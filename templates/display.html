@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Time to Display the following results:</h1>
+<h2>{{ description | default("No description passed", true) }}</h2>
+<h3> So two more questions left?</h3>
+
+<form method="POST" id="optionForm">
+    <h3>Which of the following options do you want to see:</h3>
+    <label>
+        <input type="radio" name="view_option" value="visualization" {% if selected_view == 'visualization' %}checked{% endif %}>
+        Data Visualization of the event
+    </label><br>
+    <label>
+        <input type="radio" name="view_option" value="table" {% if selected_view == 'table' %}checked{% endif %}>
+        Table of results with durations/rank of each station
+    </label>
+
+    <h3>Do you want to view the data as:</h3>
+    <label>
+        <input type="radio" name="output_format" value="html" {% if selected_format == 'html' %}checked{% endif %}>
+        Displayed on webpage (HTML)
+    </label><br>
+    <label>
+        <input type="radio" name="output_format" value="file" {% if selected_format == 'file' %}checked{% endif %}>
+        Download as file
+    </label>
+
+    <br><br>
+    <input type="submit" id="submitBtn" value="Generate" disabled>
+</form>
+
+{% if selected_view and selected_format %}
+    <p>You chose to view: <strong>{{ selected_view }}</strong></p>
+    <p>Format: <strong>{{ selected_format }}</strong></p>
+{% endif %}
+
+<script>
+    const form = document.getElementById('optionForm');
+    const submitBtn = document.getElementById('submitBtn');
+
+    function checkRadios() {
+        const viewSelected = form.querySelector('input[name="view_option"]:checked');
+        const formatSelected = form.querySelector('input[name="output_format"]:checked');
+        submitBtn.disabled = !(viewSelected && formatSelected);
+    }
+
+    // Check initial state in case some radios are pre-selected
+    checkRadios();
+
+    form.querySelectorAll('input[type="radio"]').forEach(radio => {
+        radio.addEventListener('change', checkRadios);
+    });
+</script>
+
+
+{% endblock %}

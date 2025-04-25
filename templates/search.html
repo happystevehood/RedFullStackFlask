@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+    {% block head %}
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    {% endblock %}
+
+    {% block content %}
+        <h1>Redline Results Search</h1>
+        <div id='searchui'>
+            <h2 style="text-align: left">Enter Competitor name in search bar:-</h2>
+
+            <form id="newSearchForm" class="border" >
+                <label for="competitorToSearch">Competitor Name</label>
+                <input type="text" id="competitorToSearch" name="competitor" placeholder="Joe Bloggs" style="width: 295px">
+                <button type="submit" value="Submit" id="newSearch">Search for Competitor...</button>
+            </form>
+
+            <div id='searchDetail'  hidden>
+                <p id='SearchResults'> </p>
+            </div>
+            
+            <div id='display' class='border' hidden></div>
+            
+            <div id='searchCandidate' class='border'  style="display:none;" >
+                <p id='candidateData' style="display:none;" >This is the selected competitor:</p>
+                <button id='clearSearch' style="display:none;" >Clear Search...</button>
+            </div>
+        </div>
+    {% endblock %}
+
+{% block script %}
+    <script>
+    let items = [];
+    let itemsRaw = [];
+
+    $(document).ready(function() {
+        console.log('Fetching initial search data...');
+        $.getJSON('/api/search', function(data) {
+
+        itemsRaw = data;
+        if (data === 'No matches found') {
+            return;
+        }
+        
+        console.log('Initial data received:', data);
+
+        $('#searchDetail').show();
+        $('#display').show();
+
+        $('<p>Success! ' + data.length + ' matches found! Click on individual name to get more details:</p>').appendTo('#SearchResults');
+
+        $.each(data, function(i, val) {
+            items.push('<li class="competitorItem" id="' + i + '" style="color:blue; cursor:pointer;">' +
+                val.competitor + ' - ' + val.description + ' - ' + val.race_no +  '</li>');
+            return i !== 24;
+        });
+
+        if (data.length > 25) {
+            items.push('<p style="color:red;">...and ' + (data.length - 25) + ' more! Please refine search criteria as needed</p>');
+        }
+
+        $('<ul/>', {
+            'class': 'listWrapper',
+            html: items.join('')
+        }).appendTo('#display');
+        });
+
+        $('#display').on('click', 'li.competitorItem', function() {
+            console.log('Competitor item clicked:', this.id);
+    
+            // <-- This actually loads the page
+            window.location.href = '/display_vis?competitor=' + itemsRaw[this.id].competitor  + '&year=' + itemsRaw[this.id].year + '&race_no=' + itemsRaw[this.id].race_no + '&event=' + itemsRaw[this.id].event;
+        });
+
+        $('#clearSearch').on('click', function() {
+        console.log('Clicked clear Search button:', this.id);
+
+            $.ajax({
+                url: '/api/search/',
+                type: 'DELETE',
+                success: function(data) {
+                console.log('Clear success:', data);
+                $('#searchDetail, #display, #searchCandidate, #candidateData, #clearSearch').hide();
+                //location.reload(); // Refresh to trigger GET call again
+                }
+            });
+        });
+
+        $('#newSearch').on('click', function() {
+            console.log('Clicked new search button');
+            $.ajax({
+                url: '/api/search',
+                type: 'POST',
+                dataType: 'json',
+                data: $('#newSearchForm').serialize(),
+                success: function(data) {
+                    console.log('New search form success:', data);
+                    //location.reload(); // Refresh to trigger GET call again
+                    }
+                });
+        });
+    });
+    </script>
+
+{% endblock %}

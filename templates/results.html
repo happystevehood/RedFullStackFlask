@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block content %}
+    <h1>Results Page</h1>
+    <p>First Lets find the event you are  interested in...</p>
+
+    <h2>Event List</h2>
+  
+    <form method="POST">
+        <div>
+            <label for="year_filter">Filter by Year :</label>
+            <select name="year_filter" id="year_filter" onchange="this.form.submit()">
+                <option value="">-- All Years --</option>
+                {% for year in years %}
+                    <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>{{ year }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="gender_filter">Filter by Gender :</label>
+            <select name="gender_filter" id="gender_filter" onchange="this.form.submit()">
+                <option value="">-- All Genders --</option>
+                {% for gender in genders %}
+                    <option value="{{ gender }}" {% if gender == selected_gender %}selected{% endif %}>{{ gender }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <label for="cat_filter">Filter by Category :</label>
+            <select name="cat_filter" id="cat_filter" onchange="this.form.submit()">
+                <option value="">-- All Categories --</option>
+                {% for cat in cats %}
+                    <option value="{{ cat }}" {% if cat == selected_cat %}selected{% endif %}>{{ cat }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <label for="location_filter">Filter by location :</label>
+            <select name="location_filter" id="location_filter" onchange="this.form.submit()">
+                <option value="">-- All Locations--</option>
+                {% for location in locations %}
+                    <option value="{{ location }}" {% if location == selected_location %}selected{% endif %}>{{ location }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+
+    <table border="1" cellpadding="10" style="margin-top: 20px;">
+        <tr>
+            <th>Select</th>
+            <th>Description</th>
+            <th>Year</th>
+            <th>Gender</th>
+            <th>Category</th>
+            <th>Location</th>
+        </tr>
+        {% for row in data %}
+        <tr>
+            <!-- selected data index -->
+            <td><a href="/display?eventname={{ row[0] }}">Select</a></td>
+            <td>{{ row[1] }}</td>
+            <td>{{ row[2] }}</td>
+            <td>{{ row[3] }}</td>
+            <td>{{ row[4] }}</td>
+            <td>{{ row[5] }}</td>
+        
+            
+        </tr>
+        {% endfor %}
+    </table>
+
+{% endblock %}
+
+<script>
+    document.getElementById('year_filter').onchange = function() {
+        this.form.submit();
+    };
+
+    document.getElementById('gender_filter').onchange = function() {
+        this.form.submit();
+    };
+
+    document.getElementById('cat_filter').onchange = function() {
+        this.form.submit();
+    };
+
+    document.getElementById('location_filter').onchange = function() {
+        this.form.submit();
+    };
+
+</script>
