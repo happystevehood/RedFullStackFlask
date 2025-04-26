@@ -4,18 +4,19 @@ import matplotlib as mpl
 #matplotlib.use('Agg')
 import seaborn as sns
 
-from flask import Flask, request, jsonify, render_template, send_file, abort
+from flask import Flask, request, jsonify, render_template, send_file, abort, session
 
 import os, shutil
 
 # local inclusion.
 from data_handling.search import find_competitor
-from visualisation.redline_vis import redline_vis
+from visualisation.redline_vis import redline_vis_competitor_html, redline_vis_competitor_pdf, redline_vis_generic
 
 # Global Data
-search_results = []
+#search_results = []
 
 app = Flask(__name__)
+app.secret_key = 'some key that you will never guess'
 
 OutputInfo = True
 
@@ -57,26 +58,46 @@ def remove_files_from_directory(directory):
 
 @app.route('/', methods=["GET"])
 def gethome():
-    print('Request to / GET received')
+    print('Request to / GET received', request)
+
+    #clear the search results.
+    session.pop('search_results', None)
+
     return render_template('home.html')
 
 @app.route('/', methods=["POST"])
 def posthome():
 
-    #clear the search results.
-    search_results.clear()
+    print('Request to / POST received', request)
 
-    #just in care I wanna use in future.
-    delete = request.form.get("deleteFilesForm")
-    submitBtn = request.form.get("submitBtn")
+    #Adming actity to clear the results on request.
+    session.pop('search_results', None)
 
-    # Delete all the files in the following directorys
-    remove_files_from_directory('./data/output/csv')
-    remove_files_from_directory('./data/output/pdf')
-    remove_files_from_directory('./data/output/png')
-    remove_files_from_directory('./static/csv')
-    remove_files_from_directory('./static/pdf')
-    remove_files_from_directory('./static/png')
+    # get which button was clicked in home.html
+    # and call the appropriate function
+    # for that button
+
+    regenerate = request.form.get("regenerateBtn")
+    delete = request.form.get("deleteFilesBtn")
+
+    if delete:
+        print("Delete files")
+        # Delete all the files in the following directorys
+        remove_files_from_directory('./data/output/csv')
+        remove_files_from_directory('./data/output/pdf')
+        remove_files_from_directory('./data/output/png')
+        remove_files_from_directory('./static/csv')
+        remove_files_from_directory('./static/pdf')
+        remove_files_from_directory('./static/png')
+
+    if regenerate:
+        print("Regenerate output") 
+        htmlString = " "
+        pngList = []
+ 
+
+        redline_vis_generic(htmlString, pngList)
+
 
     return render_template('home.html')
 
@@ -85,7 +106,7 @@ def posthome():
 def results():
 
     #clear the search results.
-    search_results.clear()
+    session.pop('search_results', None)
 
     selected_gender = request.form.get("gender_filter")
     selected_year = request.form.get("year_filter")
@@ -206,7 +227,7 @@ def postdisplayEvent():
 def about():
     
     #clear the search results.
-    search_results.clear()
+    session.pop('search_results', None)
 
     return render_template('about.html')
 
@@ -220,7 +241,10 @@ def index():
 
 @app.route('/api/search', methods=['GET'])
 def get_search_results():
-    print('Request to /api/search GET received', search_results)
+    print('Request to /api/search GET received')
+
+    search_results = session.get('search_results', [])
+
     if not search_results:
         print('No matches found')
         return jsonify("No matches found")
@@ -232,8 +256,7 @@ def get_search_results():
 def new_search():
     
     # call the find_competitor function, and store result in matches
-    print('Request to /api/search POST received, search_results.clear')
-    search_results.clear()
+    print('Request to /api/search POST received')
 
     search_query = request.form['competitor'].upper()
 
@@ -241,22 +264,28 @@ def new_search():
         print('No search query found /api/search POST received')
         return jsonify("No matches found")
 
-    find_competitor(search_query, lambda competitor, returned_matches: search_results.extend(list(returned_matches)))
-    
-    if not search_results:
+    # We'll define a local variable to store the matches
+    matches = []
+
+    # Populate the matches list using the callback
+    find_competitor(search_query, lambda competitor, returned_matches: matches.extend(list(returned_matches)))
+
+    if not matches:
         print('No matches found /api/search POST received')
         return jsonify("No matches found")
 
-    print('Search results returned!:')
+    # Store in session
+    session['search_results'] = matches
+    print('Search results stored in session.')
 
-    return jsonify({'status': 'ok', 'data': search_results})
+    return jsonify({'status': 'ok', 'data': matches})
 
 
 @app.route('/api/search/', methods=['DELETE'])
 def clear_search():
     
     print('Request to /api/search/ DELETE received', request.form)
-    search_results.clear()
+    session.pop('search_results', None)
 
     return jsonify({'status': 'cleared'})
 
@@ -304,7 +333,7 @@ def post_display_vis():
         }
 
         if selected_format == "html":
-            htmlString, io_pngList = redline_vis(details, htmlString, io_pngList)
+            htmlString, io_pngList = redline_vis_competitor_html(details, htmlString, io_pngList)
 
             #empty the ".\\static\\png\\" folder
             for file in os.listdir(".\\static\\png\\"):
@@ -321,7 +350,7 @@ def post_display_vis():
                 return abort(500)
 
         if selected_format == "file":
-            redline_vis(details, htmlString, io_pngList)
+            redline_vis_competitor_pdf(details, htmlString, io_pngList)
               
             png_files = []
             # get the file path
@@ -336,7 +365,7 @@ def post_display_vis():
         
 
 ##############################
-app.secret_key = 'some key that you will never guess'
+
 
 #app.config["TEMPLATES_AUTO_RELOAD"] = True
 #app.config["EXPLAIN_TEMPLATE_LOADING"] = True

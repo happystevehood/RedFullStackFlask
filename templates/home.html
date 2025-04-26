@@ -2,10 +2,14 @@
 {% block content %}
 <h1>Delete the files.:</h1>
 
+<form method="POST" id="regenerateOutput">
+    <h3>Regenerate Generic Output:</h3>
+    <input type="submit" id="regenerateBtn" name="regenerateBtn" value="Regenerate">
+</form>
+
 <form method="POST" id="deleteFilesForm">
     <h3>DeleteTemportary files:</h3>
- <br>
-    <input type="submit" id="submitBtn" value="Delete">
+    <input type="submit" id="deleteFilesBtn" name="deleteFilesBtn" value="Delete">
 </form>
 
 {% endblock %}

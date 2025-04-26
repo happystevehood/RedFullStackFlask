@@ -110,28 +110,28 @@ OutputComp=False
 # These variables are not modified progamatically .
 # variables to control where output goes during debug/developement.
 #
-pltShow=False #set to false or will get lots of warnings with mpl.use('agg')
-allScatter=False
-cvsDfOut=False
-cvsDurationOut=True
-pltPngOut=True
+pltShow=None #set to false or will get lots of warnings with mpl.use('agg')
+allScatter=None
+cvsDfOut=None
+cvsDurationOut=None
+pltPngOut=None
 #PDF only created if pltPngOut=False
-createPdf=True
+createPdf=None
 
 #Boolen to indicate if competitor analysis should be done.
-competitorAnalysis = True
+competitorAnalysis = None
 
 #
 # Which Graphs to show 
 #
-showBar=True
-showViolin=True
-showCutOffBar=True   
-showHist=True
-showPie=True
-showCorr=True
+showBar=None
+showViolin=None
+showCutOffBar=None   
+showHist=None
+showPie=None
+showCorr=None
 #Only impact if showCorr=True
-showHeat=True
+showHeat=None
 
 ###
 ### Contants ABOVE this line will change depending on user action/configuration
@@ -1084,7 +1084,7 @@ def ShowScatterPlot(df, eventName, corr, competitorIndex=-1):
 # competitorDetails will be search details of one competitor
 
 #############################
-def redline_vis(competitorDetails, io_stringHtml, io_pngList):
+def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
 
     #need to figure out why this needed.
     global fileObj
@@ -1096,26 +1096,33 @@ def redline_vis(competitorDetails, io_stringHtml, io_pngList):
     global stringPdf
     global pngList
 
-    #initialise both to emptry
-    #stringPdf = io_stringHtml
-    #pngList = io_pngList
 
     #############################
     # Reading the file
     #############################
-    print("competitorDetails",competitorDetails,competitorRaceNo)
 
+ 
     # if competitor Analysis true.
     if(competitorAnalysis == True):
         #then a single competitor in a single file has already been selected
+        print("competitorDetails",competitorDetails,competitorRaceNo)
 
         for element in myFileLists:
             if (element[0] == competitorDetails['event']):
                 fileObj = element
                 break
 
-    #Loop through each file, temporarily commment out while get this wokring for a single competitor.
-    ###for fileObj in myFileLists:###
+        #only want one file if competitor Analysis
+        thisFileList = [fileObj]
+
+    # doing general analysis of all files.
+    else:
+
+        #configure the complete file list for the next loop
+        thisFileList = myFileLists
+
+    #Loop through each file, 
+    for fileObj in thisFileList:
 
         #configure for 2023 format or 2024 format
         if (fileObj[2]=='2023'):
@@ -1151,8 +1158,6 @@ def redline_vis(competitorDetails, io_stringHtml, io_pngList):
             if (competitorIndex != -1):
                 dataOutputThisLoop=True
 
-                #print('competitorIndex',competitorIndex)
-
                 #Outpuy the tidy1 data to csv
                 if (cvsDurationOut): 
                     
@@ -1173,7 +1178,7 @@ def redline_vis(competitorDetails, io_stringHtml, io_pngList):
         else:
 
             #Outpuy the tidy data to csv
-            if (cvsDurationOut): 
+            if (cvsDurationOut):
                 
                 outdatafile = filepath + '\\output\\csv\\duration' + fileObj[0] + '.csv'
                 df.to_csv(outdatafile)
@@ -1190,8 +1195,6 @@ def redline_vis(competitorDetails, io_stringHtml, io_pngList):
 
         #if wanna output data this loop
         if (dataOutputThisLoop==True):
-
-            #print("pngList",pngList)
 
             #Outpuy the tidy2 data frame to csv
             if (cvsDfOut): 
@@ -1210,17 +1213,15 @@ def redline_vis(competitorDetails, io_stringHtml, io_pngList):
                 rect_y2 = 800 # error
                 rect = (rect_x1, rect_y1, rect_x2, rect_y2)
 
-                page = doc.new_page()
-                rc = page.insert_htmlbox(rect, stringPdf)
+                # if competitor Analysis enabled.
+                if(competitorAnalysis == True):
+                    page = doc.new_page()
+                    rc = page.insert_htmlbox(rect, stringPdf)
 
                 #Now time for images
                 imgdir = filepath + '\\output\\png\\' # where the pics are
-                imgfinaldir = '.\\static\\png\\' 
-                imgcount = len(pngList)  # pic count
 
                 for i, f in enumerate(pngList):
-                    shutil.copyfile(os.path.join(imgdir, f), os.path.join(imgfinaldir,  f))
-
                     img = pymupdf.open(os.path.join(imgdir, f))  # open pic as document
                     rect = img[0].rect  # pic dimension
                     pdfbytes = img.convert_to_pdf()  # make a PDF stream
@@ -1234,7 +1235,7 @@ def redline_vis(competitorDetails, io_stringHtml, io_pngList):
                     doc.save(filepath + '\\output\\pdf\\' + fileObj[0] + competitorName + '.pdf')
             
                     shutil.copyfile(os.path.join(filepath + '\\output\\pdf\\', fileObj[0] + competitorName + '.pdf'), 
-                                    ".\\static\\pdf\\" + '\\' + fileObj[0] + competitorName + '.pdf')
+                                    ".\\static\\pdf\\" + fileObj[0] + competitorName + '.pdf')
 
                 else:
                     doc.save(filepath + '\\output\\pdf\\' + fileObj[0] + '.pdf') 
@@ -1244,7 +1245,110 @@ def redline_vis(competitorDetails, io_stringHtml, io_pngList):
                 io_stringHtml = stringPdf
                 io_pngList = list(pngList) 
 
-                return io_stringHtml, io_pngList 
             
     #just backup should never be called
     return io_stringHtml, io_pngList       
+
+
+
+def redline_vis_competitor_html(competitorDetails, io_stringHtml, io_pngList):
+    
+    global pltShow, allScatter, cvsDfOut, cvsDurationOut, pltPngOut, createPdf, competitorAnalysis, showBar, showViolin, showCutOffBar, showHist, showPie, showCorr, showHeat
+
+    #configure figure the output variables.
+    pltShow=False #set to false or will get lots of warnings with mpl.use('agg')
+    allScatter=True
+    cvsDfOut=False
+    cvsDurationOut=False
+    pltPngOut=True
+    #PDF only created if pltPngOut=False
+    createPdf=False
+
+    #Boolen to indicate if competitor analysis should be done.
+    competitorAnalysis = True
+
+    #
+    # Which Graphs to show 
+    #
+    showBar=True
+    showViolin=True
+    showCutOffBar=True   
+    showHist=True
+    showPie=True
+    showCorr=True
+    #Only impact if showCorr=True
+    showHeat=True
+
+    print('redline_vis_competitor_html', allScatter, cvsDfOut, cvsDurationOut, pltPngOut, createPdf, competitorAnalysis, showBar, showViolin, showCutOffBar, showHist, showPie, showCorr, showHeat)     
+
+    return redline_vis_generate(competitorDetails, io_stringHtml, io_pngList)
+
+def redline_vis_competitor_pdf(competitorDetails, io_stringHtml, io_pngList):
+    
+    global pltShow, allScatter, cvsDfOut, cvsDurationOut, pltPngOut, createPdf, competitorAnalysis, showBar, showViolin, showCutOffBar, showHist, showPie, showCorr, showHeat
+
+    #configure figure the output variables.
+    pltShow=False #set to false or will get lots of warnings with mpl.use('agg')
+    allScatter=True
+    cvsDfOut=False
+    cvsDurationOut=False
+    pltPngOut=True
+    #PDF only created if pltPngOut=False
+    createPdf=True
+
+    #Boolen to indicate if competitor analysis should be done.
+    competitorAnalysis = True
+
+    #
+    # Which Graphs to show 
+    #
+    showBar=True
+    showViolin=True
+    showCutOffBar=True   
+    showHist=True
+    showPie=True
+    showCorr=True
+    #Only impact if showCorr=True
+    showHeat=True
+
+    print('redline_vis_competitor_pdf', allScatter, cvsDfOut, cvsDurationOut, pltPngOut, createPdf, competitorAnalysis, showBar, showViolin, showCutOffBar, showHist, showPie, showCorr, showHeat)     
+
+
+    return redline_vis_generate(competitorDetails, io_stringHtml, io_pngList)
+
+
+def redline_vis_generic(io_stringHtml, io_pngList):
+    
+    #configure figure the output variables.
+    global pltShow, allScatter, cvsDfOut, cvsDurationOut, pltPngOut, createPdf, competitorAnalysis, showBar, showViolin, showCutOffBar, showHist, showPie, showCorr, showHeat
+
+    #configure figure the output variables.
+    pltShow=False #set to false or will get lots of warnings with mpl.use('agg')
+    allScatter=True
+    cvsDfOut=False
+    cvsDurationOut=True
+    pltPngOut=True
+    #PDF only created if pltPngOut=False
+    createPdf=True
+
+    #Boolen to indicate if competitor analysis should be done.
+    competitorAnalysis = False
+
+    #
+    # Which Graphs to show 
+    #
+    showBar=True
+    showViolin=True
+    showCutOffBar=True   
+    showHist=True
+    showPie=True
+    showCorr=True
+    #Only impact if showCorr=True
+    showHeat=True
+
+    #local variables
+    htmlString = " "
+    pngList = []
+
+    #competitor details set to False
+    return redline_vis_generate(False, htmlString, pngList)

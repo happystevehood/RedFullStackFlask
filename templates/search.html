@@ -27,78 +27,124 @@
         </div>
     {% endblock %}
 
-{% block script %}
+    {% block script %}
     <script>
-    let items = [];
-    let itemsRaw = [];
-
     $(document).ready(function() {
-        console.log('Fetching initial search data...');
-        $.getJSON('/api/search', function(data) {
-
-        itemsRaw = data;
-        if (data === 'No matches found') {
-            return;
-        }
-        
-        console.log('Initial data received:', data);
-
-        $('#searchDetail').show();
-        $('#display').show();
-
-        $('<p>Success! ' + data.length + ' matches found! Click on individual name to get more details:</p>').appendTo('#SearchResults');
-
-        $.each(data, function(i, val) {
-            items.push('<li class="competitorItem" id="' + i + '" style="color:blue; cursor:pointer;">' +
-                val.competitor + ' - ' + val.description + ' - ' + val.race_no +  '</li>');
-            return i !== 24;
-        });
-
-        if (data.length >= 25) {
-            items.push('<p style="color:red;">...and ' + (data.length - 25) + ' more! Please refine search criteria as needed</p>');
-        }
-
-        $('<ul/>', {
-            'class': 'listWrapper',
-            html: items.join('')
-        }).appendTo('#display');
-        });
-
-        $('#display').on('click', 'li.competitorItem', function() {
-            console.log('Competitor item clicked:', this.id);
+        let itemsRaw = [];
     
-            // <-- This actually loads the page
-            window.location.href = '/display_vis?competitor=' + itemsRaw[this.id].competitor  + '&year=' + itemsRaw[this.id].year + '&race_no=' + itemsRaw[this.id].race_no + '&event=' + itemsRaw[this.id].event;
-        });
-
-        $('#clearSearch').on('click', function() {
-        console.log('Clicked clear Search button:', this.id);
-
-            $.ajax({
-                url: '/api/search/',
-                type: 'DELETE',
-                success: function(data) {
-                console.log('Clear success:', data);
-                $('#searchDetail, #display, #searchCandidate, #candidateData, #clearSearch').hide();
-                //location.reload(); // Refresh to trigger GET call again
-                }
+        // Utility function to display results
+        function displaySearchResults(data) {
+            const $searchDetail = $('#searchDetail').show();
+            const $display = $('#display').empty().show();
+            const $results = $('#SearchResults').empty();
+            const toSearch = $('#competitorToSearch').val()
+    
+            if (data.length === 0) {
+                $results.text(`No matches found for ${toSearch}`);
+                return;
+            }
+            //stop counting match after this.
+            else if(data.length === 100)
+            {
+                $results.text(`Success! At least ${data.length} matches found! Click on individual name to get more details:`);
+            }
+            else 
+            {
+                $results.text(`Success! ${data.length} matches found! Click on individual name to get more details:`);
+            }
+             
+            const $ul = $('<ul/>', { class: 'listWrapper' });
+    
+            data.slice(0, 25).forEach((val, i) => {
+                $('<li/>', {
+                    class: 'competitorItem',
+                    id: i,
+                    text: `${val.competitor} - ${val.description} - ${val.race_no}`,
+                    css: { color: 'blue', cursor: 'pointer' }
+                }).appendTo($ul);
             });
-        });
-
-        $('#newSearch').on('click', function() {
-            console.log('Clicked new search button');
-            $.ajax({
-                url: '/api/search',
-                type: 'POST',
-                dataType: 'json',
-                data: $('#newSearchForm').serialize(),
-                success: function(data) {
-                    console.log('New search form success:', data);
-                    //location.reload(); // Refresh to trigger GET call again
+    
+            if (data.length > 25) {
+                $('<p/>', {
+                    text: `...Please refine search criteria as needed`,
+                    css: { color: 'red' }
+                }).appendTo($display);
+            }
+    
+            $ul.appendTo($display);
+        }
+    
+        // Fetch initial data
+        function fetchInitialResults() {
+            $.getJSON('/api/search')
+                .done(data => {
+                    if (data === 'No matches found') {
+                        console.log('No matches found');
+                        return;
                     }
+                    console.log('Initial data received:', data);
+                    itemsRaw = data;
+                    displaySearchResults(data);
+                })
+                .fail(err => {
+                    console.error('Failed to fetch initial search data:', err);
+                });
+        }
+    
+        // New search
+        $('#newSearchForm').on('submit', function(e) {
+            e.preventDefault();
+            console.log('Submitting new search...');
+    
+            $.post('/api/search', $(this).serialize())
+                .done(response => {
+                    if (response.data?.length) {
+                        console.log('Search successful:', response.data);
+                        itemsRaw = response.data;
+                        displaySearchResults(response.data);
+                    } else {
+                        console.log('No matches found in new search.');
+                        displaySearchResults([]);
+                    }
+                    $('#competitorToSearch').val(''); // Clear the input field
+                })
+                .fail(err => {
+                    console.error('Search request failed:', err);
                 });
         });
+    
+        // Handle click on competitor
+        $('#display').on('click', '.competitorItem', function() {
+            const selected = itemsRaw[this.id];
+            if (!selected) return;
+            console.log('Competitor selected:', selected);
+    
+            const query = $.param({
+                competitor: selected.competitor,
+                year: selected.year,
+                race_no: selected.race_no,
+                event: selected.event
+            });
+    
+            window.location.href = `/display_vis?${query}`;
+        });
+    
+        // Clear search
+        $('#clearSearch').on('click', function() {
+            console.log('Clearing search...');
+            $.ajax({
+                url: '/api/search/',
+                type: 'DELETE'
+            }).done(() => {
+                $('#searchDetail, #display, #searchCandidate, #candidateData, #clearSearch').hide();
+                itemsRaw = [];
+            }).fail(err => {
+                console.error('Failed to clear search:', err);
+            });
+        });
+    
+        // Load existing results on page load
+        fetchInitialResults();
     });
     </script>
-
-{% endblock %}
+    {% endblock %}

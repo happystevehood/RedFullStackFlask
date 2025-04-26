@@ -7,7 +7,8 @@ from visualisation.redline_vis import myFileLists
 # Find competitor function
 def find_competitor(competitor, callback):
     matches = []
-
+    matchcount = 0
+    
     #print('find_competitor called', competitor)
 
     #for each element in myFileLists
@@ -33,6 +34,14 @@ def find_competitor(competitor, callback):
                         }
                         #print('found a match', match)
                         matches.append(match)
+                        matchcount += 1
+
+                        if matchcount >= 100:
+                            #leave early
+                            print(f'reached 100 matches' )
+                            callback(competitor, matches)
+                            return 
+                            
 
                 #print(f"Parsed {reader.line_num} rows")
 
