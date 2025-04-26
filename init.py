@@ -11,9 +11,9 @@ import os, shutil
 # local inclusion.
 from data_handling.search import find_competitor
 from visualisation.redline_vis import redline_vis
+
 # Global Data
 search_results = []
-selected_item = {}
 
 app = Flask(__name__)
 
@@ -22,18 +22,6 @@ OutputInfo = True
 # printout to confirm pkg versions.
 if(OutputInfo == True): import sys; print('python versions ', sys.version)
 if(OutputInfo == True): print('pandas ', pd.__version__, 'numpy ', np.__version__,'matplotlib ', mpl.__version__,'seaborn ', sns.__version__)
-
-# Constants (replace with actual values or strings if needed)
-MENS = "Mens"
-WOMENS = "Womens"
-MIXED = "Mixed"
-SINGLES = "Singles"
-SINGLES_COMPETITIVE = "Singles Competitive"
-SINGLES_OPEN = "Singles Open"
-DOUBLES = "Doubles"
-RELAY = "Relay"
-COMPETITIVE = "Competitive"
-KL = "KL"
 
 # Your data for filtering purposes
 myFileLists = [
@@ -54,12 +42,12 @@ myFileLists = [
     ["MensDoubles2024", "REDLINE Fitness Games '24 Mens Doubles", "2024", "MENS", "DOUBLES", "KL"],
     ["WomensDoubles2024", "REDLINE Fitness Games '24 Womens Doubles", "2024", "WOMENS", "DOUBLES", "KL"],
     ["MixedDoubles2024", "REDLINE Fitness Games '24 Mixed Doubles", "2024", "MIXED", "DOUBLES", "KL"],
-    ["TeamRelayMen2024", "REDLINE Fitness Games '24 Mens Team Relay", "2024", "MENS", R"ELAY", "KL"],
+    ["TeamRelayMen2024", "REDLINE Fitness Games '24 Mens Team Relay", "2024", "MENS", "RELAY", "KL"],
     ["TeamRelayWomen2024", "REDLINE Fitness Games '24 Womens Team Relay", "2024", "WOMENS", "RELAY", "KL"],
     ["TeamRelayMixed2024", "REDLINE Fitness Games '24 Mixed Team Relay", "2024", "MIXED", "RELAY", "KL"],
 ]
 
-# Temporary helper function
+# helper function
 def remove_files_from_directory(directory):
     """Removes all files within the specified directory, but leaves the directory untouched."""
     for filename in os.listdir(directory):
@@ -69,11 +57,14 @@ def remove_files_from_directory(directory):
 
 @app.route('/', methods=["GET"])
 def gethome():
-    search_results.clear()
+    print('Request to / GET received')
     return render_template('home.html')
 
 @app.route('/', methods=["POST"])
 def posthome():
+
+    #clear the search results.
+    search_results.clear()
 
     #just in care I wanna use in future.
     delete = request.form.get("deleteFilesForm")
@@ -92,6 +83,9 @@ def posthome():
 
 @app.route('/results', methods=["GET", "POST"])
 def results():
+
+    #clear the search results.
+    search_results.clear()
 
     selected_gender = request.form.get("gender_filter")
     selected_year = request.form.get("year_filter")
@@ -143,10 +137,7 @@ def results():
 @app.route('/display', methods=["GET"])
 def getdisplayEvent():
 
-    if request == None:
-        search_results.clear()
-    else:
-        print('Request to /display received', request)
+    print('Request to /display GET received', request)
 
     # get the eventname    
     eventname = request.args.get('eventname')
@@ -164,7 +155,7 @@ def getdisplayEvent():
 @app.route('/display', methods=["POST"])
 def postdisplayEvent():
 
-    search_results.clear()
+    print('Request to /display POST received', request)
 
     selected_view = None
     selected_format = None
@@ -182,7 +173,6 @@ def postdisplayEvent():
 
         #need to pass file path without the static.
         filename = "pdf/" + myFileLists[index][2] + "/" + myFileLists[index][0] + ".pdf"
-        print(filename)
 
         return render_template('visual.html', filename=filename)
     
@@ -201,12 +191,10 @@ def postdisplayEvent():
     if selected_view == "visualization" and selected_format == "file":
         # get the file path
         filepath = ".\\static\\pdf\\" + myFileLists[index][2] +"\\" + myFileLists[index][0] + ".pdf"
-        print(filepath)
     
     if selected_view == "table" and selected_format == "file":
         # get the file path
         filepath = ".\\static\\csv\\" + myFileLists[index][2] +"\\duration"+ myFileLists[index][0] + ".csv"
-        print(filepath)
 
     # dowload the file
     response = send_file(filepath, as_attachment=True)
@@ -216,16 +204,16 @@ def postdisplayEvent():
 
 @app.route('/about')
 def about():
+    
+    #clear the search results.
+    search_results.clear()
+
     return render_template('about.html')
 
 
-##############################
-
 @app.route('/search')
 def index():
-    if request == None:
-        search_results.clear()
-    
+    print('Request to /search GET received')
     return render_template('search.html' )
     
 
@@ -242,19 +230,24 @@ def get_search_results():
 
 @app.route('/api/search', methods=['POST'])
 def new_search():
-    print('Request to /api/search POST received', request.form)
-    search_query = request.form['competitor'].upper()
     
     # call the find_competitor function, and store result in matches
+    print('Request to /api/search POST received, search_results.clear')
     search_results.clear()
+
+    search_query = request.form['competitor'].upper()
+
+    if not search_query:
+        print('No search query found /api/search POST received')
+        return jsonify("No matches found")
 
     find_competitor(search_query, lambda competitor, returned_matches: search_results.extend(list(returned_matches)))
     
     if not search_results:
-        print('No matches found', search_results)
+        print('No matches found /api/search POST received')
         return jsonify("No matches found")
 
-    print('Search results returned:', search_results)
+    print('Search results returned!:')
 
     return jsonify({'status': 'ok', 'data': search_results})
 
@@ -264,7 +257,7 @@ def clear_search():
     
     print('Request to /api/search/ DELETE received', request.form)
     search_results.clear()
-    print('Cleared existing search results')
+
     return jsonify({'status': 'cleared'})
 
 
@@ -333,7 +326,6 @@ def post_display_vis():
             png_files = []
             # get the file path
             filepath = ".\\static\\pdf\\" + event + competitor + ".pdf"
-            print(filepath)
 
             # dowload the file
             response = send_file(filepath, as_attachment=True)

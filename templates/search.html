@@ -15,10 +15,10 @@
             </form>
 
             <div id='searchDetail'  hidden>
-                <p id='SearchResults'> </p>
+                <p id='SearchResults'>SearchResults</p>
             </div>
             
-            <div id='display' class='border' hidden></div>
+            <div id='display' class='border' hidden>display</div>
             
             <div id='searchCandidate' class='border'  style="display:none;" >
                 <p id='candidateData' style="display:none;" >This is the selected competitor:</p>
@@ -54,7 +54,7 @@
             return i !== 24;
         });
 
-        if (data.length > 25) {
+        if (data.length >= 25) {
             items.push('<p style="color:red;">...and ' + (data.length - 25) + ' more! Please refine search criteria as needed</p>');
         }
 

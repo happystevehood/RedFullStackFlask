@@ -167,6 +167,16 @@ fileObj = []
 
 
 #############################
+# Helper function to convert seconds to minutes.
+#############################
+
+def format_seconds(seconds):
+    minutes = int(seconds // 60)
+    sec = round(seconds % 60, 1)
+    return f"{minutes}m {sec:.1f}s"
+
+
+#############################
 # Tidy the data/data frame
 #############################
 def tidyTheData(df):
@@ -470,9 +480,9 @@ def competitorDataOutput(df):
         if(OutputComp==True): print('Net Time (s)     {:0>6.1f}'.format(df.loc[compIndex, "Net Time"]))
         if(OutputComp==True): print('Average Event Rank {:.1f}'.format(df.loc[compIndex, "Average Rank"]))
 
-        stringPdf += '<tr><td><strong>Calc Time (s)    </strong></td><td>{:0>6.1f}'.format(df.loc[compIndex, "Calc Time"]) + "</td></tr>"
-        stringPdf += '<tr><td><strong>Time Adj (s)     </strong></td><td>{:0>6.1f}'.format(df.loc[compIndex, "Time Adj"]) + "</td></tr>"
-        stringPdf += '<tr><td><strong>Net Time (s)     </strong></td><td>{:0>6.1f}'.format(df.loc[compIndex, "Net Time"]) + "</td></tr>"
+        stringPdf += '<tr><td><strong>Calc Time</strong></td><td>' + format_seconds(df.loc[compIndex, "Calc Time"]) + "</td></tr>"
+        stringPdf += '<tr><td><strong>Time Adj</strong></td><td>' + format_seconds(df.loc[compIndex, "Time Adj"]) + "</td></tr>"
+        stringPdf += '<tr><td><strong>Net Time</strong></td><td>' + format_seconds(df.loc[compIndex, "Net Time"]) + "</td></tr>"
         stringPdf += '<tr><td><strong>Average Event Rank </strong></td><td>{:.1f}'.format(df.loc[compIndex, "Average Rank"]) + "</td></tr>"
 
         #if category column exist.
