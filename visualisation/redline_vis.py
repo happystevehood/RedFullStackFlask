@@ -1257,8 +1257,6 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
                 #update output variable
                 io_stringHtml = stringPdf
                 io_pngList = list(pngList)
-                print(pngList) 
-
             
     #just backup should never be called
     return io_stringHtml, io_pngList       
