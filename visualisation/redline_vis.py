@@ -1116,10 +1116,23 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
         thisFileList = [fileObj]
 
     # doing general analysis of all files.
-    else:
+    elif (competitorDetails == None):
 
         #configure the complete file list for the next loop
         thisFileList = myFileLists
+
+    else:
+        #then a general analysis of one event has been selected
+        details = competitorDetails
+        print("details",details)
+
+        for element in myFileLists:
+            if (element[0] == details['event']):
+                fileObj = element
+                break
+
+        #only want one file for this output
+        thisFileList = [fileObj]
 
     #Loop through each file, 
     for fileObj in thisFileList:
@@ -1243,7 +1256,8 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
             if (pltPngOut):
                 #update output variable
                 io_stringHtml = stringPdf
-                io_pngList = list(pngList) 
+                io_pngList = list(pngList)
+                print(pngList) 
 
             
     #just backup should never be called
@@ -1351,4 +1365,77 @@ def redline_vis_generic(io_stringHtml, io_pngList):
     pngList = []
 
     #competitor details set to False
-    return redline_vis_generate(False, htmlString, pngList)
+    return redline_vis_generate(None, htmlString, pngList)
+
+def redline_vis_generic_eventpdf(details, io_stringHtml, io_pngList):
+    
+    #configure figure the output variables.
+    global pltShow, allScatter, cvsDfOut, cvsDurationOut, pltPngOut, createPdf, competitorAnalysis, showBar, showViolin, showCutOffBar, showHist, showPie, showCorr, showHeat
+
+    #configure figure the output variables.
+    pltShow=False #set to false or will get lots of warnings with mpl.use('agg')
+    allScatter=True
+    cvsDfOut=False
+    cvsDurationOut=False
+    pltPngOut=True
+    #PDF only created if pltPngOut=False
+    createPdf=True
+
+    #Boolen to indicate if competitor analysis should be done.
+    competitorAnalysis = False
+
+    #
+    # Which Graphs to show 
+    #
+    showBar=True
+    showViolin=True
+    showCutOffBar=True   
+    showHist=True
+    showPie=True
+    showCorr=True
+    #Only impact if showCorr=True
+    showHeat=True
+
+    #local variables
+    htmlString = " "
+    pngList = []
+
+    #competitor details set to False
+    return redline_vis_generate(details, htmlString, pngList)
+
+
+def redline_vis_generic_eventhtml(details, io_stringHtml, io_pngList):
+    
+    #configure figure the output variables.
+    global pltShow, allScatter, cvsDfOut, cvsDurationOut, pltPngOut, createPdf, competitorAnalysis, showBar, showViolin, showCutOffBar, showHist, showPie, showCorr, showHeat
+
+    #configure figure the output variables.
+    pltShow=False #set to false or will get lots of warnings with mpl.use('agg')
+    allScatter=True
+    cvsDfOut=False
+    cvsDurationOut=False
+    pltPngOut=True
+    #PDF only created if pltPngOut=False
+    createPdf=False
+
+    #Boolen to indicate if competitor analysis should be done.
+    competitorAnalysis = False
+
+    #
+    # Which Graphs to show 
+    #
+    showBar=True
+    showViolin=True
+    showCutOffBar=True   
+    showHist=True
+    showPie=True
+    showCorr=True
+    #Only impact if showCorr=True
+    showHeat=True
+
+    #local variables
+    htmlString = " "
+    pngList = []
+
+    #competitor details set to False
+    return redline_vis_generate(details, htmlString, pngList)

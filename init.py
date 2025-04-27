@@ -10,7 +10,7 @@ import os, shutil
 
 # local inclusion.
 from data_handling.search import find_competitor
-from visualisation.redline_vis import redline_vis_competitor_html, redline_vis_competitor_pdf, redline_vis_generic
+from visualisation.redline_vis import redline_vis_competitor_html, redline_vis_competitor_pdf, redline_vis_generic, redline_vis_generic_eventpdf, redline_vis_generic_eventhtml
 
 # Global Data
 #search_results = []
@@ -192,13 +192,30 @@ def postdisplayEvent():
 
     if selected_view == "visualization" and selected_format == "html":
 
-        #need to pass file path without the static.
-        filename = "pdf/" + myFileLists[index][2] + "/" + myFileLists[index][0] + ".pdf"
+        details = {
+            'competitor': None, 
+            'race_no': None,
+            'event': myFileLists[index][0]
+        }
 
-        return render_template('visual.html', filename=filename)
+        htmlString = ""
+        io_pngList = []
+
+        htmlString, io_pngList = redline_vis_generic_eventhtml(details, htmlString, io_pngList)
+  
+        #empty the ".\\static\\png\\" folder
+        for file in os.listdir(".\\static\\png\\"):
+            os.remove(".\\static\\png\\" + file)
+
+        #move a list of files to static folder
+        for file in io_pngList:
+            shutil.move(".\\data\\output\\png\\"+ file, ".\\static\\png\\" )  
+
+        return render_template('visual.html', description=myFileLists[index][1], png_files=io_pngList)
     
     if selected_view == "table" and selected_format == "html":
-        filepath = ".\\static\\csv\\" + myFileLists[index][2] +"\\duration"+ myFileLists[index][0] + ".csv"
+        filepath = "data\\output\\csv\\duration"+ myFileLists[index][0] + ".csv"
+        title = myFileLists[index][1]
 
         # Load CSV file into a DataFrame
         df = pd.read_csv(filepath)
@@ -207,20 +224,48 @@ def postdisplayEvent():
         data = df.to_dict(orient='records')
         headers = df.columns.tolist()
 
-        return render_template('table.html', headers=headers, data=data)
-            
+        return render_template('table.html', headers=headers, data=data, title=title)
+
+    if selected_view == "orig_table" and selected_format == "html":
+        filepath = "data\\input\\" + myFileLists[index][0] + ".csv"
+        title = myFileLists[index][1]
+
+        # Load CSV file into a DataFrame
+        df = pd.read_csv(filepath)
+
+        # Convert DataFrame to list of dicts (records) for Jinja2
+        data = df.to_dict(orient='records')
+        headers = df.columns.tolist()
+
+        return render_template('table.html', headers=headers, data=data, title=title)
+               
     if selected_view == "visualization" and selected_format == "file":
+
+        details = {
+            'competitor': None, 
+            'race_no': None,
+            'event': myFileLists[index][0]
+        }
+
+        htmlString = ""
+        io_pngList = []
+
+        htmlString, io_pngList = redline_vis_generic_eventpdf(details, htmlString, io_pngList)
+
         # get the file path
-        filepath = ".\\static\\pdf\\" + myFileLists[index][2] +"\\" + myFileLists[index][0] + ".pdf"
+        filepath = "data\\output\\pdf\\" + myFileLists[index][0] + ".pdf"
     
     if selected_view == "table" and selected_format == "file":
         # get the file path
-        filepath = ".\\static\\csv\\" + myFileLists[index][2] +"\\duration"+ myFileLists[index][0] + ".csv"
+        filepath = "data\\output\\csv\\duration" + myFileLists[index][0] + ".csv"
+
+    if selected_view == "orig_table" and selected_format == "file":
+        # get the file path
+        filepath = "data\\input\\" + myFileLists[index][0] + ".csv"
 
     # dowload the file
     response = send_file(filepath, as_attachment=True)
-    response.headers["Content-Disposition"] = "attachment; filename={}".format(filepath.split("/")[-1])
-    print(response)
+    response.headers["Content-Disposition"] = f"attachment; filename={os.path.basename(filepath)}"
     return response
 
 @app.route('/about')
