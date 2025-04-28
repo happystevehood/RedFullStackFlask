@@ -75,12 +75,18 @@ def posthome():
     # for that button
 
     regenerate = request.form.get("regenerateBtn")
-    delete = request.form.get("deleteFilesBtn")
+    generated_delete = request.form.get("deleteGeneratedFilesBtn")
+    competitor_delete = request.form.get("deleteCompetitorFilesBtn")
 
-    if delete:
-        print("Delete files")
-        # Delete all the files in the following directorys
+    if generated_delete:
+        print("Delete Generic files")
+        # Delete all the Generic files include Competitor
         util.data.delete_generated_files()
+
+    elif competitor_delete:
+        print("Delete Competitor files")
+        # Delete all the Competitor files include
+        util.data.delete_competitor_files()
 
     elif regenerate:
         print("Regenerate output") 
@@ -193,7 +199,7 @@ def postdisplayEvent():
 
         htmlString, io_pngList = redline_vis_generic_eventhtml(details, htmlString, io_pngList)
 
-        print (io_pngList)
+        #print (io_pngList)
   
         return render_template('visual.html', description=myFileLists[index][1], png_files=io_pngList)
     
@@ -236,10 +242,12 @@ def postdisplayEvent():
         htmlString = ""
         io_pngList = []
 
-        htmlString, io_pngList = redline_vis_generic_eventpdf(details, htmlString, io_pngList)
-
         # get the file path
         filepath = Path(util.data.PDF_GENERIC_DIR) / Path(myFileLists[index][0] + ".pdf")
+
+        # check if file exists
+        if (os.path.isfile(filepath) == False):
+            htmlString, io_pngList = redline_vis_generic_eventpdf(details, htmlString, io_pngList)
 
     if selected_view == "table" and selected_format == "file":
         # get the file path
@@ -376,12 +384,14 @@ def post_display_vis():
                 return abort(500)
 
         if selected_format == "file":
-            redline_vis_competitor_pdf(details, htmlString, io_pngList)
-              
-            png_files = []
+
             # get the file path
             filepath = Path(util.data.PDF_COMP_DIR) / Path(event + competitor + ".pdf")
 
+            # check if file exists
+            if (os.path.isfile(filepath) == False):
+                redline_vis_competitor_pdf(details, htmlString, io_pngList)
+            
             # dowload the file
             response = send_file(filepath, as_attachment=True)
             response.headers["Content-Disposition"] = f"attachment; filename={os.path.basename(filepath)}"

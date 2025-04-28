@@ -39,9 +39,14 @@ def remove_files_from_directory(directory):
 
 
 def delete_generated_files():
-    """Removes all data files generated here"""
+    """Removes all data files generated here included competitor files"""
     remove_files_from_directory(CSV_GENERIC_DIR);
     remove_files_from_directory(PDF_COMP_DIR); 
     remove_files_from_directory(PDF_GENERIC_DIR); 
     remove_files_from_directory(PNG_COMP_DIR); 
-    remove_files_from_directory(PNG_GENERIC_DIR);          
+    remove_files_from_directory(PNG_GENERIC_DIR);
+
+def delete_competitor_files():
+    """Removes all competitor data files generated here"""
+    remove_files_from_directory(PDF_COMP_DIR); 
+    remove_files_from_directory(PNG_COMP_DIR); 

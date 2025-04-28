@@ -614,42 +614,49 @@ def ShowCorrInfo(df,competitorIndex=-1):
     corr_matrix = dfcorr.corr()
     
     if( showHeat ):
-        plt.figure(figsize=(10, 10))
-        heatmap = sns.heatmap(corr_matrix, vmin=-0, vmax=1, annot=True, cmap='BrBG')
-        heatmap.set_title('Correlation Heatmap ' + fileObj[1], fontdict={'fontsize':12}, pad=12);
 
         filepath = Path(util.data.PNG_GENERIC_DIR) / Path(fileObj[0] + 'CorrHeat' + '.png')
-        
+
         #for PDF creation
         pngList.append(filepath) 
+
+        #check if file exists
+        if (os.path.isfile(filepath) == False):
+        
+            plt.figure(figsize=(10, 10))
+            heatmap = sns.heatmap(corr_matrix, vmin=-0, vmax=1, annot=True, cmap='BrBG')
+            heatmap.set_title('Correlation Heatmap ' + fileObj[1], fontdict={'fontsize':12}, pad=12);
+
+            # Output/Show depending of global variable setting with pad inches
+            if ( pltPngOut ): plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.5)
+            if ( pltShow ):   plt.show()
+            if ( pltPngOut or  pltShow):   plt.close()
+
+
+    filepath = Path(util.data.PNG_GENERIC_DIR) / Path(fileObj[0] + 'Corr' + '.png')
+    #for PDF creation
+    pngList.append(filepath)
+
+    #check if file exists
+    if (os.path.isfile(filepath) == False):
+
+        plt.figure(figsize=(10, 10))
+        
+        # Shows a nice correlation barchar
+        heatmap = sns.barplot( data=corr_matrix['Net Time'])
+        
+        for i in heatmap.containers:
+            heatmap.bar_label(i,fmt='%.2f')
+        
+        plt.xticks(rotation=70)
+        plt.ylabel('Total Time')
+
+        heatmap.set_title('Event Correlation V Total Time ' + fileObj[1], fontdict={'fontsize':12}, pad=10);
 
         # Output/Show depending of global variable setting with pad inches
         if ( pltPngOut ): plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.5)
         if ( pltShow ):   plt.show()
         if ( pltPngOut or  pltShow):   plt.close()
-
-    plt.figure(figsize=(10, 10))
-    
-    # Shows a nice correlation barchar
-    heatmap = sns.barplot( data=corr_matrix['Net Time'])
-    
-    for i in heatmap.containers:
-        heatmap.bar_label(i,fmt='%.2f')
-    
-    plt.xticks(rotation=70)
-    plt.ylabel('Total Time')
-
-    heatmap.set_title('Event Correlation V Total Time ' + fileObj[1], fontdict={'fontsize':12}, pad=10);
-
-    
-    filepath = Path(util.data.PNG_GENERIC_DIR) / Path(fileObj[0] + 'Corr' + '.png')
-    #for PDF creation
-    pngList.append(filepath)
-
-    # Output/Show depending of global variable setting with pad inches
-    if ( pltPngOut ): plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.5)
-    if ( pltShow ):   plt.show()
-    if ( pltPngOut or  pltShow):   plt.close()
     
     #get the highest and lowest correlation events
     #Correction works better with Calculated time compared with Net Time compared with 
@@ -675,102 +682,104 @@ def ShowCorrInfo(df,competitorIndex=-1):
 
 def ShowHistAgeCat(df):
 
-    # set num of categories to be 3 by default
-    num_cat        = 3
-
-    plt.figure(figsize=(10, 10))
-
-    # do for 2023
-    if (fileObj[2]=='2023'):
-
-        #Competitive singles Category columns colours
-        Category_order = ["18 - 29", "30 - 39", "40+"]
-        colors         = ['red'    , 'tan'    , 'lime']
-    
-    #else for 2024
-    else:
-        #Competitive singles Category 
-        Category_order_single = ["18-24", "25-29", "30-34", "35-39", "40-44",  "45-49", "50+"]
-        colors_single =         ['red'  , 'tan'  , 'lime' , 'blue' , 'purple', 'orange', 'grey']
-
-        #Competitive Dobules Mixed Relay Category 
-        category_order_team = ["< 30", "30-44", "45+"]
-        colors_team =         ['red' , 'tan'  , 'lime']
-
-    #converting from seconds to minutes and making bins dvisible by 5
-    binWidth = 5
-    binMin = ((int(min(df['Net Time']))//60)//binWidth)*binWidth
-    binMax = (((int(max(df['Net Time']))//60)+binWidth)//binWidth)*binWidth
-    bins=np.arange(binMin,binMax, binWidth)
-
-    #BinAllWidth
-    binAllWidth = 20
-    binAllMin = ((int(min(df['Net Time']))//60)//binWidth)*binWidth
-    binAllMax = (((int(max(df['Net Time']))//60)+binWidth)//binWidth)*binWidth
-    binsAll=np.arange(binAllMin,binAllMax, binAllWidth)
-
-
-    catAll = list((df['Net Time'])/60.0)
-
-    #if category column exist.
-    if 'Category' in df.columns:
-
-        #if 2024 style
-        if (fileObj[2]=='2024'):
-
-            #need to setup for singles or teams
-            #if single matches exist
-            if (Category_order_single[0] in df['Category'].values):
-                Category_order = Category_order_single
-                colors = colors_single
-                num_cat        = 7
-            else:
-                Category_order = category_order_team
-                colors = colors_team
-                num_cat        = 3            
-
-        #create list per category
-        cat0 = list((df[df['Category'] == Category_order[0]]['Net Time'])/60.0)
-        cat1 = list((df[df['Category'] == Category_order[1]]['Net Time'])/60.0)
-        cat2 = list((df[df['Category'] == Category_order[2]]['Net Time'])/60.0)
-
-        if (num_cat == 7):
-            cat3 = list((df[df['Category'] == Category_order[3]]['Net Time'])/60.0)
-            cat4 = list((df[df['Category'] == Category_order[4]]['Net Time'])/60.0)
-            cat5 = list((df[df['Category'] == Category_order[5]]['Net Time'])/60.0)
-            cat6 = list((df[df['Category'] == Category_order[6]]['Net Time'])/60.0)
-
-        #if cat0 not empty means there are categories.
-        if cat0 != []:
-
-            if (num_cat == 3):
-                plt.hist([cat0,cat1,cat2], color=colors, label=Category_order, bins=bins)
-                plt.legend()
-            else:
-                plt.hist([cat0,cat1,cat2,cat3,cat4,cat5,cat6], color=colors, label=Category_order, bins=bins)
-                plt.legend()
-                #sns.histplot(data=df, x='Net Time', hue='Category',  multiple="dodge", shrink=.8, palette=colors, hue_order=Category_order, legend=True)
-        else:
-            plt.hist(catAll,bins=binAllWidth)
-
-    else:
-        plt.hist(catAll,bins=binAllWidth)
-
-    plt.xticks(bins)
-    plt.xlabel('Time (Minutes)')
-    plt.ylabel('Num. Participants')
-    plt.title(fileObj[1] + ' Time Distrbution')
-    plt.grid(color ='grey', linestyle ='-.', linewidth = 0.5, alpha = 0.4)
-
 
     filepath = Path(util.data.PNG_GENERIC_DIR) / Path(fileObj[0] + 'Hist' + '.png')
     #for PDF creation
     pngList.append(filepath)
 
-    # Output/Show depending of global variable setting.
-    if ( pltPngOut ): plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.3)
-    if ( pltShow ):   plt.show()
-    if ( pltPngOut or  pltShow):   plt.close()
+    # check if file exists
+    if (os.path.isfile(filepath) == False):  
+
+        # set num of categories to be 3 by default
+        num_cat        = 3
+
+        plt.figure(figsize=(10, 10))
+
+        # do for 2023
+        if (fileObj[2]=='2023'):
+
+            #Competitive singles Category columns colours
+            Category_order = ["18 - 29", "30 - 39", "40+"]
+            colors         = ['red'    , 'tan'    , 'lime']
+        
+        #else for 2024
+        else:
+            #Competitive singles Category 
+            Category_order_single = ["18-24", "25-29", "30-34", "35-39", "40-44",  "45-49", "50+"]
+            colors_single =         ['red'  , 'tan'  , 'lime' , 'blue' , 'purple', 'orange', 'grey']
+
+            #Competitive Dobules Mixed Relay Category 
+            category_order_team = ["< 30", "30-44", "45+"]
+            colors_team =         ['red' , 'tan'  , 'lime']
+
+        #converting from seconds to minutes and making bins dvisible by 5
+        binWidth = 5
+        binMin = ((int(min(df['Net Time']))//60)//binWidth)*binWidth
+        binMax = (((int(max(df['Net Time']))//60)+binWidth)//binWidth)*binWidth
+        bins=np.arange(binMin,binMax, binWidth)
+
+        #BinAllWidth
+        binAllWidth = 20
+        binAllMin = ((int(min(df['Net Time']))//60)//binWidth)*binWidth
+        binAllMax = (((int(max(df['Net Time']))//60)+binWidth)//binWidth)*binWidth
+        binsAll=np.arange(binAllMin,binAllMax, binAllWidth)
+
+        catAll = list((df['Net Time'])/60.0)
+
+        #if category column exist.
+        if 'Category' in df.columns:
+
+            #if 2024 style
+            if (fileObj[2]=='2024'):
+
+                #need to setup for singles or teams
+                #if single matches exist
+                if (Category_order_single[0] in df['Category'].values):
+                    Category_order = Category_order_single
+                    colors = colors_single
+                    num_cat        = 7
+                else:
+                    Category_order = category_order_team
+                    colors = colors_team
+                    num_cat        = 3            
+
+            #create list per category
+            cat0 = list((df[df['Category'] == Category_order[0]]['Net Time'])/60.0)
+            cat1 = list((df[df['Category'] == Category_order[1]]['Net Time'])/60.0)
+            cat2 = list((df[df['Category'] == Category_order[2]]['Net Time'])/60.0)
+
+            if (num_cat == 7):
+                cat3 = list((df[df['Category'] == Category_order[3]]['Net Time'])/60.0)
+                cat4 = list((df[df['Category'] == Category_order[4]]['Net Time'])/60.0)
+                cat5 = list((df[df['Category'] == Category_order[5]]['Net Time'])/60.0)
+                cat6 = list((df[df['Category'] == Category_order[6]]['Net Time'])/60.0)
+
+            #if cat0 not empty means there are categories.
+            if cat0 != []:
+
+                if (num_cat == 3):
+                    plt.hist([cat0,cat1,cat2], color=colors, label=Category_order, bins=bins)
+                    plt.legend()
+                else:
+                    plt.hist([cat0,cat1,cat2,cat3,cat4,cat5,cat6], color=colors, label=Category_order, bins=bins)
+                    plt.legend()
+                    #sns.histplot(data=df, x='Net Time', hue='Category',  multiple="dodge", shrink=.8, palette=colors, hue_order=Category_order, legend=True)
+            else:
+                plt.hist(catAll,bins=binAllWidth)
+
+        else:
+            plt.hist(catAll,bins=binAllWidth)
+
+        plt.xticks(bins)
+        plt.xlabel('Time (Minutes)')
+        plt.ylabel('Num. Participants')
+        plt.title(fileObj[1] + ' Time Distrbution')
+        plt.grid(color ='grey', linestyle ='-.', linewidth = 0.5, alpha = 0.4)
+
+        # Output/Show depending of global variable setting.
+        if ( pltPngOut ): plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.3)
+        if ( pltShow ):   plt.show()
+        if ( pltPngOut or  pltShow):   plt.close()
 
 #############################
 # Bar chart Events
@@ -787,51 +796,6 @@ def ShowBarChartEvent(df,competitorIndex=-1):
     compList= []
     maxTime = 0.0
 
-    # get the median time for each event.
-    for event in EventList:
-
-        maxEventList.append(df[event].quantile(0.90))
-        q1EventList.append(df[event].quantile(0.70))
-        medianEventList.append(df[event].quantile(0.50))
-        q3EventList.append(df[event].quantile(0.30))
-        q4EventList.append(df[event].quantile(0.10))
-        minEventList.append(df[event].min())
-
-        if (competitorIndex != -1):
-            compList.append(df.loc[competitorIndex,event])
-            if (df[event].quantile(0.90) > maxTime):
-                maxTime = df[event].quantile(0.90)
-
-    fig, ax = plt.subplots(figsize=(10, 10))
-
-    plt.bar(EventList, maxEventList,       color='grey'   , label='70%-90%')
-    plt.bar(EventList, q1EventList,        color='red'    , label='50%-70%')
-    plt.bar(EventList, medianEventList,    color='orange' , label='30%-50%')
-    plt.bar(EventList, q3EventList,        color='green'  , label='10%-30%')
-    plt.bar(EventList, q4EventList,        color='purple'  , label='0%-10%')
-    plt.bar(EventList, minEventList,       color='blue'   , label='fastest')
-
-    if (competitorIndex != -1):
-        plt.plot(compList, marker='_', markersize=40.0, markeredgewidth=2.0, color='navy', linewidth=0.0)
-
-        #coorinates via trial an error.
-        plt.text(4.0,maxTime*1.02,'____='+ df.loc[competitorIndex,'Name'] , fontsize = 10, color='blue')
-
-
-    #keep the y axis showing multiples of 60
-    plt.yticks(range(0,int(max(maxEventList))+30,60))
-    plt.grid(color ='grey', linestyle ='-.', linewidth = 0.5, alpha = 0.4)
-
-    plt.tick_params(axis='x', labelrotation=90)
-    plt.ylabel('Time in Seconds')
-
-    if (competitorIndex == -1):
-        plt.title(fileObj[1] + ' Bar Station Breakdown')
-    else:
-        plt.title(fileObj[1] + ' ' + df.loc[competitorIndex,'Name'] + ' Bar Stations')
-   
-    plt.legend() 
-
     if (competitorIndex == -1):
         filepath = Path(util.data.PNG_GENERIC_DIR) / Path(fileObj[0] + 'Bar' + '.png')
     else:
@@ -840,10 +804,58 @@ def ShowBarChartEvent(df,competitorIndex=-1):
     #for PDF creation
     pngList.append(filepath)
 
-    # Output/Show depending of global variable setting with some padding
-    if ( pltPngOut ): plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.5)
-    if ( pltShow ):   plt.show()
-    if ( pltPngOut or  pltShow):   plt.close()
+    # check if file exists
+    if (os.path.isfile(filepath) == False):    
+
+        # get the median time for each event.
+        for event in EventList:
+
+            maxEventList.append(df[event].quantile(0.90))
+            q1EventList.append(df[event].quantile(0.70))
+            medianEventList.append(df[event].quantile(0.50))
+            q3EventList.append(df[event].quantile(0.30))
+            q4EventList.append(df[event].quantile(0.10))
+            minEventList.append(df[event].min())
+
+            if (competitorIndex != -1):
+                compList.append(df.loc[competitorIndex,event])
+                if (df[event].quantile(0.90) > maxTime):
+                    maxTime = df[event].quantile(0.90)
+
+        fig, ax = plt.subplots(figsize=(10, 10))
+
+        plt.bar(EventList, maxEventList,       color='grey'   , label='70%-90%')
+        plt.bar(EventList, q1EventList,        color='red'    , label='50%-70%')
+        plt.bar(EventList, medianEventList,    color='orange' , label='30%-50%')
+        plt.bar(EventList, q3EventList,        color='green'  , label='10%-30%')
+        plt.bar(EventList, q4EventList,        color='purple'  , label='0%-10%')
+        plt.bar(EventList, minEventList,       color='blue'   , label='fastest')
+
+        if (competitorIndex != -1):
+            plt.plot(compList, marker='_', markersize=40.0, markeredgewidth=2.0, color='navy', linewidth=0.0)
+
+            #coorinates via trial an error.
+            plt.text(4.0,maxTime*1.02,'____='+ df.loc[competitorIndex,'Name'] , fontsize = 10, color='blue')
+
+
+        #keep the y axis showing multiples of 60
+        plt.yticks(range(0,int(max(maxEventList))+30,60))
+        plt.grid(color ='grey', linestyle ='-.', linewidth = 0.5, alpha = 0.4)
+
+        plt.tick_params(axis='x', labelrotation=90)
+        plt.ylabel('Time in Seconds')
+
+        if (competitorIndex == -1):
+            plt.title(fileObj[1] + ' Bar Station Breakdown')
+        else:
+            plt.title(fileObj[1] + ' ' + df.loc[competitorIndex,'Name'] + ' Bar Stations')
+    
+        plt.legend() 
+
+        # Output/Show depending of global variable setting with some padding
+        if ( pltPngOut ): plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.5)
+        if ( pltShow ):   plt.show()
+        if ( pltPngOut or  pltShow):   plt.close()
 
 
 #############################
@@ -852,33 +864,8 @@ def ShowBarChartEvent(df,competitorIndex=-1):
 
 def ShowViolinChartEvent(df,competitorIndex=-1):
 
-    compList= []
 
-    # compile list of comeptitor times.
-    if (competitorIndex != -1):
-        for event in EventList:
-            compList.append(df.loc[competitorIndex,event])
 
-    #Draw Violin plot. 600 value used to exclude outliers, but should be chosen algorithmically.
-    g=sns.violinplot(data=df[df[EventList]<600.0][EventList] , inner='box', cut=1)
-    g.figure.set_size_inches(10,10)
-
-    if (competitorIndex != -1):
-        plt.plot(compList, marker='_', markersize=40.0, markeredgewidth=2.0, color='navy', linewidth=0.0)
-
-        #coorinates via trial an error.
-        plt.text(4.0,645,'____='+ df.loc[competitorIndex,'Name'], color='navy' , fontsize = 10)
-
-    plt.yticks(range(0,660+30,60))
-    plt.tick_params(axis='x', labelrotation=90)
-    plt.ylabel('Time in Seconds')
-    plt.grid(color ='grey', linestyle ='-.', linewidth = 0.5, alpha = 0.4)
-    
-    if (competitorIndex == -1):
-        plt.title(fileObj[1] + ' Violin Station Breakdown')
-    else:
-        plt.title(fileObj[1] + ' ' + df.loc[competitorIndex,'Name'] + ' Violin Stations')
-   
     if (competitorIndex == -1):
         filepath = Path(util.data.PNG_GENERIC_DIR) / Path(fileObj[0] + 'Violin' + '.png')
     else:
@@ -887,10 +874,40 @@ def ShowViolinChartEvent(df,competitorIndex=-1):
     #for PDF creation
     pngList.append(filepath)
 
-    # Output/Show depending of global variable setting with some padding
-    if ( pltPngOut ): plt.savefig(filepath , bbox_inches='tight', pad_inches = 0.5)
-    if ( pltShow ):   plt.show()
-    if ( pltPngOut or  pltShow):   plt.close()
+    # check if file exists  
+    if (os.path.isfile(filepath) == False):
+
+        compList= []
+
+        # compile list of comeptitor times.
+        if (competitorIndex != -1):
+            for event in EventList:
+                compList.append(df.loc[competitorIndex,event])
+
+        #Draw Violin plot. 600 value used to exclude outliers, but should be chosen algorithmically.
+        g=sns.violinplot(data=df[df[EventList]<600.0][EventList] , inner='box', cut=1)
+        g.figure.set_size_inches(10,10)
+
+        if (competitorIndex != -1):
+            plt.plot(compList, marker='_', markersize=40.0, markeredgewidth=2.0, color='navy', linewidth=0.0)
+
+            #coorinates via trial an error.
+            plt.text(4.0,645,'____='+ df.loc[competitorIndex,'Name'], color='navy' , fontsize = 10)
+
+        plt.yticks(range(0,660+30,60))
+        plt.tick_params(axis='x', labelrotation=90)
+        plt.ylabel('Time in Seconds')
+        plt.grid(color ='grey', linestyle ='-.', linewidth = 0.5, alpha = 0.4)
+        
+        if (competitorIndex == -1):
+            plt.title(fileObj[1] + ' Violin Station Breakdown')
+        else:
+            plt.title(fileObj[1] + ' ' + df.loc[competitorIndex,'Name'] + ' Violin Stations')
+    
+        # Output/Show depending of global variable setting with some padding
+        if ( pltPngOut ): plt.savefig(filepath , bbox_inches='tight', pad_inches = 0.5)
+        if ( pltShow ):   plt.show()
+        if ( pltPngOut or  pltShow):   plt.close()
 
 
 #############################
@@ -899,97 +916,115 @@ def ShowViolinChartEvent(df,competitorIndex=-1):
 
 def ShowBarChartCutOffEvent(df):
 
-    fig, ax = plt.subplots(figsize=(10, 10))
-
-    #null list
-    cutOffEventList = []
-    MyIndex = 0
-
-    for event in EventList[::]:
-        #print ('Event CutOff %s %d %d %2.2f' % (event, EventCutOffCount[MyIndex], len(df.index), EventCutOffCount[MyIndex] / len(df.index)))
-
-        #add percentage to list
-        cutOffEventList.append((100*EventCutOffCount[MyIndex]) / len(df.index))
-        MyIndex = MyIndex + 1
-
-    ax.bar(EventList, cutOffEventList,       color='red'   , label='Partipants > 7min')
-
-    for container in ax.containers:
-        ax.bar_label(container,fmt='%.1f%%')
-
-    plt.grid(color ='grey', linestyle ='-.', linewidth = 0.5, alpha = 0.4)
-    plt.tick_params(axis='x', labelrotation=90)
-    plt.ylabel('Num Participants')
-    plt.title(fileObj[1] + ' Station 7 Min Stats')
-    plt.legend() 
-
     filepath = Path(util.data.PNG_GENERIC_DIR) / Path(fileObj[0] + 'CutOffBar' + '.png')
     #for PDF creation
     pngList.append(filepath)
 
-    # Output/Show depending of global variable setting with some padding
-    if ( pltPngOut ): plt.savefig(filepath , bbox_inches='tight', pad_inches = 0.5)
-    if ( pltShow ):   plt.show()
-    if ( pltPngOut or  pltShow):   plt.close()
+    # check if file exists  
+    if (os.path.isfile(filepath) == False):
+
+        fig, ax = plt.subplots(figsize=(10, 10))
+
+        #null list
+        cutOffEventList = []
+        MyIndex = 0
+
+        for event in EventList[::]:
+            #print ('Event CutOff %s %d %d %2.2f' % (event, EventCutOffCount[MyIndex], len(df.index), EventCutOffCount[MyIndex] / len(df.index)))
+
+            #add percentage to list
+            cutOffEventList.append((100*EventCutOffCount[MyIndex]) / len(df.index))
+            MyIndex = MyIndex + 1
+
+        ax.bar(EventList, cutOffEventList,       color='red'   , label='Partipants > 7min')
+
+        for container in ax.containers:
+            ax.bar_label(container,fmt='%.1f%%')
+
+        plt.grid(color ='grey', linestyle ='-.', linewidth = 0.5, alpha = 0.4)
+        plt.tick_params(axis='x', labelrotation=90)
+        plt.ylabel('Num Participants')
+        plt.title(fileObj[1] + ' Station 7 Min Stats')
+        plt.legend() 
+
+        # Output/Show depending of global variable setting with some padding
+        if ( pltPngOut ): plt.savefig(filepath , bbox_inches='tight', pad_inches = 0.5)
+        if ( pltShow ):   plt.show()
+        if ( pltPngOut or  pltShow):   plt.close()
 
 #############################
 # PieChartAverage
 #############################
 def ShowPieChartAverage(df,competitorIndex=-1):
 
-    plt.figure(figsize=(10, 10))
-
     # Just do Generic pie chart based on mean time per event.
     if(competitorIndex==-1):
-        meanEventList = []
-        meanEventListLabel = []
-        totalMeanTime = 0.0
-    
-        # get the median time for each event.
-        for event in EventList:
-            meanEventList.append(df[event].mean())
-            totalMeanTime = totalMeanTime + int(df[event].mean())
 
-            eventLabelString = "{}\n{:1d}m {:2d}s".format(event, int(df[event].mean())//60 ,int(df[event].mean())%60)
-            meanEventListLabel.append(eventLabelString)
-
-        totalMeanTimeString = "{:1d}m {:2d}s".format(int(totalMeanTime)//60 ,int(totalMeanTime)%60)
-        plt.title(fileObj[1] + ' Average Station Breakdown : ' + totalMeanTimeString )
-    
-        #create pie chart = Use Seaborn's color palette 'Set2'
-        plt.pie(meanEventList, labels = meanEventListLabel, startangle = 0, autopct='%1.1f%%', colors=sns.color_palette('Set2'))
-        
         filepath = Path(util.data.PNG_GENERIC_DIR) / Path(fileObj[0] + 'Pie' + '.png')
         #for PDF creation
         pngList.append(filepath)
 
+        # check if file exists
+        if (os.path.isfile(filepath) == False):
+
+            plt.figure(figsize=(10, 10))
+
+            meanEventList = []
+            meanEventListLabel = []
+            totalMeanTime = 0.0
+        
+            # get the median time for each event.
+            for event in EventList:
+                meanEventList.append(df[event].mean())
+                totalMeanTime = totalMeanTime + int(df[event].mean())
+
+                eventLabelString = "{}\n{:1d}m {:2d}s".format(event, int(df[event].mean())//60 ,int(df[event].mean())%60)
+                meanEventListLabel.append(eventLabelString)
+
+            totalMeanTimeString = "{:1d}m {:2d}s".format(int(totalMeanTime)//60 ,int(totalMeanTime)%60)
+            plt.title(fileObj[1] + ' Average Station Breakdown : ' + totalMeanTimeString )
+        
+            #create pie chart = Use Seaborn's color palette 'Set2'
+            plt.pie(meanEventList, labels = meanEventListLabel, startangle = 0, autopct='%1.1f%%', colors=sns.color_palette('Set2'))
+            
+            # Output/Show depending of global variable setting. 
+            if ( pltPngOut ): plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.3)
+            if ( pltShow ):   plt.show()
+            if ( pltPngOut or  pltShow):   plt.close()
+
     # else do competitor specific pie chart based on actual time per event.
     else:
-        compEventList = []
-        compEventListLabel = []
 
-        # get the median time for each event.
-        for event in EventList:
-         
-            compEventList.append(df.loc[competitorIndex,event])
-            eventLabelString = "{}\n{:1d}m {:2d}s".format(event, int(df.loc[competitorIndex,event])//60 ,int(df.loc[competitorIndex,event])%60)
-            compEventListLabel.append(eventLabelString)
-
-        totalCompTimeString = "{:1d}m {:2d}s".format(int(df.loc[competitorIndex,'Calc Time'])//60 ,int(df.loc[competitorIndex,'Calc Time'])%60)
-        plt.title(fileObj[1] + ' ' + df.loc[competitorIndex,'Name'] + ' Stations: ' + totalCompTimeString )
-
-        #create pie chart = Use Seaborn's color palette 'Set2'
-        plt.pie(compEventList, labels = compEventListLabel, startangle = 0, autopct='%1.1f%%', colors=sns.color_palette('Set2'))
-        
         filepath = Path(util.data.PNG_COMP_DIR) / Path(fileObj[0] + competitorName + 'Pie' + '.png')
 
         #for PDF creation
         pngList.append(filepath)
 
-    # Output/Show depending of global variable setting. 
-    if ( pltPngOut ): plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.3)
-    if ( pltShow ):   plt.show()
-    if ( pltPngOut or  pltShow):   plt.close()
+        # check if file exists  
+        if (os.path.isfile(filepath) == False):
+
+            plt.figure(figsize=(10, 10))
+
+            compEventList = []
+            compEventListLabel = []
+
+            # get the median time for each event.
+            for event in EventList:
+            
+                compEventList.append(df.loc[competitorIndex,event])
+                eventLabelString = "{}\n{:1d}m {:2d}s".format(event, int(df.loc[competitorIndex,event])//60 ,int(df.loc[competitorIndex,event])%60)
+                compEventListLabel.append(eventLabelString)
+
+            totalCompTimeString = "{:1d}m {:2d}s".format(int(df.loc[competitorIndex,'Calc Time'])//60 ,int(df.loc[competitorIndex,'Calc Time'])%60)
+            plt.title(fileObj[1] + ' ' + df.loc[competitorIndex,'Name'] + ' Stations: ' + totalCompTimeString )
+
+            #create pie chart = Use Seaborn's color palette 'Set2'
+            plt.pie(compEventList, labels = compEventListLabel, startangle = 0, autopct='%1.1f%%', colors=sns.color_palette('Set2'))
+
+            # Output/Show depending of global variable setting. 
+            if ( pltPngOut ): plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.3)
+            if ( pltShow ):   plt.show()
+            if ( pltPngOut or  pltShow):   plt.close()
 
 
 #############################
@@ -997,68 +1032,7 @@ def ShowPieChartAverage(df,competitorIndex=-1):
 #############################
 def ShowScatterPlot(df, eventName, corr, competitorIndex=-1):
         
-    q1ListX = [] #fastest quatile
-    q2ListX = []
-    q3ListX = []
-    q4ListX = [] #slowest quatile
 
-    q1ListY = [] #fastest quatile
-    q2ListY = []
-    q3ListY = []
-    q4ListY = [] #slowest quatile
-    maxPos=0
-
-     # For each competitor.
-    for index in df.index:
-
-        if df[eventName][index] <  df[eventName].quantile(0.25) :
-            #Add to fastest quartile list
-            q1ListX.append(df[eventName][index])
-            q1ListY.append(df['Pos'][index])
-            if(df['Pos'][index]> maxPos): maxPos = df['Pos'][index]
-        
-        elif df[eventName][index] <  df[eventName].quantile(0.50) :
-            #Add to q2 list
-            q2ListX.append(df[eventName][index])
-            q2ListY.append(df['Pos'][index])
-            if(df['Pos'][index]> maxPos): maxPos = df['Pos'][index]
-            
-        elif df[eventName][index] <  df[eventName].quantile(0.75) :
-            #Add to q3 list
-            q3ListX.append(df[eventName][index])
-            q3ListY.append(df['Pos'][index])
-            if(df['Pos'][index]> maxPos): maxPos = df['Pos'][index]
-
-        elif df[eventName][index] <  df[eventName].quantile(0.98):
-            #Add to slowest quartile list
-            q4ListX.append(df[eventName][index])
-            q4ListY.append(df['Pos'][index])
-            if(df['Pos'][index]> maxPos): maxPos = df['Pos'][index]
-
-
-    plt.figure(figsize=(10, 10))
-
-    plt.scatter(x=q1ListX, y=q1ListY, c ="blue",  label="0%-24%")
-    plt.scatter(x=q2ListX, y=q2ListY, c ="brown", label="25%-49%")
-    plt.scatter(x=q3ListX, y=q3ListY, c ="green", label="50%-74%")
-    plt.scatter(x=q4ListX, y=q4ListY, c ="red",   label="75%-98%")
-    
-    if (competitorIndex != -1):
-        plt.plot([df.loc[competitorIndex,eventName]], [df.loc[competitorIndex,'Pos']], marker='+', markersize=20.0, markeredgewidth=2.0, color='navy', linewidth=0.0)
-
-        #coorinates via trial an error.
-        plt.text(df[eventName].min()*1.1, maxPos+1.0,'+='+ df.loc[competitorIndex,'Name'] , fontsize = 10, color='navy')
-
-    #conver corr float to str
-    if (corr):
-        corrstr = "{:1.2f}".format(corr)
-    
-    plt.title(fileObj[1] + ' ' + eventName + ' Corr. ' + corrstr)
-    plt.ylabel("Ovearll Position")
-    plt.xlabel("Station Time")
-    plt.legend()
-    plt.grid(color ='grey', linestyle ='-.', linewidth = 0.5, alpha = 0.4)
-    
     if (competitorIndex == -1):
         filepath = Path(util.data.PNG_GENERIC_DIR) / Path(fileObj[0] + eventName + 'Scat' + '.png')
     else:
@@ -1067,10 +1041,74 @@ def ShowScatterPlot(df, eventName, corr, competitorIndex=-1):
     #for PDF creation
     pngList.append(filepath)
 
-    # Output/Show depending of global variable setting. 
-    if ( pltPngOut ): plt.savefig(filepath , bbox_inches='tight', pad_inches = 0.3)
-    if ( pltShow ):   plt.show()
-    if ( pltPngOut or  pltShow):   plt.close()
+    # check if file exists
+    if (os.path.isfile(filepath) == False):
+    
+        q1ListX = [] #fastest quatile
+        q2ListX = []
+        q3ListX = []
+        q4ListX = [] #slowest quatile
+
+        q1ListY = [] #fastest quatile
+        q2ListY = []
+        q3ListY = []
+        q4ListY = [] #slowest quatile
+        maxPos=0
+
+        # For each competitor.
+        for index in df.index:
+
+            if df[eventName][index] <  df[eventName].quantile(0.25) :
+                #Add to fastest quartile list
+                q1ListX.append(df[eventName][index])
+                q1ListY.append(df['Pos'][index])
+                if(df['Pos'][index]> maxPos): maxPos = df['Pos'][index]
+            
+            elif df[eventName][index] <  df[eventName].quantile(0.50) :
+                #Add to q2 list
+                q2ListX.append(df[eventName][index])
+                q2ListY.append(df['Pos'][index])
+                if(df['Pos'][index]> maxPos): maxPos = df['Pos'][index]
+                
+            elif df[eventName][index] <  df[eventName].quantile(0.75) :
+                #Add to q3 list
+                q3ListX.append(df[eventName][index])
+                q3ListY.append(df['Pos'][index])
+                if(df['Pos'][index]> maxPos): maxPos = df['Pos'][index]
+
+            elif df[eventName][index] <  df[eventName].quantile(0.98):
+                #Add to slowest quartile list
+                q4ListX.append(df[eventName][index])
+                q4ListY.append(df['Pos'][index])
+                if(df['Pos'][index]> maxPos): maxPos = df['Pos'][index]
+
+        plt.figure(figsize=(10, 10))
+
+        plt.scatter(x=q1ListX, y=q1ListY, c ="blue",  label="0%-24%")
+        plt.scatter(x=q2ListX, y=q2ListY, c ="brown", label="25%-49%")
+        plt.scatter(x=q3ListX, y=q3ListY, c ="green", label="50%-74%")
+        plt.scatter(x=q4ListX, y=q4ListY, c ="red",   label="75%-98%")
+        
+        if (competitorIndex != -1):
+            plt.plot([df.loc[competitorIndex,eventName]], [df.loc[competitorIndex,'Pos']], marker='+', markersize=20.0, markeredgewidth=2.0, color='navy', linewidth=0.0)
+
+            #coorinates via trial an error.
+            plt.text(df[eventName].min()*1.1, maxPos+1.0,'+='+ df.loc[competitorIndex,'Name'] , fontsize = 10, color='navy')
+
+        #conver corr float to str
+        if (corr):
+            corrstr = "{:1.2f}".format(corr)
+        
+        plt.title(fileObj[1] + ' ' + eventName + ' Corr. ' + corrstr)
+        plt.ylabel("Ovearll Position")
+        plt.xlabel("Station Time")
+        plt.legend()
+        plt.grid(color ='grey', linestyle ='-.', linewidth = 0.5, alpha = 0.4)
+
+        # Output/Show depending of global variable setting. 
+        if ( pltPngOut ): plt.savefig(filepath , bbox_inches='tight', pad_inches = 0.3)
+        if ( pltShow ):   plt.show()
+        if ( pltPngOut or  pltShow):   plt.close()
 
 
 #############################
@@ -1169,7 +1207,10 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
                 if (csvDurationOut): 
                     
                     outdatafile = Path(util.data.CSV_GENERIC_DIR) / Path('duration' + fileObj[0] + '.csv')
-                    df.to_csv(outdatafile)
+                    
+                    # check if file exists
+                    if (os.path.isfile(outdatafile) == False):
+                        df.to_csv(outdatafile)
 
                 #show the competitor plots.
                 if(showHist): ShowHistAgeCat(df=df)
@@ -1188,7 +1229,9 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
             if (csvDurationOut):
                 
                 outdatafile = Path(util.data.CSV_GENERIC_DIR) / Path('duration' + fileObj[0] + '.csv')
-                df.to_csv(outdatafile)
+                # check if file exists
+                if (os.path.isfile(outdatafile) == False):
+                    df.to_csv(outdatafile)
 
             #show the event plots.
             if(showHist): ShowHistAgeCat(df=df)
@@ -1207,42 +1250,47 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
             if (csvDfOut): 
                 tidyTheData2(df=df)
                 outdatafile = Path(util.data.CSV_GENERIC_DIR) / Path('df' + fileObj[0] + '.csv')
-                df.to_csv(outdatafile)
+                
+                # check if file exists
+                if (os.path.isfile(outdatafile) == False):
+                    df.to_csv(outdatafile)
 
             #creates a pdf of the PNGs processed here for each event
             if (createPdf):
-                doc = pymupdf.open()  # PDF with the text pictures
-
-                #first output text (Can work on format)
-                rect_x1 = 50
-                rect_y1 = 50
-                rect_x2 = 500  # trial
-                rect_y2 = 800 # error
-                rect = (rect_x1, rect_y1, rect_x2, rect_y2)
-
-                # if competitor Analysis enabled.
-                if(competitorAnalysis == True):
-                    page = doc.new_page()
-                    rc = page.insert_htmlbox(rect, stringPdf)
-
-
-                for i, f in enumerate(pngList):
-                    img = pymupdf.open(f)  # open pic as document
-                    rect = img[0].rect  # pic dimension
-                    pdfbytes = img.convert_to_pdf()  # make a PDF stream
-                    img.close()  # no longer needed
-                    imgPDF = pymupdf.open("pdf", pdfbytes)  # open stream as PDF
-                    page = doc.new_page(width = rect.width,  # new page with ...
-                                    height = rect.height)  # pic dimension
-                    page.show_pdf_page(rect, imgPDF, 0)  # image fills the page
 
                 if(competitorAnalysis==True and competitorIndex != -1):
                     filepath = Path(util.data.PDF_COMP_DIR) /  Path(fileObj[0] + competitorName + '.pdf')
-
                 else:
                     filepath = Path(util.data.PDF_GENERIC_DIR) / Path(fileObj[0] +  '.pdf')
-                    
-                doc.save(filepath) 
+
+                # check if file exists
+                if (os.path.isfile(filepath) == False):            
+                    doc = pymupdf.open()  # PDF with the text pictures
+
+                    #first output text (Can work on format)
+                    rect_x1 = 50
+                    rect_y1 = 50
+                    rect_x2 = 500  # trial
+                    rect_y2 = 800 # error
+                    rect = (rect_x1, rect_y1, rect_x2, rect_y2)
+
+                    # if competitor Analysis enabled.
+                    if(competitorAnalysis == True):
+                        page = doc.new_page()
+                        rc = page.insert_htmlbox(rect, stringPdf)
+
+
+                    for i, f in enumerate(pngList):
+                        img = pymupdf.open(f)  # open pic as document
+                        rect = img[0].rect  # pic dimension
+                        pdfbytes = img.convert_to_pdf()  # make a PDF stream
+                        img.close()  # no longer needed
+                        imgPDF = pymupdf.open("pdf", pdfbytes)  # open stream as PDF
+                        page = doc.new_page(width = rect.width,  # new page with ...
+                                        height = rect.height)  # pic dimension
+                        page.show_pdf_page(rect, imgPDF, 0)  # image fills the page
+                        
+                    doc.save(filepath) 
 
             if (pltPngOut):
                 #update output variable
