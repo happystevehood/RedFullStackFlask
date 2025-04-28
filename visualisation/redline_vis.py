@@ -39,9 +39,11 @@ from datetime import datetime, timedelta
 import os, pymupdf
 
 import json
-
+from pathlib import Path
 #copy utility
 import shutil
+
+import util.data
 
 # Otherwise get this warning - UserWarning: Starting a Matplotlib GUI outside of the main thread will likely fail
 mpl.use('agg')
@@ -84,14 +86,6 @@ myFileLists = [
             ]
 
 
-#
-#filepath hardcoded relative path, delete absolute path when ready
-#
-#filepath23 = r"C:\Users\Steph\OneDrive\Documents\Dev\RedFullStackFlask\data"
-#filepath24 = r"C:\Users\Steph\OneDrive\Documents\Dev\RedFullStackFlask\data"
-filepath23 = r".\data"
-filepath24 = r".\data"
-
 
 #Boolean to decide if output warnings/Competitor Date to terminal
 OutputInfo=False
@@ -112,8 +106,8 @@ OutputComp=False
 #
 pltShow=None #set to false or will get lots of warnings with mpl.use('agg')
 allScatter=None
-cvsDfOut=None
-cvsDurationOut=None
+csvDfOut=None
+csvDurationOut=None
 pltPngOut=None
 #PDF only created if pltPngOut=False
 createPdf=None
@@ -162,7 +156,6 @@ competitorRaceNo = ''
 #Some lazy global variables
 EventList = []
 EventListStart = []
-filepath = ""
 fileObj = []
 
 
@@ -184,7 +177,6 @@ def tidyTheData(df):
     global fileObj
     global EventList
     global EventListStart
-    global filepath
 
     #Clean a few uneeded columns first.
     if 'Fav' in df.columns:
@@ -626,12 +618,13 @@ def ShowCorrInfo(df,competitorIndex=-1):
         heatmap = sns.heatmap(corr_matrix, vmin=-0, vmax=1, annot=True, cmap='BrBG')
         heatmap.set_title('Correlation Heatmap ' + fileObj[1], fontdict={'fontsize':12}, pad=12);
 
-        pngFilename = fileObj[0] + 'CorrHeat' + '.png'
+        filepath = Path(util.data.PNG_GENERIC_DIR) / Path(fileObj[0] + 'CorrHeat' + '.png')
+        
         #for PDF creation
-        pngList.append(pngFilename)        
+        pngList.append(filepath) 
 
         # Output/Show depending of global variable setting with pad inches
-        if ( pltPngOut ): plt.savefig(filepath + '\\output\\png\\' + pngFilename, bbox_inches='tight', pad_inches = 0.5)
+        if ( pltPngOut ): plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.5)
         if ( pltShow ):   plt.show()
         if ( pltPngOut or  pltShow):   plt.close()
 
@@ -648,12 +641,13 @@ def ShowCorrInfo(df,competitorIndex=-1):
 
     heatmap.set_title('Event Correlation V Total Time ' + fileObj[1], fontdict={'fontsize':12}, pad=10);
 
-    pngFilename = fileObj[0] + 'Corr' + '.png'
+    
+    filepath = Path(util.data.PNG_GENERIC_DIR) / Path(fileObj[0] + 'Corr' + '.png')
     #for PDF creation
-    pngList.append(pngFilename)
+    pngList.append(filepath)
 
     # Output/Show depending of global variable setting with pad inches
-    if ( pltPngOut ): plt.savefig(filepath + '\\output\\png\\' + pngFilename , bbox_inches='tight', pad_inches = 0.5)
+    if ( pltPngOut ): plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.5)
     if ( pltShow ):   plt.show()
     if ( pltPngOut or  pltShow):   plt.close()
     
@@ -768,12 +762,13 @@ def ShowHistAgeCat(df):
     plt.title(fileObj[1] + ' Time Distrbution')
     plt.grid(color ='grey', linestyle ='-.', linewidth = 0.5, alpha = 0.4)
 
-    pngFilename = fileObj[0] + 'Hist' + '.png'
+
+    filepath = Path(util.data.PNG_GENERIC_DIR) / Path(fileObj[0] + 'Hist' + '.png')
     #for PDF creation
-    pngList.append(pngFilename)
+    pngList.append(filepath)
 
     # Output/Show depending of global variable setting.
-    if ( pltPngOut ): plt.savefig(filepath + '\\output\\png\\' + pngFilename, bbox_inches='tight', pad_inches = 0.3)
+    if ( pltPngOut ): plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.3)
     if ( pltShow ):   plt.show()
     if ( pltPngOut or  pltShow):   plt.close()
 
@@ -838,15 +833,15 @@ def ShowBarChartEvent(df,competitorIndex=-1):
     plt.legend() 
 
     if (competitorIndex == -1):
-        pngFilename = fileObj[0] + 'Bar' + '.png'
+        filepath = Path(util.data.PNG_GENERIC_DIR) / Path(fileObj[0] + 'Bar' + '.png')
     else:
-        pngFilename = fileObj[0] + competitorName + 'Bar' + '.png'
+        filepath = Path(util.data.PNG_COMP_DIR) / Path(fileObj[0] + competitorName + 'Bar' + '.png')
     
     #for PDF creation
-    pngList.append(pngFilename)
+    pngList.append(filepath)
 
     # Output/Show depending of global variable setting with some padding
-    if ( pltPngOut ): plt.savefig(filepath + '\\output\\png\\' + pngFilename, bbox_inches='tight', pad_inches = 0.5)
+    if ( pltPngOut ): plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.5)
     if ( pltShow ):   plt.show()
     if ( pltPngOut or  pltShow):   plt.close()
 
@@ -885,15 +880,15 @@ def ShowViolinChartEvent(df,competitorIndex=-1):
         plt.title(fileObj[1] + ' ' + df.loc[competitorIndex,'Name'] + ' Violin Stations')
    
     if (competitorIndex == -1):
-        pngFilename = fileObj[0] + 'Violin' + '.png'
+        filepath = Path(util.data.PNG_GENERIC_DIR) / Path(fileObj[0] + 'Violin' + '.png')
     else:
-        pngFilename = fileObj[0] + competitorName + 'Violin' + '.png'
+        filepath = Path(util.data.PNG_COMP_DIR) / Path(fileObj[0] + competitorName + 'Violin' + '.png')
 
     #for PDF creation
-    pngList.append(pngFilename)
+    pngList.append(filepath)
 
     # Output/Show depending of global variable setting with some padding
-    if ( pltPngOut ): plt.savefig(filepath + '\\output\\png\\' +  pngFilename, bbox_inches='tight', pad_inches = 0.5)
+    if ( pltPngOut ): plt.savefig(filepath , bbox_inches='tight', pad_inches = 0.5)
     if ( pltShow ):   plt.show()
     if ( pltPngOut or  pltShow):   plt.close()
 
@@ -928,12 +923,12 @@ def ShowBarChartCutOffEvent(df):
     plt.title(fileObj[1] + ' Station 7 Min Stats')
     plt.legend() 
 
-    pngFilename = fileObj[0] + 'CutOffBar' + '.png'
+    filepath = Path(util.data.PNG_GENERIC_DIR) / Path(fileObj[0] + 'CutOffBar' + '.png')
     #for PDF creation
-    pngList.append(pngFilename)
+    pngList.append(filepath)
 
     # Output/Show depending of global variable setting with some padding
-    if ( pltPngOut ): plt.savefig(filepath + '\\output\\png\\' + pngFilename, bbox_inches='tight', pad_inches = 0.5)
+    if ( pltPngOut ): plt.savefig(filepath , bbox_inches='tight', pad_inches = 0.5)
     if ( pltShow ):   plt.show()
     if ( pltPngOut or  pltShow):   plt.close()
 
@@ -964,9 +959,9 @@ def ShowPieChartAverage(df,competitorIndex=-1):
         #create pie chart = Use Seaborn's color palette 'Set2'
         plt.pie(meanEventList, labels = meanEventListLabel, startangle = 0, autopct='%1.1f%%', colors=sns.color_palette('Set2'))
         
-        pngFilename = fileObj[0] + 'Pie' + '.png'
+        filepath = Path(util.data.PNG_GENERIC_DIR) / Path(fileObj[0] + 'Pie' + '.png')
         #for PDF creation
-        pngList.append(pngFilename)
+        pngList.append(filepath)
 
     # else do competitor specific pie chart based on actual time per event.
     else:
@@ -986,12 +981,13 @@ def ShowPieChartAverage(df,competitorIndex=-1):
         #create pie chart = Use Seaborn's color palette 'Set2'
         plt.pie(compEventList, labels = compEventListLabel, startangle = 0, autopct='%1.1f%%', colors=sns.color_palette('Set2'))
         
-        pngFilename = fileObj[0] + competitorName + 'Pie' + '.png'
+        filepath = Path(util.data.PNG_COMP_DIR) / Path(fileObj[0] + competitorName + 'Pie' + '.png')
+
         #for PDF creation
-        pngList.append(pngFilename)
+        pngList.append(filepath)
 
     # Output/Show depending of global variable setting. 
-    if ( pltPngOut ): plt.savefig(filepath + '\\output\\png\\' + pngFilename, bbox_inches='tight', pad_inches = 0.3)
+    if ( pltPngOut ): plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.3)
     if ( pltShow ):   plt.show()
     if ( pltPngOut or  pltShow):   plt.close()
 
@@ -1064,19 +1060,17 @@ def ShowScatterPlot(df, eventName, corr, competitorIndex=-1):
     plt.grid(color ='grey', linestyle ='-.', linewidth = 0.5, alpha = 0.4)
     
     if (competitorIndex == -1):
-        pngFilename = fileObj[0] + eventName + 'Scat' + '.png'
+        filepath = Path(util.data.PNG_GENERIC_DIR) / Path(fileObj[0] + eventName + 'Scat' + '.png')
     else:
-        pngFilename = fileObj[0] + eventName + competitorName + 'Scat' + '.png'
+        filepath = Path(util.data.PNG_COMP_DIR) / Path(fileObj[0] + eventName + competitorName + 'Scat' + '.png')
     
     #for PDF creation
-    pngList.append(pngFilename)
+    pngList.append(filepath)
 
     # Output/Show depending of global variable setting. 
-    if ( pltPngOut ): plt.savefig(filepath + '\\output\\png\\' + pngFilename, bbox_inches='tight', pad_inches = 0.3)
+    if ( pltPngOut ): plt.savefig(filepath , bbox_inches='tight', pad_inches = 0.3)
     if ( pltShow ):   plt.show()
     if ( pltPngOut or  pltShow):   plt.close()
-
-
 
 
 #############################
@@ -1090,7 +1084,6 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
     global fileObj
     global EventList
     global EventListStart
-    global filepath
     global competitorName
     global competitorRaceNo
     global stringPdf
@@ -1141,11 +1134,11 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
         if (fileObj[2]=='2023'):
             EventList = EventList23
             EventListStart = EventListStart23
-            filepath = filepath23
+
         else:
             EventList = EventList24
             EventListStart = EventListStart24
-            filepath = filepath24
+
 
         #reset PNG list
         del pngList[:]
@@ -1153,7 +1146,8 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
         dataOutputThisLoop=False
         stringPdf = ""
 
-        indatafile = filepath + '\\input\\' + fileObj[0] + '.csv'
+        indatafile = Path(util.data.CSV_INPUT_DIR) / Path(fileObj[0] + '.csv')
+
         #read in the data.
         df = pd.read_csv(indatafile)
 
@@ -1172,9 +1166,9 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
                 dataOutputThisLoop=True
 
                 #Outpuy the tidy1 data to csv
-                if (cvsDurationOut): 
+                if (csvDurationOut): 
                     
-                    outdatafile = filepath + '\\output\\csv\\duration' + fileObj[0] + '.csv'
+                    outdatafile = Path(util.data.CSV_GENERIC_DIR) / Path('duration' + fileObj[0] + '.csv')
                     df.to_csv(outdatafile)
 
                 #show the competitor plots.
@@ -1191,9 +1185,9 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
         else:
 
             #Outpuy the tidy data to csv
-            if (cvsDurationOut):
+            if (csvDurationOut):
                 
-                outdatafile = filepath + '\\output\\csv\\duration' + fileObj[0] + '.csv'
+                outdatafile = Path(util.data.CSV_GENERIC_DIR) / Path('duration' + fileObj[0] + '.csv')
                 df.to_csv(outdatafile)
 
             #show the event plots.
@@ -1210,9 +1204,9 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
         if (dataOutputThisLoop==True):
 
             #Outpuy the tidy2 data frame to csv
-            if (cvsDfOut): 
+            if (csvDfOut): 
                 tidyTheData2(df=df)
-                outdatafile = filepath + '\\output\\csv\\df' + fileObj[0] + '.csv'
+                outdatafile = Path(util.data.CSV_GENERIC_DIR) / Path('df' + fileObj[0] + '.csv')
                 df.to_csv(outdatafile)
 
             #creates a pdf of the PNGs processed here for each event
@@ -1231,11 +1225,9 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
                     page = doc.new_page()
                     rc = page.insert_htmlbox(rect, stringPdf)
 
-                #Now time for images
-                imgdir = filepath + '\\output\\png\\' # where the pics are
 
                 for i, f in enumerate(pngList):
-                    img = pymupdf.open(os.path.join(imgdir, f))  # open pic as document
+                    img = pymupdf.open(f)  # open pic as document
                     rect = img[0].rect  # pic dimension
                     pdfbytes = img.convert_to_pdf()  # make a PDF stream
                     img.close()  # no longer needed
@@ -1245,13 +1237,12 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
                     page.show_pdf_page(rect, imgPDF, 0)  # image fills the page
 
                 if(competitorAnalysis==True and competitorIndex != -1):
-                    doc.save(filepath + '\\output\\pdf\\' + fileObj[0] + competitorName + '.pdf')
-            
-                    shutil.copyfile(os.path.join(filepath + '\\output\\pdf\\', fileObj[0] + competitorName + '.pdf'), 
-                                    ".\\static\\pdf\\" + fileObj[0] + competitorName + '.pdf')
+                    filepath = Path(util.data.PDF_COMP_DIR) /  Path(fileObj[0] + competitorName + '.pdf')
 
                 else:
-                    doc.save(filepath + '\\output\\pdf\\' + fileObj[0] + '.pdf') 
+                    filepath = Path(util.data.PDF_GENERIC_DIR) / Path(fileObj[0] +  '.pdf')
+                    
+                doc.save(filepath) 
 
             if (pltPngOut):
                 #update output variable
@@ -1265,13 +1256,13 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
 
 def redline_vis_competitor_html(competitorDetails, io_stringHtml, io_pngList):
     
-    global pltShow, allScatter, cvsDfOut, cvsDurationOut, pltPngOut, createPdf, competitorAnalysis, showBar, showViolin, showCutOffBar, showHist, showPie, showCorr, showHeat
+    global pltShow, allScatter, csvDfOut, csvDurationOut, pltPngOut, createPdf, competitorAnalysis, showBar, showViolin, showCutOffBar, showHist, showPie, showCorr, showHeat
 
     #configure figure the output variables.
     pltShow=False #set to false or will get lots of warnings with mpl.use('agg')
     allScatter=True
-    cvsDfOut=False
-    cvsDurationOut=False
+    csvDfOut=False
+    csvDurationOut=False
     pltPngOut=True
     #PDF only created if pltPngOut=False
     createPdf=False
@@ -1291,19 +1282,19 @@ def redline_vis_competitor_html(competitorDetails, io_stringHtml, io_pngList):
     #Only impact if showCorr=True
     showHeat=True
 
-    print('redline_vis_competitor_html', allScatter, cvsDfOut, cvsDurationOut, pltPngOut, createPdf, competitorAnalysis, showBar, showViolin, showCutOffBar, showHist, showPie, showCorr, showHeat)     
+    print('redline_vis_competitor_html', allScatter, csvDfOut, csvDurationOut, pltPngOut, createPdf, competitorAnalysis, showBar, showViolin, showCutOffBar, showHist, showPie, showCorr, showHeat)     
 
     return redline_vis_generate(competitorDetails, io_stringHtml, io_pngList)
 
 def redline_vis_competitor_pdf(competitorDetails, io_stringHtml, io_pngList):
     
-    global pltShow, allScatter, cvsDfOut, cvsDurationOut, pltPngOut, createPdf, competitorAnalysis, showBar, showViolin, showCutOffBar, showHist, showPie, showCorr, showHeat
+    global pltShow, allScatter, csvDfOut, csvDurationOut, pltPngOut, createPdf, competitorAnalysis, showBar, showViolin, showCutOffBar, showHist, showPie, showCorr, showHeat
 
     #configure figure the output variables.
     pltShow=False #set to false or will get lots of warnings with mpl.use('agg')
     allScatter=True
-    cvsDfOut=False
-    cvsDurationOut=False
+    csvDfOut=False
+    csvDurationOut=False
     pltPngOut=True
     #PDF only created if pltPngOut=False
     createPdf=True
@@ -1323,7 +1314,7 @@ def redline_vis_competitor_pdf(competitorDetails, io_stringHtml, io_pngList):
     #Only impact if showCorr=True
     showHeat=True
 
-    print('redline_vis_competitor_pdf', allScatter, cvsDfOut, cvsDurationOut, pltPngOut, createPdf, competitorAnalysis, showBar, showViolin, showCutOffBar, showHist, showPie, showCorr, showHeat)     
+    print('redline_vis_competitor_pdf', allScatter, csvDfOut, csvDurationOut, pltPngOut, createPdf, competitorAnalysis, showBar, showViolin, showCutOffBar, showHist, showPie, showCorr, showHeat)     
 
 
     return redline_vis_generate(competitorDetails, io_stringHtml, io_pngList)
@@ -1332,13 +1323,13 @@ def redline_vis_competitor_pdf(competitorDetails, io_stringHtml, io_pngList):
 def redline_vis_generic(io_stringHtml, io_pngList):
     
     #configure figure the output variables.
-    global pltShow, allScatter, cvsDfOut, cvsDurationOut, pltPngOut, createPdf, competitorAnalysis, showBar, showViolin, showCutOffBar, showHist, showPie, showCorr, showHeat
+    global pltShow, allScatter, csvDfOut, csvDurationOut, pltPngOut, createPdf, competitorAnalysis, showBar, showViolin, showCutOffBar, showHist, showPie, showCorr, showHeat
 
     #configure figure the output variables.
     pltShow=False #set to false or will get lots of warnings with mpl.use('agg')
     allScatter=True
-    cvsDfOut=False
-    cvsDurationOut=True
+    csvDfOut=False
+    csvDurationOut=True
     pltPngOut=True
     #PDF only created if pltPngOut=False
     createPdf=True
@@ -1368,13 +1359,13 @@ def redline_vis_generic(io_stringHtml, io_pngList):
 def redline_vis_generic_eventpdf(details, io_stringHtml, io_pngList):
     
     #configure figure the output variables.
-    global pltShow, allScatter, cvsDfOut, cvsDurationOut, pltPngOut, createPdf, competitorAnalysis, showBar, showViolin, showCutOffBar, showHist, showPie, showCorr, showHeat
+    global pltShow, allScatter, csvDfOut, csvDurationOut, pltPngOut, createPdf, competitorAnalysis, showBar, showViolin, showCutOffBar, showHist, showPie, showCorr, showHeat
 
     #configure figure the output variables.
     pltShow=False #set to false or will get lots of warnings with mpl.use('agg')
     allScatter=True
-    cvsDfOut=False
-    cvsDurationOut=False
+    csvDfOut=False
+    csvDurationOut=False
     pltPngOut=True
     #PDF only created if pltPngOut=False
     createPdf=True
@@ -1405,13 +1396,13 @@ def redline_vis_generic_eventpdf(details, io_stringHtml, io_pngList):
 def redline_vis_generic_eventhtml(details, io_stringHtml, io_pngList):
     
     #configure figure the output variables.
-    global pltShow, allScatter, cvsDfOut, cvsDurationOut, pltPngOut, createPdf, competitorAnalysis, showBar, showViolin, showCutOffBar, showHist, showPie, showCorr, showHeat
+    global pltShow, allScatter, csvDfOut, csvDurationOut, pltPngOut, createPdf, competitorAnalysis, showBar, showViolin, showCutOffBar, showHist, showPie, showCorr, showHeat
 
     #configure figure the output variables.
     pltShow=False #set to false or will get lots of warnings with mpl.use('agg')
     allScatter=True
-    cvsDfOut=False
-    cvsDurationOut=False
+    csvDfOut=False
+    csvDurationOut=False
     pltPngOut=True
     #PDF only created if pltPngOut=False
     createPdf=False

@@ -1,15 +1,6 @@
-data_handling/__pycache__/search.cpython-312.pyc
-static/png/MensSinglesCompetitive2024STEPHEN ANTHONY CLEARYViolin.png
-static/png/MensSinglesCompetitive2024STEPHEN ANTHONY CLEARYPie.png
-static/png/MensSinglesCompetitive2024STEPHEN ANTHONY CLEARYBar.png
-static/png/MensSinglesCompetitive2024Pie.png
-static/png/MensSinglesCompetitive2024Hist.png
-static/png/MensSinglesCompetitive2024Farmer's CarrySTEPHEN ANTHONY CLEARYScat.png
-static/png/MensSinglesCompetitive2024Deadball BurpeeSTEPHEN ANTHONY CLEARYScat.png
-static/png/MensSinglesCompetitive2024CutOffBar.png
-static/png/MensSinglesCompetitive2024CorrHeat.png
-data/output/pdf/MensSinglesCompetitive2024STEPHEN ANTHONY CLEARY.pdf
-static/png/MensSinglesCompetitive2024Corr.png
-data/output/csv/durationMensSinglesCompetitive2024.csv
-static/pdf/MensSinglesCompetitive2024STEPHEN ANTHONY CLEARY.pdf
 visualisation/__pycache__/redline_vis.cpython-312.pyc
+util/__pycache__/search.cpython-312.pyc
+util/__pycache__/data.cpython-312.pyc
+*.pdf
+*.png
+static/csv/generic/*.csv

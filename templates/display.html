@@ -1,46 +1,50 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Time to Display the following results:</h1>
-<h2>{{ description | default("No description passed", true) }}</h2>
-<h3> So two more questions left?</h3>
+<div class="container my-5">
+    <h2 class="mb-4">Time to Display the following results:</h2>
+    <h5>{{ description | default("No description passed", true) }}</h5>
+    <p> So two more questions left?</p>
+    <form method="POST" id="optionForm" onsubmit="showLoading()">
+        <h3>Which of the following options do you want to see:</h3>
+        <label>
+            <input type="radio" name="view_option" value="visualization" {% if selected_view == 'visualization' %}checked{% endif %}>
+            Data Visualization of the event!!! (Recommended)
+        </label>
+        <br/>
+        <label>
+            <input type="radio" name="view_option" value="table" {% if selected_view == 'table' %}checked{% endif %}>
+            Table of results with durations/rank of each station
+        </label>
+        <br/>
+        <label>
+            <input type="radio" name="view_option" value="orig_table" {% if selected_view == 'orig_table' %}checked{% endif %}>
+            Original results shared by the event organisers
+        </label>
+        <br/><br/>
+        <h3>Do you want to view the results as:</h3>
+        <label>
+            <input type="radio" name="output_format" value="html" {% if selected_format == 'html' %}checked{% endif %}>
+            Displayed on webpage (HTML)
+        </label>
+        <br>
+        <label>
+            <input type="radio" name="output_format" value="file" {% if selected_format == 'file' %}checked{% endif %}>
+            Download as file (pdf or csv)
+        </label>
 
-<form method="POST" id="optionForm" onsubmit="showLoading()">
-    <h3>Which of the following options do you want to see:</h3>
-    <label>
-        <input type="radio" name="view_option" value="visualization" {% if selected_view == 'visualization' %}checked{% endif %}>
-        Data Visualization of the event!!! (Recommended)
-    </label><br>
-    <label>
-        <input type="radio" name="view_option" value="table" {% if selected_view == 'table' %}checked{% endif %}>
-        Table of results with durations/rank of each station
-    </label>
-    <label><br>
-        <input type="radio" name="view_option" value="orig_table" {% if selected_view == 'orig_table' %}checked{% endif %}>
-        Original results shared by the event
-    </label>
+        <br><br>
+        <input type="submit" id="submitBtn" value="Generate" disabled>
+    </form>
 
-    <h3>Do you want to view the data as:</h3>
-    <label>
-        <input type="radio" name="output_format" value="html" {% if selected_format == 'html' %}checked{% endif %}>
-        Displayed on webpage (HTML)
-    </label><br>
-    <label>
-        <input type="radio" name="output_format" value="file" {% if selected_format == 'file' %}checked{% endif %}>
-        Download as file (pdf or cvs)
-    </label>
+    {% if selected_view and selected_format %}
+        <p>You chose to view: <strong>{{ selected_view }}</strong></p>
+        <p>Format: <strong>{{ selected_format }}</strong></p>
+    {% endif %}
 
-    <br><br>
-    <input type="submit" id="submitBtn" value="Generate" disabled>
-</form>
-
-{% if selected_view and selected_format %}
-    <p>You chose to view: <strong>{{ selected_view }}</strong></p>
-    <p>Format: <strong>{{ selected_format }}</strong></p>
-{% endif %}
-
-<!-- This shows the loading message -->
-<div id="loading-message" style="display:none; font-weight: bold; color: darkblue; margin-top: 10px;">
-    <strong></strong>Processing... please be patient!<strong>
+    <!-- This shows the loading message -->
+    <div id="loading-message" style="display:none; font-weight: bold; color: darkblue; margin-top: 10px;">
+        <strong></strong>Processing... please be patient!<strong>
+    </div>
 </div>
 
 <script>

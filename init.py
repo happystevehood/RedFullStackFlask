@@ -7,16 +7,20 @@ import seaborn as sns
 from flask import Flask, request, jsonify, render_template, send_file, abort, session
 
 import os, shutil
+from pathlib import Path
 
 # local inclusion.
-from data_handling.search import find_competitor
+from util.search import find_competitor
+import util.data
 from visualisation.redline_vis import redline_vis_competitor_html, redline_vis_competitor_pdf, redline_vis_generic, redline_vis_generic_eventpdf, redline_vis_generic_eventhtml
 
-# Global Data
-#search_results = []
 
 app = Flask(__name__)
-app.secret_key = 'some key that you will never guess'
+#randon 24 character string
+# python
+# >>> import os
+# >>> os.urandom(24)
+app.secret_key = b' q/\x8ax"\xe9\xfc\x8a0v\x1a\x18\r\x8f\xc1\xb7\xf4\x14\xd0\xb8j:\xb1'
 
 OutputInfo = True
 
@@ -48,13 +52,6 @@ myFileLists = [
     ["TeamRelayMixed2024", "REDLINE Fitness Games '24 Mixed Team Relay", "2024", "MIXED", "RELAY", "KL"],
 ]
 
-# helper function
-def remove_files_from_directory(directory):
-    """Removes all files within the specified directory, but leaves the directory untouched."""
-    for filename in os.listdir(directory):
-        file_path = os.path.join(directory, filename)
-        if os.path.isfile(file_path):
-            os.remove(file_path)
 
 @app.route('/', methods=["GET"])
 def gethome():
@@ -83,19 +80,13 @@ def posthome():
     if delete:
         print("Delete files")
         # Delete all the files in the following directorys
-        remove_files_from_directory('./data/output/csv')
-        remove_files_from_directory('./data/output/pdf')
-        remove_files_from_directory('./data/output/png')
-        remove_files_from_directory('./static/csv')
-        remove_files_from_directory('./static/pdf')
-        remove_files_from_directory('./static/png')
+        util.data.delete_generated_files()
 
-    if regenerate:
+    elif regenerate:
         print("Regenerate output") 
         htmlString = " "
         pngList = []
  
-
         redline_vis_generic(htmlString, pngList)
 
 
@@ -166,7 +157,6 @@ def getdisplayEvent():
     #find index  of eventid in myFileLists[0]
     index = next((i for i, item in enumerate(myFileLists) if item[0] == eventname), None)
 
-
     return render_template('display.html', 
                            id=myFileLists[index][0], 
                            description=myFileLists[index][1], 
@@ -202,19 +192,14 @@ def postdisplayEvent():
         io_pngList = []
 
         htmlString, io_pngList = redline_vis_generic_eventhtml(details, htmlString, io_pngList)
+
+        print (io_pngList)
   
-        #empty the ".\\static\\png\\" folder
-        for file in os.listdir(".\\static\\png\\"):
-            os.remove(".\\static\\png\\" + file)
-
-        #move a list of files to static folder
-        for file in io_pngList:
-            shutil.move(".\\data\\output\\png\\"+ file, ".\\static\\png\\" )  
-
         return render_template('visual.html', description=myFileLists[index][1], png_files=io_pngList)
     
     if selected_view == "table" and selected_format == "html":
-        filepath = "data\\output\\csv\\duration"+ myFileLists[index][0] + ".csv"
+
+        filepath = Path(util.data.CSV_GENERIC_DIR) / Path('duration' + myFileLists[index][0] + ".csv")
         title = myFileLists[index][1]
 
         # Load CSV file into a DataFrame
@@ -227,7 +212,8 @@ def postdisplayEvent():
         return render_template('table.html', headers=headers, data=data, title=title)
 
     if selected_view == "orig_table" and selected_format == "html":
-        filepath = "data\\input\\" + myFileLists[index][0] + ".csv"
+
+        filepath = Path(util.data.CSV_INPUT_DIR) / Path(myFileLists[index][0] + ".csv")
         title = myFileLists[index][1]
 
         # Load CSV file into a DataFrame
@@ -253,15 +239,15 @@ def postdisplayEvent():
         htmlString, io_pngList = redline_vis_generic_eventpdf(details, htmlString, io_pngList)
 
         # get the file path
-        filepath = "data\\output\\pdf\\" + myFileLists[index][0] + ".pdf"
-    
+        filepath = Path(util.data.PDF_GENERIC_DIR) / Path(myFileLists[index][0] + ".pdf")
+
     if selected_view == "table" and selected_format == "file":
         # get the file path
-        filepath = "data\\output\\csv\\duration" + myFileLists[index][0] + ".csv"
+        filepath = Path(util.data.CSV_GENERIC_DIR) / Path('duration' + myFileLists[index][0] + ".csv")
 
     if selected_view == "orig_table" and selected_format == "file":
         # get the file path
-        filepath = "data\\input\\" + myFileLists[index][0] + ".csv"
+        filepath = Path(util.data.CSV_INPUT_DIR) / Path(myFileLists[index][0] + ".csv")
 
     # dowload the file
     response = send_file(filepath, as_attachment=True)
@@ -302,6 +288,9 @@ def new_search():
     
     # call the find_competitor function, and store result in matches
     print('Request to /api/search POST received')
+
+    #clear the search results.
+    session.pop('search_results', None)
 
     search_query = request.form['competitor'].upper()
 
@@ -380,14 +369,6 @@ def post_display_vis():
         if selected_format == "html":
             htmlString, io_pngList = redline_vis_competitor_html(details, htmlString, io_pngList)
 
-            #empty the ".\\static\\png\\" folder
-            for file in os.listdir(".\\static\\png\\"):
-                os.remove(".\\static\\png\\" + file)
-
-            #move a list of files to static folder
-            for file in io_pngList:
-                shutil.move(".\\data\\output\\png\\"+ file, ".\\static\\png\\" )  
-
             try:
                 return render_template('display_vis.html', selected_format = selected_format, competitor=competitor.title(),  race_no=race_no, description=description, htmlString=htmlString, png_files=io_pngList)
             except Exception as e:
@@ -399,7 +380,7 @@ def post_display_vis():
               
             png_files = []
             # get the file path
-            filepath = ".\\static\\pdf\\" + event + competitor + ".pdf"
+            filepath = Path(util.data.PDF_COMP_DIR) / Path(event + competitor + ".pdf")
 
             # dowload the file
             response = send_file(filepath, as_attachment=True)

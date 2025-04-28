@@ -1,24 +1,25 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>You have selected the following: </h2> 
-<h3>   Competitor: {{ competitor | default("No competitor passed", true) }}, No: {{ race_no | default("No race_no passed", true) }}</h1>
-<h3>   Event: {{ description | default("No description passed", true) }} </h2>
-
-<form method="POST" id="optionForm" onsubmit="showLoading()">
-    <h3> So one more questions left... How do you want to access the info?:</h3>
-    <label>
-        <input type="radio" name="output_format" value="html" {% if selected_format == 'html' %}checked{% endif %}>
-        Displayed on this webpage (HTML)
-    </label><br>
-    <label>
-        <input type="radio" name="output_format" value="file" {% if selected_format == 'file' %}checked{% endif %}>
-        Downloaded as file (pdf)
-    </label>
-
+<div class="container my-5">
+    <h2 class="mb-4">You have selected the following: </h2> 
+    <p><strong>Competitor: {{ competitor | default("No competitor passed", true) }}, No: {{ race_no | default("No race_no passed", true) }}</strong></h4>
+    <p><strong>Event: {{ description | default("No description passed", true) }} </strong></h4>
     <br>
-    <input type="submit" id="submitBtn" value="Generate" disabled>
-    <br>
-</form>
+    <form method="POST" id="optionForm" onsubmit="showLoading()">
+        <h3> So one more questions left... How do you want to access the info?:</h3>
+        <label>
+            <input type="radio" name="output_format" value="html" {% if selected_format == 'html' %}checked{% endif %}>
+            Displayed on this webpage (HTML)
+        </label><br>
+        <label>
+            <input type="radio" name="output_format" value="file" {% if selected_format == 'file' %}checked{% endif %}>
+            Downloaded as file (pdf)
+        </label>
+    
+        <br>
+        <input type="submit" id="submitBtn" value="Generate" disabled>
+        <br>
+    </form>
 
 <!-- This shows the loading message -->
 <div id="loading-message" style="display:none; font-weight: bold; color: darkblue; margin-top: 10px;">
@@ -26,18 +27,21 @@
 </div>
 
 {% if selected_format %}
-        <div>
-            {{ htmlString | safe }}
-        </div>
+    <br>
+    <div>
+        {{ htmlString | safe }}
+    </div>
 
     {% for png_file in png_files %}
-        <div>
-            <img src="{{ url_for('static', filename='png/' ~ png_file) }}" width="800">
-        </div>
+    <div>
+        <img src="{{ png_file }}" width="800">
+    </div>
     {% endfor %}
 
 {% endif %}
+</div>
 {% endblock %}
+
 
 {% block script %}
     <script>

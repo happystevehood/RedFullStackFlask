@@ -1,12 +1,14 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>You have selected the following: </h2> 
-<h3>   Event: {{ description | default("No description passed", true) }} </h2>
-
-    {% for png_file in png_files %}
-        <div>
-            <img src="{{ url_for('static', filename='png/' ~ png_file) }}" width="800">
-        </div>
-    {% endfor %}
+<div class="container my-5">
+    <h2 class="mb-4">You have selected the following: </h2> 
+    <h5>   Event: {{ description | default("No description passed", true) }} </h5>
+    
+        {% for png_file in png_files %}
+            <div>
+                <img src="{{ png_file }}" width="800">
+            </div>
+        {% endfor %}    
+</div>
 
 {% endblock %}

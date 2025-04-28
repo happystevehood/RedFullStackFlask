@@ -2,15 +2,14 @@
 
 {% block head %}
 <!-- Bootstrap & DataTables CSS -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/css/bootstrap.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap4.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.bootstrap4.min.css">
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid my-4">
+<div class="full-width-wrapper my-4">
     <h2 class="mb-4">{{ title }}</h2>
-    <div class="table-responsive">
+    <div class="table-responsive" style="overflow-x: auto;">
         <table id="dataTable" class="table table-striped table-bordered nowrap" style="width:100%;">
             <thead>
                 <tr>
@@ -58,7 +57,7 @@ $(document).ready(function() {
             header: true,
             headerOffset: 56
         }
-        // ⚡ NO "responsive: true" here anymore!
+        // ⚡ NO "responsive: true" here anymore
     });
 });
 </script>

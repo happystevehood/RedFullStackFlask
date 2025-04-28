@@ -1,15 +1,17 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Delete the files.:</h1>
 
-<form method="POST" id="regenerateOutput">
-    <h3>Regenerate Generic Output:</h3>
-    <input type="submit" id="regenerateBtn" name="regenerateBtn" value="Regenerate">
-</form>
+<div class="container my-5">
+    <h1 class="mb-4">Delete the files.:</h1>
 
-<form method="POST" id="deleteFilesForm">
-    <h3>DeleteTemportary files:</h3>
-    <input type="submit" id="deleteFilesBtn" name="deleteFilesBtn" value="Delete">
-</form>
-
+    <form method="POST" id="regenerateOutput">
+        <h3>Regenerate Generic Output:</h3>
+        <input type="submit" id="regenerateBtn" name="regenerateBtn" value="Regenerate">
+    </form>
+    <br/>
+    <form method="POST" id="deleteFilesForm">
+        <h3>DeleteTemportary files:</h3>
+        <input type="submit" id="deleteFilesBtn" name="deleteFilesBtn" value="Delete">
+    </form>
+</div>  
 {% endblock %}
