@@ -45,42 +45,6 @@ def gethome():
 
     return render_template('home.html')
 
-@app.route('/', methods=["POST"])
-def posthome():
-
-    print('Request to / POST received', request)
-
-    #Adming actity to clear the results on request.
-    session.pop('search_results', None)
-
-    # get which button was clicked in home.html
-    # and call the appropriate function
-    # for that button
-
-    regenerate = request.form.get("regenerateBtn")
-    generated_delete = request.form.get("deleteGeneratedFilesBtn")
-    competitor_delete = request.form.get("deleteCompetitorFilesBtn")
-
-    if generated_delete:
-        print("Delete Generic files")
-        # Delete all the Generic files include Competitor
-        util.data.delete_generated_files()
-
-    elif competitor_delete:
-        print("Delete Competitor files")
-        # Delete all the Competitor files include
-        util.data.delete_competitor_files()
-
-    elif regenerate:
-        print("Regenerate output") 
-        htmlString = " "
-        pngList = []
- 
-        redline_vis_generic(htmlString, pngList)
-
-
-    return render_template('home.html')
-
 
 # Decorator to protect routes
 def login_required(f):
@@ -117,6 +81,44 @@ def admin():
     
     #clear the search results.
     session.pop('search_results', None)
+
+    return render_template('admin.html')
+
+
+@app.route('/admin', methods=["POST"])
+@login_required
+def postadmin():
+
+    print('Request to / POST received', request)
+
+    #Adming actity to clear the results on request.
+    session.pop('search_results', None)
+
+    # get which button was clicked in home.html
+    # and call the appropriate function
+    # for that button
+
+    regenerate = request.form.get("regenerateBtn")
+    generated_delete = request.form.get("deleteGeneratedFilesBtn")
+    competitor_delete = request.form.get("deleteCompetitorFilesBtn")
+
+    if generated_delete:
+        print("Delete Generated files")
+        # Delete all the Generic files include Competitor
+        util.data.delete_generated_files()
+
+    elif competitor_delete:
+        print("Delete Competitor files")
+        # Delete all the Competitor files include
+        util.data.delete_competitor_files()
+
+    elif regenerate:
+        print("Regenerate output") 
+        htmlString = " "
+        pngList = []
+ 
+        redline_vis_generic(htmlString, pngList)
+
 
     return render_template('admin.html')
 
