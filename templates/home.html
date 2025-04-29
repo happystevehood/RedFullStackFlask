@@ -1,23 +1,32 @@
 {% extends "base.html" %}
+
+{% block title %}Home | Redline Fitness Games{% endblock %}
+
 {% block content %}
+<div class="container mt-4">
+    <h2>Welcome to Redline Fitness Games Results Explorer</h2>
+    <p>
+        This site provides a searchable and interactive view of the results from the Redline Fitness Games, 
+        covering both the 2023 and 2024 events. Data has been collected directly from the official timing provider, 
+        and organized for ease of browsing, filtering, and visual exploration.
+    </p>
 
-<div class="container my-5">
-    <h1 class="mb-4">Delete the files.:</h1>
+    <p>
+        Use the <strong>Search</strong> page to quickly find individual competitors or events by name, 
+        or head to the <strong>Results</strong> section to filter by year, gender, category, or location.
+    </p>
 
-    <form method="POST" id="regenerateOutput">
-        <h3>Regenerate Generic Output:</h3>
-        <input type="submit" id="regenerateBtn" name="regenerateBtn" value="Regenerate">
-    </form>
-    <br/>
-    <form method="POST" id="deleteGeneratedFilesForm">
-        <h3>Delete Generated files:</h3>
-        <input type="submit" id="deleteGeneratedFilesBtn" name="deleteGeneratedFilesBtn" value="Delete Generic">
-    </form>
-    <br/>
-    <form method="POST" id="deleteCompetitorFilesForm">
-        <h3>Delete Competitor files:</h3>
-        <input type="submit" id="deleteCompetitorFilesBtn" name="deleteCompetitorFilesBtn" value="Delete">
-    </form>
+    <p>Try our <a href="/search">Redline competitor search</a> or view <a href="/results">filtered event results</a> by year and category.</p>
 
-</div>  
+    
+    <p>
+        The original race result pages are available from <a href="https://runnersunite.racetecresults.com/" target="_blank">Racetec Results</a>, 
+        and the official Redline Fitness Games website can be found at 
+        <a href="https://redlinefitnessgames.com/" target="_blank">redlinefitnessgames.com</a>.
+    </p>
+
+    <p class="text-muted">
+        This site was created by a 2024 participant who’s already signed up for the 2025 competition.
+    </p>
+</div>
 {% endblock %}

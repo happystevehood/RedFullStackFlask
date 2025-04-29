@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4" style="max-width: 600px;">
+    <h2>We value your feedback!</h2>
+    <p>Let us know what you liked, what could be improved, or what you'd like to see next.</p>
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <div class="alert alert-info mt-3">
+                {{ messages[0] }}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <form method="post">
+        <div class="form-group">
+            <label for="name">Your name (optional):</label>
+            <input type="text" class="form-control" name="name" id="name" placeholder="Anonymous">
+        </div>
+
+        <div class="form-group">
+            <label for="email">Your email (optional):</label>
+            <input type="email" class="form-control" name="email" id="email" placeholder="you@example.com">
+            <small class="form-text text-muted">Only if you want a reply.</small>
+        </div>
+
+        <div class="form-group">
+            <label for="comments">Your feedback:</label>
+            <textarea class="form-control" name="comments" id="comments" rows="4" required></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-danger">Submit Feedback</button>
+    </form>
+</div>
+{% endblock %}

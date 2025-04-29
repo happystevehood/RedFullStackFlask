@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}Admin | Redline Fitness Games{% endblock %}
+
+{% block content %}
+
+<div class="container my-5">
+    <h1 class="mb-4">Delete the files.:</h1>
+
+    <form method="POST" id="regenerateOutput">
+        <h3>Regenerate Generic Output:</h3>
+        <input type="submit" id="regenerateBtn" name="regenerateBtn" value="Regenerate">
+    </form>
+    <br/>
+    <form method="POST" id="deleteGeneratedFilesForm">
+        <h3>Delete Generated files:</h3>
+        <input type="submit" id="deleteGeneratedFilesBtn" name="deleteGeneratedFilesBtn" value="Delete Generic">
+    </form>
+    <br/>
+    <form method="POST" id="deleteCompetitorFilesForm">
+        <h3>Delete Competitor files:</h3>
+        <input type="submit" id="deleteCompetitorFilesBtn" name="deleteCompetitorFilesBtn" value="Delete">
+    </form>
+
+</div>  
+{% endblock %}

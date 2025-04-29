@@ -1,11 +1,13 @@
 {% extends "base.html" %}
 
+{% block title %}Search | Redline Fitness Games{% endblock %}
+
 {% block content %}
 <div class="container my-5">
-    <h1 class="mb-4">Redline Results Search</h1>
+    <h1 class="mb-4">Redline Fitness Games Results Explorer</h1>
 
     <div id="searchui">
-        <h2 class="mb-3">Enter Competitor Name:</h2>
+        <h2 class="mb-3">Search by Competitor Name:</h2>
 
         <form id="newSearchForm" class="row gy-2 gx-3 align-items-center mb-4">
             <div class="col-auto">
@@ -25,6 +27,12 @@
 
     </div>
 </div>
+<style>
+    #display, #searchDetail {
+        display: none;
+    }
+</style>
+
 {% endblock %}
 
 {% block script %}
@@ -33,12 +41,14 @@ $(document).ready(function() {
     let itemsRaw = [];
 
     function displaySearchResults(data) {
-        const $searchDetail = $('#searchDetail').show();
+        const $searchDetail = $('#searchDetail');
         const $display = $('#display').empty();
         const $results = $('#SearchResults').empty();
         const toSearch = $('#competitorToSearch').val();
 
         if (data.length === 0) {
+            $searchDetail.hide();
+            $display.hide();
             $results.text(`No matches found for "${toSearch}".`);
             return;
         } else if (data.length === 100) {
@@ -46,6 +56,9 @@ $(document).ready(function() {
         } else {
             $results.text(`Success! ${data.length} matches found! Click a name to get more details:`);
         }
+
+        $searchDetail.show();
+        $display.show();
 
         const $ul = $('<ul/>', { class: 'list-group' });
 

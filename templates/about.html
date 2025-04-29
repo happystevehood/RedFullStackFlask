@@ -1,9 +1,37 @@
 {% extends "base.html" %}
 
-{% block content %}
-<div class="container my-5">
-    <h1 class="mb-4">About Us</h1>
-    <p>What this is all about...</p>
-</div>
+{% block title %}About | Redline Fitness Games{% endblock %}
 
+{% block content %}
+<div class="container mt-4">
+    <h2>About This Project</h2>
+
+    <p>
+    The Redline Fitness Games is a high-intensity fitness competition featuring athletes from around the world. This unofficial 
+    archive provides searchable, filterable access to Redline results, athlete stats, and event categories from 2023 and 2024.
+    </p>
+    <p>
+        This tool was built to help competitors and fans of the Redline Fitness Games explore past event results more efficiently.
+        All data was originally published on Racetec Results and was extracted for visualization and personal analysis.
+    </p>
+
+    <h4>Data Sources</h4>
+    <ul>
+        <li><strong>2023 Day 1:</strong> <a href="https://runnersunite.racetecresults.com/results.aspx?CId=16634&RId=1216" target="_blank">View Results</a></li>
+        <li><strong>2023 Day 2:</strong> <a href="https://runnersunite.racetecresults.com/results.aspx?CId=16634&RId=1217" target="_blank">View Results</a></li>
+        <li><strong>2024 Day 1:</strong> <a href="https://runnersunite.racetecresults.com/results.aspx?CId=16634&RId=1251" target="_blank">View Results</a></li>
+        <li><strong>2024 Day 2:</strong> <a href="https://runnersunite.racetecresults.com/results.aspx?CId=16634&RId=1252" target="_blank">View Results</a></li>
+    </ul>
+
+    <h4>Technical Notes</h4>
+    <p>
+        Results were manually copied into Excel from the public race timing site and then converted to CSV files per event.
+        This site uses Flask, jQuery, Bootstrap, and DataTables to provide a fast and responsive experience.
+        It was initially modeled on the 2023 result format and later updated for 2024.
+    </p>
+
+    <p class="text-muted">
+        The author of this site has no official connection to Redline Fitness Games and developed this tool as a personal project.
+    </p>
+</div>
 {% endblock %}

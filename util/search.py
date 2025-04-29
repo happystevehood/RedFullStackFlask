@@ -1,8 +1,6 @@
 import csv
-import os
 from pathlib import Path
 
-from visualisation.redline_vis import myFileLists 
 import util.data
 
 # Find competitor function
@@ -12,8 +10,8 @@ def find_competitor(competitor, callback):
     
     #print('find_competitor called', competitor)
 
-    #for each element in myFileLists
-    for element in myFileLists:
+    #for each element in EVENT_DATA_LIST
+    for element in util.data.EVENT_DATA_LIST:
         #equivalent to the following filepath = './data/input/' + filename
         filepath = Path(util.data.CSV_INPUT_DIR) / Path(element[0] + '.csv')
 
@@ -36,14 +34,12 @@ def find_competitor(competitor, callback):
                         matches.append(match)
                         matchcount += 1
 
-                        if matchcount >= 100:
+                        if matchcount >= 50:
                             #leave early
-                            print(f'reached 100 matches' )
+                            print(f'reached 50 matches' )
                             callback(competitor, matches)
                             return 
-                            
-
-                #print(f"Parsed {reader.line_num} rows")
+                           
 
         except Exception as e:
             print(f"Error occurred: {e}")

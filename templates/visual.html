@@ -1,4 +1,7 @@
 {% extends "base.html" %}
+
+{% block title %}Visual | Redline Fitness Games{% endblock %}
+
 {% block content %}
 <div class="container my-5">
     <h2 class="mb-4">You have selected the following: </h2> 
@@ -6,6 +9,7 @@
     
         {% for png_file in png_files %}
             <div>
+                <!-- <img src="{{ png_file }}" width="800"> -->
                 <img src="{{ png_file }}" width="800">
             </div>
         {% endfor %}    
