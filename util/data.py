@@ -11,12 +11,14 @@ from pathlib import Path
 #		 - png	- generic
 #				- comp
 
-CSV_INPUT_DIR   = Path('static') / 'csv' / 'input'
-CSV_GENERIC_DIR = Path('static') / 'csv' / 'generic' 
-PDF_COMP_DIR    = Path('static') / 'pdf' / 'comp' 
-PDF_GENERIC_DIR = Path('static') / 'pdf' / 'generic' 
-PNG_COMP_DIR    = Path('static') / 'png' / 'comp'
-PNG_GENERIC_DIR = Path('static') / 'png' / 'generic' 
+CSV_INPUT_DIR    = Path('static') / 'csv' / 'input'
+CSV_GENERIC_DIR  = Path('static') / 'csv' / 'generic' 
+CSV_FEEDBACK_DIR = Path('static') / 'csv' / 'feedback'
+PDF_COMP_DIR     = Path('static') / 'pdf' / 'comp' 
+PDF_GENERIC_DIR  = Path('static') / 'pdf' / 'generic' 
+PNG_COMP_DIR     = Path('static') / 'png' / 'comp'
+PNG_GENERIC_DIR  = Path('static') / 'png' / 'generic' 
+PNG_HTML_DIR     = Path('static') / 'png' / 'html' 
 
 #The 2023 Events Lists
 EVENTLIST23 =      [         'Run','Bike','Sandbag Gauntlet','Battle Rope Pull','Farmer\'s Carry','Row','Deadball Burpee','Sled Push','Pendulum Shots','Agility Climber','Ski','The Mule']

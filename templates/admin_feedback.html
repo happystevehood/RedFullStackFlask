@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+    <h2>Submitted Feedback</h2>
+
+    <div class="mb-3">
+        <a href="{{ url_for('export_feedback') }}" class="btn btn-sm btn-outline-primary">⬇️ Download CSV</a>
+    </div>
+
+    {% if feedback_list %}
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped table-hover">
+                <thead class="thead-dark">
+                    <tr>
+                        <th>Date</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Comments</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in feedback_list %}
+                        <tr>
+                            <td>{{ entry[0] }}</td>
+                            <td>{{ entry[1] or 'Anonymous' }}</td>
+                            <td>{{ entry[2] or 'N/A' }}</td>
+                            <td>{{ entry[3] }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <nav aria-label="Feedback pagination">
+            <ul class="pagination">
+                {% for i in range(1, total_pages + 1) %}
+                    <li class="page-item {% if i == page %}active{% endif %}">
+                        <a class="page-link" href="{{ url_for('admin_feedback', page=i) }}">{{ i }}</a>
+                    </li>
+                {% endfor %}
+            </ul>
+        </nav>
+
+        <form method="POST" action="{{ url_for('clear_feedback') }}" onsubmit="return confirm('Are you sure you want to delete all feedback?');">
+            <button type="submit" class="btn btn-danger">Clear All Feedback</button>
+        </form>
+
+    {% else %}
+        <p>No feedback has been submitted yet.</p>
+    {% endif %}
+
+{% with messages = get_flashed_messages() %}
+{% if messages %}
+    <div class="alert alert-info mt-3">
+        {{ messages[0] }}
+    </div>
+{% endif %}
+{% endwith %}
+
+</div>
+{% endblock %}

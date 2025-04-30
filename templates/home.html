@@ -26,7 +26,27 @@
     </p>
 
     <p class="text-muted">
-        This site was created by a 2024 participant who’s already signed up for the 2025 competition.
+        This site was created by a 2024 participant who’s already signed up for the 2025 competition. 
+        The author of this site has no official connection to Redline Fitness Games and developed this tool as a personal project.
     </p>
+
+    <h4>Feedback</h4>
+    <p>
+        If you have any feedback or suggestions, please use the <a href="/feedback">Feedback</a> page.
+    </p>    
+
+    <h3>Samples of what you can expect from this site</h3>
+
+    {%for i in range(0, pngListLen)%} 
+  
+    <div>
+        <br>
+        <h5>{{str_list[i]}}</h5>
+        <img src="{{ png_files[i] }}" width="80%" border="1">
+        </br>
+    </div>
+
+    {%endfor%} 
+
 </div>
 {% endblock %}

@@ -5,7 +5,16 @@
 {% block content %}
 
 <div class="container my-5">
-    <h1 class="mb-4">Delete the files.:</h1>
+
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+        <div class="alert alert-info mt-3">
+            {{ messages[0] }}
+        </div>
+    {% endif %}
+    {% endwith %}
+
+    <h1 class="mb-4">Magic Admin Powers:</h1>
 
     <form method="POST" id="regenerateOutput">
         <h3>Regenerate Generic Output:</h3>

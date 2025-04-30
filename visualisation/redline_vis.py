@@ -994,8 +994,6 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
 
     #need to figure out why this needed.
     runtimeVars = session.get('runtime', {})
-    print("redline_vis_generate runtimeVars",runtimeVars)
-
     config = session.get('config', {})
     #############################
     # Reading the file
@@ -1052,8 +1050,6 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
 
         dataOutputThisLoop=False
         runtimeVars['stringPdf'] = ""
-
-        print("runtimeVars",runtimeVars)
 
         indatafile = Path(util.data.CSV_INPUT_DIR) / Path(runtimeVars['eventDataList'][0] + '.csv')
 

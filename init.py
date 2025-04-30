@@ -4,7 +4,7 @@ from datetime import datetime
 
 import pandas as pd
 
-import os, csv
+import os, csv, math
 from pathlib import Path
 
 # local inclusion.
@@ -43,7 +43,24 @@ def gethome():
     #clear the search results.
     session.pop('search_results', None)
 
-    return render_template('home.html')
+    #list of pngs to be displayed on home page
+    pnglistHome = [ str(util.data.PNG_HTML_DIR / Path('visualisation_samples.png')),  
+                    str(util.data.PNG_HTML_DIR / Path('results_sample.png')),
+                    str(util.data.PNG_HTML_DIR / Path('results_table.png')),
+                    str(util.data.PNG_HTML_DIR / Path('searchlist.png')),
+                    str(util.data.PNG_HTML_DIR / Path('individual_visualisation.png'))
+                    ]
+    
+    strlistHome = [ "A Sample of Visualisations you can expect",  
+                    "A Selction of Results avaialable",
+                    "Filtered Results under your control"
+                    "Search for yourself and your friends",
+                    "Example of competitor visualisation"
+                    ]
+    
+    pngListLen = len(pnglistHome)
+
+    return render_template('home.html', png_files=pnglistHome, str_list=strlistHome, pngListLen=pngListLen)
 
 
 # Decorator to protect routes
@@ -122,14 +139,65 @@ def postadmin():
 
     return render_template('admin.html')
 
+@app.route('/admin/feedback')
+@login_required
+def admin_feedback():
+
+    page = int(request.args.get('page', 1))
+    per_page = 10
+
+    feedback_list = []
+    filename = util.data.CSV_FEEDBACK_DIR / Path('feedback.csv')
+
+    if os.path.exists(filename):
+        with open(filename, newline='', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            feedback_list = list(reader)
+
+    total = len(feedback_list)
+    start = (page - 1) * per_page
+    end = start + per_page
+    paginated_feedback = feedback_list[start:end]
+    total_pages = math.ceil(total / per_page)
+
+    return render_template('admin_feedback.html',
+                           feedback_list=paginated_feedback,
+                           page=page,
+                           total_pages=total_pages)
+
+@app.route('/admin/feedback/export')
+@login_required
+def export_feedback():
+
+    filename = util.data.CSV_FEEDBACK_DIR / Path('feedback.csv')
+
+    return send_file(filename, as_attachment=True, download_name='feedback.csv')
+
+@app.route('/admin/clear_feedback', methods=['POST'])
+@login_required
+def clear_feedback():
+
+    filename = util.data.CSV_FEEDBACK_DIR / Path('feedback.csv')
+
+    # Overwrite the file with headers only, if exists
+    if os.path.exists(filename):
+        with open(filename, 'w', newline='') as f:
+            writer = csv.writer(f)
+            #writer.writerow(['timestamp', 'message', 'email'])
+
+    flash("All feedback has been cleared.", "success")
+    return redirect(url_for('admin_feedback'))
 
 @app.route('/about')
 def about():
     
+    #list of pngs to be displayed on home page
+    pnglistAbout = [ str(util.data.PNG_HTML_DIR / Path('redline_author.png'))]
+
     #clear the search results.
     session.pop('search_results', None)
 
-    return render_template('about.html')
+    return render_template('about.html', png_files=pnglistAbout)
 
 @app.route('/feedback', methods=['GET', 'POST'])
 def feedback():
@@ -142,7 +210,9 @@ def feedback():
             flash('Please provide some feedback before submitting.', "warning")
             return redirect('/feedback')
 
-        with open('feedback.csv', 'a', newline='', encoding='utf-8') as f:
+        filename = util.data.CSV_FEEDBACK_DIR / Path('feedback.csv')
+
+        with open(filename, 'a', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow([datetime.now().isoformat(), name, email, comments])
 

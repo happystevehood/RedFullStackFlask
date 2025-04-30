@@ -23,15 +23,23 @@
         <li><strong>2024 Day 2:</strong> <a href="https://runnersunite.racetecresults.com/results.aspx?CId=16634&RId=1252" target="_blank">View Results</a></li>
     </ul>
 
-    <h4>Technical Notes</h4>
+    <h4>Technical Notes</h4> 
     <p>
         Results were manually copied into Excel from the public race timing site and then converted to CSV files per event.
         This site uses Flask, jQuery, Bootstrap, and DataTables to provide a fast and responsive experience.
         It was initially modeled on the 2023 result format and later updated for 2024.
     </p>
+    <p>
+        All of the soucre code for this site is available <a href="https://github.com/happystevehood/RedFullStackFlask" target="_blank">https://github.com/happystevehood/RedFullStackFlask</a>
+        If you need more details on the code please refer to github as starting point, any questions can be directed via the <a href="/feedback">Feedback</a> page.
+    </p>
 
     <p class="text-muted">
-        The author of this site has no official connection to Redline Fitness Games and developed this tool as a personal project.
+        The author of this site has no official connection to Redline Fitness Games and developed this tool as a personal hobby project.
     </p>
+
+    {% for png_file in png_files %}
+        <img src="{{ png_file }}" width="50%" border="1">
+    {% endfor %}
 </div>
 {% endblock %}
