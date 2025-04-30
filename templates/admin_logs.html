@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+    .log-container {
+        width: 100%;
+        
+        padding: 1rem;
+        overflow-x: auto;
+    }
+
+    pre.log-output {
+        font-size: 0.75rem;         /* Smaller font */
+        white-space: pre;           /* Prevent text wrapping */
+        overflow-x: auto;
+        background-color: #f9f9f9;
+        border: 1px solid #ccc;
+        padding: 1rem;
+        margin: 0;
+    }
+
+    .log-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .log-toolbar form {
+        display: inline-block;
+        margin: 0.25rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Activity Log</h2>
+
+    <div class="log-container">
+        <h2>Activity Log</h2>
+    
+        <div class="log-toolbar">
+            <form method="GET" action="{{ url_for('download_logs') }}">
+                <button class="btn btn-sm btn-success">Download Logs as .txt</button>
+            </form>
+    
+            <form method="POST" action="{{ url_for('clear_logs') }}" onsubmit="return confirm('Are you sure you want to clear the log file?');">
+                <button class="btn btn-sm btn-danger">Clear Log File</button>
+            </form>
+        </div>
+    
+        <pre class="log-output">{{ log_contents }}</pre>
+    </div>
+
+</div>
+{% endblock %}

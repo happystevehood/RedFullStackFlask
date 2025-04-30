@@ -4,8 +4,9 @@ from datetime import datetime
 
 import pandas as pd
 
-import os, csv, math
+import os, csv, math, re
 from pathlib import Path
+import logging
 
 # local inclusion.
 from util.search import find_competitor
@@ -19,6 +20,11 @@ app = Flask(__name__)
 # >>> import os
 # >>> os.urandom(24)
 app.secret_key = b' q/\x8ax"\xe9\xfc\x8a0v\x1a\x18\r\x8f\xc1\xb7\xf4\x14\xd0\xb8j:\xb1'
+
+#setup consistent logging
+util.data.setup_logger()
+
+logger = logging.getLogger()
 
 # Dummy password (store in environment variable or config in production)
 ADMIN_PASSWORD = 'admin'
@@ -35,6 +41,17 @@ if(OutputInfo == True):
     print('python versions ', sys.version)
     print('pandas ', pd.__version__, 'numpy ', np.__version__,'matplotlib ', mpl.__version__,'seaborn ', sns.__version__)
 
+
+@app.before_request
+def ensure_log_levels_session():
+    if 'log_levels' not in session:
+        session['log_levels'] = {
+            'global': logging.getLevelName(util.data.DEFAULT_LOG_LEVEL),
+            'handlers': {
+                'file': logging.getLevelName(util.data.DEFAULT_LOG_FILE_LEVEL),
+                'console': logging.getLevelName(util.data.DEFAULT_LOG_CONSOLE_LEVEL)
+            }
+        }
 
 @app.route('/', methods=["GET"])
 def gethome():
@@ -99,7 +116,11 @@ def admin():
     #clear the search results.
     session.pop('search_results', None)
 
-    return render_template('admin.html')
+    levels = session.get('log_levels') or util.data.get_log_levels()
+
+    print("Log levels: ",levels)   
+
+    return render_template("admin.html", current_log_levels=levels)
 
 
 @app.route('/admin', methods=["POST"])
@@ -137,7 +158,9 @@ def postadmin():
         redline_vis_generic(htmlString, pngList)
 
 
-    return render_template('admin.html')
+    levels = util.data.get_log_levels() or session.get('log_levels')
+    print("Log levels: ",levels)    
+    return render_template("admin.html", current_log_levels=levels)
 
 @app.route('/admin/feedback')
 @login_required
@@ -188,10 +211,82 @@ def clear_feedback():
     flash("All feedback has been cleared.", "success")
     return redirect(url_for('admin_feedback'))
 
+
+
+@app.route('/admin/logs/download')
+@login_required
+def download_logs():
+
+    filename = util.data.LOG_FILE_DIR / Path('activity.log')
+    return send_file(filename, as_attachment=True)
+
+@app.route('/admin/logs/clear', methods=['POST'])
+@login_required
+def clear_logs():
+
+    filename = util.data.LOG_FILE_DIR / Path('activity.log')
+    with open(filename, 'w') as f:
+        f.truncate()
+    flash('Log file cleared.')
+    return redirect(url_for('view_logs'))  # adjust route as needed
+
+@app.route('/admin/logs')
+@login_required
+def view_logs():
+
+    ANSI_ESCAPE_RE = re.compile(r'\x1B[@-_][0-?]*[ -/]*[@-~]')
+
+    try:
+        filename = util.data.LOG_FILE_DIR / Path('activity.log')
+        with open(filename, 'r') as f:
+            raw_log = f.read()
+            log_contents = ANSI_ESCAPE_RE.sub('', raw_log)  # 🔍 Strip ANSI codes
+    except FileNotFoundError:
+        log_contents = 'Log file not found.'
+
+    return render_template('admin_logs.html', log_contents=log_contents)
+
+@app.route('/admin/set-log-level', methods=['POST'])
+def set_log_level():
+    if not session.get('logged_in'):
+        abort(403)
+
+    global_level = request.form.get('global_log_level')
+    file_level = request.form.get('file_log_level')
+    console_level = request.form.get('console_log_level')
+
+    util.data.update_log_level(
+        global_level=global_level,
+        handler_levels={
+            'file': file_level,
+            'console': console_level
+        }
+    )
+
+    # Store in session for display in dropdowns
+    session['log_levels'] = {
+        'global': global_level,
+        'handlers': {
+            'file': file_level,
+            'console': console_level
+        }
+    }
+
+    flash("Log levels updated.", "success")
+    return redirect(url_for('admin'))
+
 @app.route('/about')
 def about():
     
-    #list of pngs to be displayed on home page
+    logger = logging.getLogger()
+
+    logger.debug("This is a debug message")    # Typically used for detailed dev info
+    logger.info("This is an info message")     # General application info
+    logger.warning("This is a warning")        # Something unexpected, but not fatal
+    logger.error("This is an error message")   # Serious problem, app still running
+    logger.critical("This is critical") 
+
+    #list of pngs to be displayed on about page
     pnglistAbout = [ str(util.data.PNG_HTML_DIR / Path('redline_author.png'))]
 
     #clear the search results.
@@ -326,9 +421,7 @@ def postdisplayEvent():
         io_pngList = []
 
         htmlString, io_pngList = redline_vis_generic_eventhtml(details, htmlString, io_pngList)
-
-        print ("redline_vis_generic_eventhtml", util.data.EVENT_DATA_LIST[index][1], io_pngList)
-  
+ 
         return render_template('visual.html', description=util.data.EVENT_DATA_LIST[index][1], png_files=io_pngList)
     
     if selected_view == "table" and selected_format == "html":

@@ -1,6 +1,9 @@
 import csv
 import os
 from pathlib import Path
+import logging
+from logging.handlers import RotatingFileHandler
+from flask import session
 
 
 # file sturcture 'constants'
@@ -19,6 +22,12 @@ PDF_GENERIC_DIR  = Path('static') / 'pdf' / 'generic'
 PNG_COMP_DIR     = Path('static') / 'png' / 'comp'
 PNG_GENERIC_DIR  = Path('static') / 'png' / 'generic' 
 PNG_HTML_DIR     = Path('static') / 'png' / 'html' 
+
+LOG_FILE_DIR      = Path('logs') 
+LOG_FILE          = LOG_FILE_DIR / 'activity.log'
+DEFAULT_LOG_LEVEL = logging.DEBUG # Lowest - Anything below will be filtered out
+DEFAULT_LOG_CONSOLE_LEVEL = logging.INFO # Middle - Anything will be written to console/terminal
+DEFAULT_LOG_FILE_LEVEL = logging.WARNING # Highest - Anything above will be written to file
 
 #The 2023 Events Lists
 EVENTLIST23 =      [         'Run','Bike','Sandbag Gauntlet','Battle Rope Pull','Farmer\'s Carry','Row','Deadball Burpee','Sled Push','Pendulum Shots','Agility Climber','Ski','The Mule']
@@ -53,6 +62,8 @@ EVENT_DATA_LIST = [
     ["TeamRelayWomen2024", "REDLINE Fitness Games '24 Womens Team Relay", "2024", "WOMENS", "RELAY", "KL"],
     ["TeamRelayMixed2024", "REDLINE Fitness Games '24 Mixed Team Relay", "2024", "MIXED", "RELAY", "KL"],
 ]
+
+
 
 def init_filepaths(dummy):
 
@@ -91,3 +102,70 @@ def format_seconds(seconds):
     minutes = int(seconds // 60)
     sec = round(seconds % 60, 1)
     return f"{minutes}m {sec:.1f}s"
+
+
+def setup_logger():
+    os.makedirs(LOG_FILE_DIR, exist_ok=True)
+
+    logger = logging.getLogger()
+    logger.setLevel(DEFAULT_LOG_LEVEL)  # Global level
+
+    formatter = logging.Formatter('[%(asctime)s] %(levelname)s in %(module)s: %(message)s')
+
+    # File handler
+    if not any(isinstance(h, RotatingFileHandler) for h in logger.handlers):
+        # File handler
+        file_handler = RotatingFileHandler(LOG_FILE, maxBytes=5_000_000, backupCount=3)
+        file_handler.setLevel(DEFAULT_LOG_FILE_LEVEL)  # Can customize
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+
+    # console handler
+    if not any(type(h) is logging.StreamHandler for h in logger.handlers):
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(DEFAULT_LOG_CONSOLE_LEVEL)
+        console_handler.setFormatter(logging.Formatter('[%(levelname)s] %(message)s'))
+        logger.addHandler(console_handler)
+
+    print("Configured log handlers:",logger.handlers)
+    for handler in logger.handlers:
+        print(f"Handler: {type(handler)}, Level: {logging.getLevelName(handler.level)}")
+
+    logger.debug("Logger debug message test")
+    logger.info("Logger info message test")
+    logger.warning("Logger warning message test")
+    logger.error("Logger error message test")
+    logger.critical("Logger critical message test")
+
+
+def update_log_level(global_level=None, handler_levels=None):
+    logger = logging.getLogger()
+    if global_level:
+        level = getattr(logging, global_level.upper(), None)
+        if isinstance(level, int):
+            logger.setLevel(level)
+
+    if handler_levels:
+        for handler in logger.handlers:
+            if isinstance(handler, RotatingFileHandler) and 'file' in handler_levels:
+                level = getattr(logging, handler_levels['file'].upper(), None)
+                if isinstance(level, int):
+                    handler.setLevel(level)
+            elif isinstance(handler, logging.StreamHandler) and 'console' in handler_levels:
+                level = getattr(logging, handler_levels['console'].upper(), None)
+                if isinstance(level, int):
+                    handler.setLevel(level)
+
+def get_log_levels():
+    logger = logging.getLogger()
+    levels = {
+        'global': logging.getLevelName(logger.level),
+        'file': None,
+        'console': None
+    }
+    for handler in logger.handlers:
+        if isinstance(handler, RotatingFileHandler):
+            levels['file'] = logging.getLevelName(handler.level)
+        elif isinstance(handler, logging.StreamHandler):
+            levels['console'] = logging.getLevelName(handler.level)
+    return levels

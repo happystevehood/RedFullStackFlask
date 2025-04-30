@@ -1022,7 +1022,7 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
     else:
         #then a general analysis of one event has been selected
         details = competitorDetails
-        print("details",details)
+        #print("details",details)
 
         for element in util.data.EVENT_DATA_LIST:
             if (element[0] == details['event']):
@@ -1207,8 +1207,6 @@ def redline_vis_competitor_html(competitorDetails, io_stringHtml, io_pngList):
     # Store config in session
     session['config'] = config
 
-    print('redline_vis_competitor_html', config)     
-
     return redline_vis_generate(competitorDetails, io_stringHtml, io_pngList)
 
 def redline_vis_competitor_pdf(competitorDetails, io_stringHtml, io_pngList):
@@ -1247,8 +1245,6 @@ def redline_vis_competitor_pdf(competitorDetails, io_stringHtml, io_pngList):
 
     # Store config in session
     session['config'] = config
-
-    print('redline_vis_competitor_pdf', config)     
 
     return redline_vis_generate(competitorDetails, io_stringHtml, io_pngList)
 
@@ -1376,8 +1372,6 @@ def redline_vis_generic_eventhtml(details, io_stringHtml, io_pngList):
 
     # Store session config dictionary
     session['config'] = config
-
-    #local variables
 
     #competitor details set to False
     return redline_vis_generate(details, io_stringHtml, io_pngList)
