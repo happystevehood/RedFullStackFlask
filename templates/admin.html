@@ -23,12 +23,12 @@
     <br/>
     <form method="POST" id="deleteGeneratedFilesForm">
         <h3>Delete Generated files:</h3>
-        <input type="submit" id="deleteGeneratedFilesBtn" name="deleteGeneratedFilesBtn" value="Delete Generic">
+        <input type="submit" id="deleteGeneratedFilesBtn" name="deleteGeneratedFilesBtn" value="Delete Generated">
     </form>
     <br/>
     <form method="POST" id="deleteCompetitorFilesForm">
         <h3>Delete Competitor files:</h3>
-        <input type="submit" id="deleteCompetitorFilesBtn" name="deleteCompetitorFilesBtn" value="Delete">
+        <input type="submit" id="deleteCompetitorFilesBtn" name="deleteCompetitorFilesBtn" value="Delete Competitor">
     </form>
 
     <form method="POST" action="/admin/set-log-level" class="form-inline my-2">
@@ -42,14 +42,14 @@
         <label class="mr-2">Console Handler:</label>
         <select name="console_log_level" class="form-control mr-2">
             {% for level in ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] %}
-                <option value="{{ level }}" {% if current_log_levels.handlers.console == level %}selected{% endif %}>{{ level }}</option>
+                <option value="{{ level }}" {% if current_log_levels.console == level %}selected{% endif %}>{{ level }}</option>
             {% endfor %}
         </select>
         
         <label class="mr-2">File Handler:</label>
         <select name="file_log_level" class="form-control mr-2">
             {% for level in ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] %}
-                <option value="{{ level }}" {% if current_log_levels.handlers.file == level %}selected{% endif %}>{{ level }}</option>
+                <option value="{{ level }}" {% if current_log_levels.file == level %}selected{% endif %}>{{ level }}</option>
             {% endfor %}
         </select>
     

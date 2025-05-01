@@ -3,8 +3,6 @@ import os
 from pathlib import Path
 import logging
 from logging.handlers import RotatingFileHandler
-from flask import session
-
 
 # file sturcture 'constants'
 # static - csv 	- input
@@ -25,9 +23,24 @@ PNG_HTML_DIR     = Path('static') / 'png' / 'html'
 
 LOG_FILE_DIR      = Path('logs') 
 LOG_FILE          = LOG_FILE_DIR / 'activity.log'
-DEFAULT_LOG_LEVEL = logging.DEBUG # Lowest - Anything below will be filtered out
-DEFAULT_LOG_CONSOLE_LEVEL = logging.INFO # Middle - Anything will be written to console/terminal
-DEFAULT_LOG_FILE_LEVEL = logging.WARNING # Highest - Anything above will be written to file
+
+#Here are the different logging levels 
+# DEBUG 
+# INFO 
+# WARNING 
+# ERROR 
+
+
+# DEBUG      logger.debug("This is a debug message")    # Typically used for detailed dev info
+# INFO       logger.info("This is an info message")     # General application info
+# WARNING    logger.warning("This is a warning")        # Something unexpected, but not fatal
+# ERROR      logger.error("This is an error message")   # Serious problem, app still running
+# CRITICAL    logger.critical("This is critical") 
+
+
+DEFAULT_LOG_LEVEL = logging.INFO # Anything LOWER than this will be filtered out.
+DEFAULT_LOG_CONSOLE_LEVEL = logging.ERROR # This level or higher will be written to the console/terminal
+DEFAULT_LOG_FILE_LEVEL = logging.INFO # This level or higher will be written to the console/terminal
 
 #The 2023 Events Lists
 EVENTLIST23 =      [         'Run','Bike','Sandbag Gauntlet','Battle Rope Pull','Farmer\'s Carry','Row','Deadball Burpee','Sled Push','Pendulum Shots','Agility Climber','Ski','The Mule']
@@ -63,42 +76,50 @@ EVENT_DATA_LIST = [
     ["TeamRelayMixed2024", "REDLINE Fitness Games '24 Mixed Team Relay", "2024", "MIXED", "RELAY", "KL"],
 ]
 
-
-
-def init_filepaths(dummy):
-
-    print(CSV_INPUT_DIR)
-
-    return True
+#call per module.
+logger = logging.getLogger()
 
 
 # helper function
 def remove_files_from_directory(directory):
     """Removes all files within the specified directory, but leaves the directory untouched."""
+
+    logger.debug("remove_files_from_directory> %s",str(directory))
     for filename in os.listdir(directory):
         file_path = os.path.join(directory, filename)
         if os.path.isfile(file_path):
             os.remove(file_path)
+    logger.debug("remove_files_from_directory<")
 
 
 def delete_generated_files():
     """Removes all data files generated here included competitor files"""
+    logger.debug("delete_generated_files>")
+    
     remove_files_from_directory(CSV_GENERIC_DIR);
     remove_files_from_directory(PDF_COMP_DIR); 
     remove_files_from_directory(PDF_GENERIC_DIR); 
     remove_files_from_directory(PNG_COMP_DIR); 
     remove_files_from_directory(PNG_GENERIC_DIR);
+    
+    logger.debug("delete_generated_files<")
 
 def delete_competitor_files():
+    
+    logger.debug("delete_competitor_files>")
+    
     """Removes all competitor data files generated here"""
     remove_files_from_directory(PDF_COMP_DIR); 
-    remove_files_from_directory(PNG_COMP_DIR); 
+    remove_files_from_directory(PNG_COMP_DIR);
+    
+    logger.debug("delete_competitor_files<") 
 
 #############################
 # Helper function to convert seconds to minutes.
 #############################
 
 def format_seconds(seconds):
+    logger.debug("format_seconds>")
     minutes = int(seconds // 60)
     sec = round(seconds % 60, 1)
     return f"{minutes}m {sec:.1f}s"
@@ -107,7 +128,6 @@ def format_seconds(seconds):
 def setup_logger():
     os.makedirs(LOG_FILE_DIR, exist_ok=True)
 
-    logger = logging.getLogger()
     logger.setLevel(DEFAULT_LOG_LEVEL)  # Global level
 
     formatter = logging.Formatter('[%(asctime)s] %(levelname)s in %(module)s: %(message)s')
@@ -127,19 +147,21 @@ def setup_logger():
         console_handler.setFormatter(logging.Formatter('[%(levelname)s] %(message)s'))
         logger.addHandler(console_handler)
 
-    print("Configured log handlers:",logger.handlers)
+    logger.debug("Configured log handlers: %s",logger.handlers)
     for handler in logger.handlers:
-        print(f"Handler: {type(handler)}, Level: {logging.getLevelName(handler.level)}")
+        logger.debug(f"Handler: {type(handler)}, Level: {logging.getLevelName(handler.level)}")
 
-    logger.debug("Logger debug message test")
-    logger.info("Logger info message test")
-    logger.warning("Logger warning message test")
-    logger.error("Logger error message test")
-    logger.critical("Logger critical message test")
+    logger.debug("setup_logger:Logger debug message test")
+    logger.info("setup_logger:Logger info message test")
+    logger.warning("setup_logger:Logger warning message test")
+    logger.error("setup_logger:Logger error message test")
+    logger.critical("setup_logger:Logger critical message test")
 
+    logger.debug("setup_logger<")
 
 def update_log_level(global_level=None, handler_levels=None):
-    logger = logging.getLogger()
+    logger.debug("update_log_level>", global_level, handler_levels)
+    
     if global_level:
         level = getattr(logging, global_level.upper(), None)
         if isinstance(level, int):
@@ -156,8 +178,11 @@ def update_log_level(global_level=None, handler_levels=None):
                 if isinstance(level, int):
                     handler.setLevel(level)
 
+    logger.debug("update_log_level<")
+
 def get_log_levels():
-    logger = logging.getLogger()
+    logger.debug("get_log_levels>" )
+    
     levels = {
         'global': logging.getLevelName(logger.level),
         'file': None,
@@ -168,4 +193,7 @@ def get_log_levels():
             levels['file'] = logging.getLevelName(handler.level)
         elif isinstance(handler, logging.StreamHandler):
             levels['console'] = logging.getLevelName(handler.level)
+
+    logger.debug("get_log_levels<")
     return levels
+

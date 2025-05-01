@@ -31,6 +31,7 @@ import os, pymupdf
 from pathlib import Path
 
 from flask import session
+import logging
 
 # local inclusion.
 import util.data
@@ -44,7 +45,7 @@ OutputInfo=False
 #############################
 # Tidy the data/data frame
 #############################
-def tidyTheData(df):
+def tidyTheData(df, filename):
 
     runtimeVars = session.get('runtime', {})
 
@@ -104,8 +105,8 @@ def tidyTheData(df):
                     #if value less than 10 seconds, then somthing wrong, data not trust worthy so want to drop the row.
                     if df.loc[x,event] < 10.0:
                         #print data...
-                        if(OutputInfo == True): print ('Removed Low value', x, event, df.loc[x,event], df.loc[x,'Pos'])
-                        
+                        if(OutputInfo == True): logging.debug(f"Removed Low value {filename} {x} {event} {df.loc[x,event]} {df.loc[x,'Pos']}")
+                                                
                         #drop the row
                         df.drop(x, inplace = True)
 
@@ -165,7 +166,7 @@ def tidyTheData(df):
                                 twoEventDuration = timedelta.total_seconds(datetime.strptime(dforig.loc[x,event],"%H:%M:%S.%f") - datetime.strptime(dforig.loc[x,runtimeVars['EventListStart'][MyIndex-2]] ,"%H:%M:%S.%f"))
 
                             if (twoEventDuration < 60.0):
-                                    if(OutputInfo == True): print ('2 EventDurLow', x, event, twoEventDuration)
+                                    if(OutputInfo == True): logging.debug(f"2 EventDurLow {filename} {x} {event} {twoEventDuration}")
                                     #drop the row
                                     df.drop(x, inplace = True)
 
@@ -204,7 +205,7 @@ def tidyTheData(df):
             #if net time less than 6 minutes
             if ((df.loc[x,'Net Time']) < 360.0):
                 #print data...
-                if(OutputInfo == True): print ('Removed Low NetTime', x, df.loc[x,'Net Time'], df.loc[x,'Pos'])
+                if(OutputInfo == True): logging.debug(f"Removed Low NetTime {filename} {x} {df.loc[x,'Net Time']} {df.loc[x,'Pos']}")
                 #drop the row
                 df.drop(x, inplace = True)
 
@@ -1003,7 +1004,7 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
     # if competitor Analysis true.
     if(config['competitorAnalysis'] == True):
         #then a single competitor in a single file has already been selected
-        print("competitorDetails",competitorDetails,runtimeVars['competitorRaceNo'])
+        #print("competitorDetails",competitorDetails,runtimeVars['competitorRaceNo'])
 
         for element in util.data.EVENT_DATA_LIST:
             if (element[0] == competitorDetails['event']):
@@ -1056,7 +1057,7 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
         #read in the data.
         df = pd.read_csv(indatafile)
 
-        tidyTheData(df=df)
+        tidyTheData(df=df, filename=indatafile)
         
         # if competitor Analysis enabled.
         if(config['competitorAnalysis'] == True):
@@ -1172,6 +1173,8 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
 
 def redline_vis_competitor_html(competitorDetails, io_stringHtml, io_pngList):
     
+    logging.info(f"redline_vis_competitor_html {competitorDetails}")
+    
     # Value always initialised as below but will be updated in function
     runtime = {
         "EventCutOffCount": [0,0,0,0,0,0,0,0,0,0, 0,0],  #Count number of partipants who reach 7 minutes per event. Corresponds to EventList Entries
@@ -1211,6 +1214,8 @@ def redline_vis_competitor_html(competitorDetails, io_stringHtml, io_pngList):
 
 def redline_vis_competitor_pdf(competitorDetails, io_stringHtml, io_pngList):
     
+    logging.info(f"redline_vis_competitor_pdf {competitorDetails}")
+
     # Value always initialised as below but will be updated in function
     runtime = {
         "EventCutOffCount": [0,0,0,0,0,0,0,0,0,0, 0,0],  #Count number of partipants who reach 7 minutes per event. Corresponds to EventList Entries
@@ -1250,6 +1255,8 @@ def redline_vis_competitor_pdf(competitorDetails, io_stringHtml, io_pngList):
 
 # used when regenerating all generic output for all events.
 def redline_vis_generic(io_stringHtml, io_pngList):
+
+    logging.info(f"redline_vis_generic")
 
     # Value always initialised as below but will be updated in function
     runtime = {
@@ -1297,6 +1304,8 @@ def redline_vis_generic(io_stringHtml, io_pngList):
 # used when generating generic pdf (if not already generated)
 def redline_vis_generic_eventpdf(details, io_stringHtml, io_pngList):
  
+    logging.info(f"redline_vis_generic_eventpdf {details}")
+
     # Value always initialised as below but will be updated in function
     runtime = {
         "EventCutOffCount": [0,0,0,0,0,0,0,0,0,0, 0,0],  #Count number of partipants who reach 7 minutes per event. Corresponds to EventList Entries
@@ -1337,6 +1346,8 @@ def redline_vis_generic_eventpdf(details, io_stringHtml, io_pngList):
 
 # used when generating generic event html (and generating string pdf and displaying pngs)
 def redline_vis_generic_eventhtml(details, io_stringHtml, io_pngList):
+
+    logging.info(f"redline_vis_generic_eventhtml {details}")
 
     # Value always initialised as below but will be updated in function
     runtime = {

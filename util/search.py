@@ -1,14 +1,19 @@
 import csv
 from pathlib import Path
+import logging
 
 import util.data
+
+
+#call per module.
+logger = logging.getLogger()
 
 # Find competitor function
 def find_competitor(competitor, callback):
     matches = []
     matchcount = 0
     
-    #print('find_competitor called', competitor)
+    logger.debug(f"find_competitor called {competitor}")
 
     #for each element in EVENT_DATA_LIST
     for element in util.data.EVENT_DATA_LIST:
@@ -22,7 +27,6 @@ def find_competitor(competitor, callback):
                 for row in reader:
                     # Check if the name field has a partial match with competitor (case insensitive)
                     if competitor.upper() in row['Name'].upper():
-                        #print('found a match', row['Name'])
 
                         match = {
                             'competitor': row['Name'],
@@ -30,19 +34,19 @@ def find_competitor(competitor, callback):
                             'race_no': row['Race No'],
                             'event': element[0]  # could be extracted from filename
                         }
-                        #print('found a match', match)
+                        logger.debug(f"found a match {match}")
                         matches.append(match)
                         matchcount += 1
 
                         if matchcount >= 50:
                             #leave early
-                            print(f'reached 50 matches' )
+                            logger.debug(f'reached {matchcount} matches' )
                             callback(competitor, matches)
                             return 
                            
 
         except Exception as e:
-            print(f"Error occurred: {e}")
+            logger.critical(f"Error occurred: {e}")   
 
     #only callback once all the files have been checked
     callback(competitor, matches)
