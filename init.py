@@ -41,6 +41,10 @@ csrf = CSRFProtect(app)
 #Headers & Clickjacking Prevention
 Talisman(app, content_security_policy=None)
 
+#####
+#This area needs to be updated to make secure again.
+####
+
 #mobile phone testing
 app.config['WTF_CSRF_ENABLED'] = False
 app.config['WTF_CSRF_SSL_STRICT'] = False    # Avoid issues with non-SSL
@@ -58,7 +62,10 @@ app.config.update(
 #    SESSION_COOKIE_SAMESITE='Lax'    # Prevent CSRF in most cases
 #)
 
-'''
+#####
+#This area needs to be updated to make secure again.
+####
+
 #Error handling
 app.config['TRAP_HTTP_EXCEPTIONS']=True
 #some local error handing
@@ -78,11 +85,6 @@ def handle_error(e):
         raise e
     except:
         return  render_template('error.html', string1="Error", string2="Something went wrong", error_code=500)
-'''    
-
-
-
-
 
 ####################################################
 

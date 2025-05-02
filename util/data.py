@@ -39,8 +39,8 @@ LOG_FILE          = LOG_FILE_DIR / 'activity.log'
 
 
 DEFAULT_LOG_LEVEL = logging.INFO # Anything LOWER than this will be filtered out.
+DEFAULT_LOG_FILE_LEVEL = logging.INFO # This level or higher will be written to the log file
 DEFAULT_LOG_CONSOLE_LEVEL = logging.ERROR # This level or higher will be written to the console/terminal
-DEFAULT_LOG_FILE_LEVEL = logging.INFO # This level or higher will be written to the console/terminal
 
 #The 2023 Events Lists
 EVENTLIST23 =      [         'Run','Bike','Sandbag Gauntlet','Battle Rope Pull','Farmer\'s Carry','Row','Deadball Burpee','Sled Push','Pendulum Shots','Agility Climber','Ski','The Mule']
