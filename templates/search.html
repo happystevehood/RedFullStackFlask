@@ -10,9 +10,10 @@
         <h2 class="mb-3">Search by Competitor Name:</h2>
 
         <form id="newSearchForm" class="row gy-2 gx-3 align-items-center mb-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="col-auto">
                 <label for="competitorToSearch" class="visually-hidden">Competitor Name</label>
-                <input type="text" class="form-control" id="competitorToSearch" name="competitor" placeholder="Joe Bloggs" style="min-width: 250px;">
+                <input type="text" class="form-control" id="competitorToSearch" name="competitor" placeholder="Joe Bloggs" style="min-width: 250px;" maxlength="100">
             </div>
             <div class="col-auto">
                 <button type="submit" class="btn btn-primary">Search</button>
@@ -38,6 +39,15 @@
 {% block script %}
 <script>
 $(document).ready(function() {
+
+    const csrfToken = $('meta[name="csrf-token"]').attr('content');
+
+    $.ajaxSetup({
+        headers: {
+            'X-CSRFToken': csrfToken
+        }
+    });
+
     let itemsRaw = [];
 
     function displaySearchResults(data) {
@@ -49,10 +59,10 @@ $(document).ready(function() {
         if (data.length === 0) {
             $searchDetail.hide();
             $display.hide();
-            $results.text(`No matches found for "${toSearch}".`);
+            $results.text(`No matches found!`);
             return;
-        } else if (data.length === 100) {
-            $results.text(`Success! At least ${data.length} matches found! Click a name to get more details:`);
+        } else if (data.length === 50) {
+            $results.text(`Success! The first 25 of ${data.length} matches shown. Refine you search criteria as needed... Click a name to get more details:`);
         } else {
             $results.text(`Success! ${data.length} matches found! Click a name to get more details:`);
         }
@@ -97,9 +107,18 @@ $(document).ready(function() {
             });
     }
 
+    function sanitizeInput(str) {
+    return str.replace(/[<>&"'\/]/g, function (c) {
+        return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;','/':'&#x2F;'}[c];
+    });
+}
+
     $('#newSearchForm').on('submit', function(e) {
         e.preventDefault();
         console.log('Submitting new search...');
+
+        let sanitized = sanitizeInput($('#competitorToSearch').val());
+        $('#competitorToSearch').val(sanitized); // Temporarily replace with sanitized version
 
         $.post('/api/search', $(this).serialize())
             .done(response => {

@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, render_template, send_file, abort, session, redirect, url_for,  flash
+from markupsafe import escape
 from functools import wraps
 from datetime import datetime
 
@@ -7,6 +8,11 @@ import pandas as pd
 import os, csv, math, re
 from pathlib import Path
 import logging
+
+#for security purposes
+from flask_wtf.csrf import CSRFProtect, generate_csrf, CSRFError
+from flask_talisman import Talisman
+from flask_limiter import Limiter
 
 # local inclusion.
 from util.search import find_competitor
@@ -26,10 +32,46 @@ util.data.setup_logger()
 
 logger = logging.getLogger()
 
+#To prevent abuse (e.g., bots spamming the search box), consider adding Flask-Limiter:
+limiter = Limiter(app)
+
+#protect against Cross-Site Request Forgery:
+csrf = CSRFProtect(app)
+
+
+
+app.config['TRAP_HTTP_EXCEPTIONS']=True
+
+#some local error handing
+@app.errorhandler(Exception)
+def handle_error(e):
+    try:
+        if e.code == 401:
+            return  render_template('error.html', string1="Bad Request", string2="The page you're looking for was not found", error_code=401)
+        elif e.code == 404:
+            return  render_template('error.html', string1="Page Not Found", string2="The page you're looking for was not found", error_code=404)
+        raise e
+    except:
+        return  render_template('error.html', string1="Error", string2="Something went wrong", error_code=500)
+    
+
+
+#Headers & Clickjacking Prevention
+Talisman(app, content_security_policy=None)
+
+#Regenerate session ID on login to avoid fixation attacks.
+app.config.update(
+    SESSION_COOKIE_SECURE=True,      # Only send cookies over HTTPS
+    SESSION_COOKIE_HTTPONLY=True,    # Not accessible via JavaScript
+    SESSION_COOKIE_SAMESITE='Lax'    # Prevent CSRF in most cases
+)
+
+####################################################
+
 # Dummy password (store in environment variable or config in production)
 ADMIN_PASSWORD = 'admin'
 
-OutputInfo = False
+OutputInfo = True
 
 # printout to confirm pkg versions.
 if(OutputInfo == True): 
@@ -43,6 +85,16 @@ if(OutputInfo == True):
     logger.warning(f"python versions {sys.version}")
     logger.warning(f"pandas {pd.__version__}, numpy {np.__version__}, matplotlib { mpl.__version__} 'seaborn {sns.__version__}")
 
+#####
+### pre-post processor functions
+####
+
+
+@app.context_processor
+def inject_csrf_token():
+    from flask_wtf.csrf import generate_csrf
+    return dict(csrf_token=generate_csrf)
+
 @app.before_request
 def ensure_log_levels_session():
     if 'log_levels' not in session:
@@ -51,6 +103,14 @@ def ensure_log_levels_session():
             'file': logging.getLevelName(util.data.DEFAULT_LOG_FILE_LEVEL),
             'console': logging.getLevelName(util.data.DEFAULT_LOG_CONSOLE_LEVEL)
         }
+
+#@app.after_request
+def set_csp(response):
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' https://code.jquery.com"
+    return response
+
+
+#################################################
 
 @app.route('/', methods=["GET"])
 def gethome():
@@ -79,230 +139,6 @@ def gethome():
     return render_template('home.html', png_files=pnglistHome, str_list=strlistHome, pngListLen=pngListLen)
 
 
-# Decorator to protect routes
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if session.get('logged_in') != True:
-            flash("You must log in to access this page.", "warning")
-            logger.warning(f"You must log in to access this page.")
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated_function
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    logger.debug(f"/login received {request}")
-
-    if request.method == 'POST':
-        password = request.form.get('password')
-        if password == ADMIN_PASSWORD:
-            session['logged_in'] = True
-            flash("Login successful!", "success")
-            logger.warning(f"Login successful!")            
-            return redirect(url_for('admin'))
-        else:
-            flash("Incorrect password. Try again.", "danger")
-    return render_template('login.html')
-
-@app.route('/logout')
-@login_required
-def logout():
-
-    logger.debug(f"/logout received {request}")
-    session.pop('logged_in', None)
-
-    flash("You have been logged out.", "info")
-    logger.warning(f"You have been logged out!")  
-    
-    return redirect(url_for('login'))
-
-
-@app.route('/admin')
-@login_required
-def admin():
-
-    logger.debug(f"/admin received {request}")
-    
-    #clear the search results.
-    session.pop('search_results', None)
-
-    level1 = util.data.get_log_levels()
-    level2 = session.get('log_levels')
-
-    levels = util.data.get_log_levels() or session.get('log_levels')
-    logger.info(f"Log Levels: {levels} {level1} {level2}") 
-
-    return render_template("admin.html", current_log_levels=levels)
-
-
-@app.route('/admin', methods=["POST"])
-@login_required
-def postadmin():
-
-    logger.debug(f"/admin POST received {request}")
-
-    #Adming actity to clear the results on request.
-    session.pop('search_results', None)
-
-    # get which button was clicked in home.html
-    # and call the appropriate function
-    # for that button
-
-    regenerate = request.form.get("regenerateBtn")
-    generated_delete = request.form.get("deleteGeneratedFilesBtn")
-    competitor_delete = request.form.get("deleteCompetitorFilesBtn")
-
-    if generated_delete:
-        logger.debug(f"Delete the generated files")
-        # Delete all the Generic files include Competitor
-        util.data.delete_generated_files()
-
-    elif competitor_delete:
-        logger.debug(f"Delete Competitor files")
-        # Delete all the Competitor files include
-        util.data.delete_competitor_files()
-
-    elif regenerate:
-        logger.debug(f"Regenerate output")
-        htmlString = " "
-        pngList = []
- 
-        redline_vis_generic(htmlString, pngList)
-
-    level1 = util.data.get_log_levels()
-    level2 = session.get('log_levels')
-
-    levels = util.data.get_log_levels() or session.get('log_levels')
-    logger.info(f"Log Levels: {levels} {level1} {level2}") 
-
-    return render_template("admin.html", current_log_levels=levels)
-
-@app.route('/admin/feedback')
-@login_required
-def admin_feedback():
-
-    logger.debug(f"/admin/feedback received {request}")
-
-    page = int(request.args.get('page', 1))
-    per_page = 10
-
-    feedback_list = []
-    filename = util.data.CSV_FEEDBACK_DIR / Path('feedback.csv')
-
-    if os.path.exists(filename):
-        with open(filename, newline='', encoding='utf-8') as f:
-            reader = csv.reader(f)
-            feedback_list = list(reader)
-
-    total = len(feedback_list)
-    start = (page - 1) * per_page
-    end = start + per_page
-    paginated_feedback = feedback_list[start:end]
-    total_pages = math.ceil(total / per_page)
-
-    return render_template('admin_feedback.html',
-                           feedback_list=paginated_feedback,
-                           page=page,
-                           total_pages=total_pages)
-
-@app.route('/admin/feedback/export')
-@login_required
-def export_feedback():
-
-    logger.debug(f"/admin/feedback/export received {request}")
-
-    filename = util.data.CSV_FEEDBACK_DIR / Path('feedback.csv')
-
-    return send_file(filename, as_attachment=True, download_name='feedback.csv')
-
-@app.route('/admin/clear_feedback', methods=['POST'])
-@login_required
-def clear_feedback():
-
-    logger.debug(f"/admin/clear_feedback POST received {request}")
-
-    filename = util.data.CSV_FEEDBACK_DIR / Path('feedback.csv')
-
-    # Overwrite the file with headers only, if exists
-    if os.path.exists(filename):
-        with open(filename, 'w', newline='') as f:
-            writer = csv.writer(f)
-
-    flash("All feedback has been cleared.", "success")
-    logger.info(f"All feedback has been cleared.")   
-    return redirect(url_for('admin_feedback'))
-
-
-
-@app.route('/admin/logs/download')
-@login_required
-def download_logs():
-
-    logger.debug(f"/admin/logs/download received {request}")
-
-    filename = util.data.LOG_FILE_DIR / Path('activity.log')
-    return send_file(filename, as_attachment=True)
-
-@app.route('/admin/logs/clear', methods=['POST'])
-@login_required
-def clear_logs():
-
-    logger.debug(f"/admin/logs/clear POST received {request}")
-
-    filename = util.data.LOG_FILE_DIR / Path('activity.log')
-    with open(filename, 'w') as f:
-        f.truncate()
-    logger.info(f"All logs have been cleared.")   
-    return redirect(url_for('view_logs'))  # adjust route as needed
-
-@app.route('/admin/logs')
-@login_required
-def view_logs():
-
-    logger.debug(f"/admin/logs received {request}")
-
-    ANSI_ESCAPE_RE = re.compile(r'\x1B[@-_][0-?]*[ -/]*[@-~]')
-
-    try:
-        filename = util.data.LOG_FILE_DIR / Path('activity.log')
-        with open(filename, 'r') as f:
-            raw_log = f.read()
-            log_contents = ANSI_ESCAPE_RE.sub('', raw_log)  # 🔍 Strip ANSI codes
-    except FileNotFoundError:
-        logger.info(f"Log file not found") 
-        log_contents = 'Log file not found.'
-
-    return render_template('admin_logs.html', log_contents=log_contents)
-
-@app.route('/admin/set-log-level', methods=['POST'])
-@login_required
-def set_log_level():
-    
-    logger.debug(f"/admin/set-log-level POST received {request}")
-
-    global_level = request.form.get('global_log_level')
-    file_level = request.form.get('file_log_level')
-    console_level = request.form.get('console_log_level')
-
-    util.data.update_log_level(
-        global_level=global_level,
-        handler_levels={
-            'file': file_level,
-            'console': console_level
-        }
-    )
-
-    # Store in session for display in dropdowns
-    session['log_levels'] = {
-        'global': global_level,
-        'file': file_level,
-        'console': console_level
-        }
-
-    flash("Log levels updated.", "success")
-    logger.info(f"Log levels updated, global: {global_level}, file: {file_level}, console: {console_level}")
-    return redirect(url_for('admin'))
 
 @app.route('/about')
 def about():
@@ -329,6 +165,7 @@ def feedback():
     logger.debug(f"/feedback received {request}")
 
     if request.method == 'POST':
+
         name = request.form.get('name', '').strip()
         email = request.form.get('email', '').strip()
         comments = request.form.get('comments', '').strip()
@@ -521,6 +358,7 @@ def postdisplayEvent():
     return response
 
 @app.route('/api/search', methods=['GET'])
+@limiter.limit("10 per minute")
 def get_search_results():
         
     logger.debug(f"/api/search GET received {request}")
@@ -546,6 +384,16 @@ def new_search():
 
     search_query = request.form['competitor'].upper()
 
+    #sanitise this search query
+    search_query = search_query.strip()  # Remove leading/trailing whitespace
+    search_query = escape(search_query)  # Prevent injection if rendered back to user
+
+    # Optionally, apply further filtering:
+    if len(search_query) > 100:
+        logger.debug(f"/api/search POST Search term too long: {search_query}")
+        flash("Search term too long.", "danger")
+        return jsonify("No matches found")
+
     if not search_query:
         logger.debug(f"/api/search POST No search query found")
         return jsonify("No matches found")
@@ -564,17 +412,6 @@ def new_search():
     session['search_results'] = matches
 
     return jsonify({'status': 'ok', 'data': matches})
-
-
-@app.route('/api/search/', methods=['DELETE'])
-def clear_search():
-    
-    logger.debug(f"/api/search DELETE received {request}")
-
-    print('Request to /api/search/ DELETE received', request.form)
-    session.pop('search_results', None)
-
-    return jsonify({'status': 'cleared'})
 
 
 @app.route('/display_vis', methods=['GET'])
@@ -647,12 +484,245 @@ def post_display_vis():
             logger.info(f"File downloaded: {response}")
             return response
         
+##############################
+
+# Admin routes Below this line
 
 ##############################
 
+# Decorator to protect routes
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if session.get('logged_in') != True:
+            flash("You must log in to access this page.", "warning")
+            logger.warning(f"You must log in to access this page.")
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
-#app.config["TEMPLATES_AUTO_RELOAD"] = True
-#app.config["EXPLAIN_TEMPLATE_LOADING"] = True
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    logger.debug(f"/login received {request}")
+
+    if request.method == 'POST':
+
+        password = request.form.get('password')
+        if password == ADMIN_PASSWORD:
+            session['logged_in'] = True
+            flash("Login successful!", "success")
+            logger.warning(f"Login successful!")            
+            return redirect(url_for('admin'))
+        else:
+            flash("Incorrect password. Try again.", "danger")
+    return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+
+    logger.debug(f"/logout received {request}")
+    session.pop('logged_in', None)
+
+    flash("You have been logged out.", "info")
+    logger.warning(f"You have been logged out!")  
+    
+    return redirect(url_for('login'))
+
+
+@app.route('/admin', methods=["GET"])
+@login_required
+def admin():
+
+    logger.debug(f"/admin received {request}")
+    
+    #clear the search results.
+    session.pop('search_results', None)
+
+    level1 = util.data.get_log_levels()
+    level2 = session.get('log_levels')
+
+    levels = util.data.get_log_levels() or session.get('log_levels')
+    logger.info(f"Log Levels: {levels} {level1} {level2}") 
+
+    return render_template("admin.html", current_log_levels=levels)
+
+
+@app.route('/admin', methods=["POST"])
+@login_required
+def postadmin():
+
+    logger.debug(f"/admin POST received {request}")
+
+    #Adming actity to clear the results on request.
+    session.pop('search_results', None)
+
+    # get which button was clicked in home.html
+    # and call the appropriate function
+    # for that button
+
+    regenerate = request.form.get("regenerateBtn")
+    generated_delete = request.form.get("deleteGeneratedFilesBtn")
+    competitor_delete = request.form.get("deleteCompetitorFilesBtn")
+
+    if generated_delete:
+        logger.debug(f"Delete the generated files")
+        # Delete all the Generic files include Competitor
+        util.data.delete_generated_files()
+
+    elif competitor_delete:
+        logger.debug(f"Delete Competitor files")
+        # Delete all the Competitor files include
+        util.data.delete_competitor_files()
+
+    elif regenerate:
+        logger.debug(f"Regenerate output")
+        htmlString = " "
+        pngList = []
+ 
+        redline_vis_generic(htmlString, pngList)
+
+    level1 = util.data.get_log_levels()
+    level2 = session.get('log_levels')
+
+    levels = util.data.get_log_levels() or session.get('log_levels')
+    logger.info(f"Log Levels: {levels} {level1} {level2}") 
+
+    return render_template("admin.html", current_log_levels=levels)
+
+@app.route('/admin/feedback')
+@login_required
+def admin_feedback():
+
+    logger.debug(f"/admin/feedback received {request}")
+
+    page = int(request.args.get('page', 1))
+    per_page = 10
+
+    feedback_list = []
+    filename = util.data.CSV_FEEDBACK_DIR / Path('feedback.csv')
+
+    if os.path.exists(filename):
+        with open(filename, newline='', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            feedback_list = list(reader)
+
+    total = len(feedback_list)
+    start = (page - 1) * per_page
+    end = start + per_page
+    paginated_feedback = feedback_list[start:end]
+    total_pages = math.ceil(total / per_page)
+
+    return render_template('admin_feedback.html',
+                           feedback_list=paginated_feedback,
+                           page=page,
+                           total_pages=total_pages)
+
+@app.route('/admin/feedback/export')
+@login_required
+def export_feedback():
+
+    logger.debug(f"/admin/feedback/export received {request}")
+
+    filename = util.data.CSV_FEEDBACK_DIR / Path('feedback.csv')
+
+    return send_file(filename, as_attachment=True, download_name='feedback.csv')
+
+@app.route('/admin/clear_feedback', methods=['POST'])
+@login_required
+def clear_feedback():
+
+    logger.debug(f"/admin/clear_feedback POST received {request}")
+
+    filename = util.data.CSV_FEEDBACK_DIR / Path('feedback.csv')
+
+    # Overwrite the file with headers only, if exists
+    if os.path.exists(filename):
+        with open(filename, 'w', newline='') as f:
+            writer = csv.writer(f)
+
+    flash("All feedback has been cleared.", "success")
+    logger.info(f"All feedback has been cleared.")   
+    return redirect(url_for('admin_feedback'))
+
+
+
+@app.route('/admin/logs/download')
+@login_required
+def download_logs():
+
+    logger.debug(f"/admin/logs/download received {request}")
+
+    filename = util.data.LOG_FILE_DIR / Path('activity.log')
+    return send_file(filename, as_attachment=True)
+
+@app.route('/admin/logs/clear', methods=['POST'])
+@login_required
+def clear_logs():
+
+    logger.debug(f"/admin/logs/clear POST received {request}")
+
+    filename = util.data.LOG_FILE_DIR / Path('activity.log')
+    with open(filename, 'w') as f:
+        f.truncate()
+    logger.info(f"All logs have been cleared.")   
+    return redirect(url_for('view_logs'))  # adjust route as needed
+
+@app.route('/admin/logs')
+@login_required
+def view_logs():
+
+    logger.debug(f"/admin/logs received {request}")
+
+    ANSI_ESCAPE_RE = re.compile(r'\x1B[@-_][0-?]*[ -/]*[@-~]')
+
+    try:
+        filename = util.data.LOG_FILE_DIR / Path('activity.log')
+        with open(filename, 'r') as f:
+            raw_log = f.read()
+            log_contents = ANSI_ESCAPE_RE.sub('', raw_log)  # 🔍 Strip ANSI codes
+    except FileNotFoundError:
+        logger.info(f"Log file not found") 
+        log_contents = 'Log file not found.'
+
+    return render_template('admin_logs.html', log_contents=log_contents)
+
+@app.route('/admin/set-log-level', methods=['POST'])
+@login_required
+def set_log_level():
+    
+    logger.debug(f"/admin/set-log-level POST received {request}")
+
+    global_level = request.form.get('global_log_level')
+    file_level = request.form.get('file_log_level')
+    console_level = request.form.get('console_log_level')
+
+    util.data.update_log_level(
+        global_level=global_level,
+        handler_levels={
+            'file': file_level,
+            'console': console_level
+        }
+    )
+
+    # Store in session for display in dropdowns
+    session['log_levels'] = {
+        'global': global_level,
+        'file': file_level,
+        'console': console_level
+        }
+
+    flash("Log levels updated.", "success")
+    logger.info(f"Log levels updated, global: {global_level}, file: {file_level}, console: {console_level}")
+    return redirect(url_for('admin'))
+
+
+##############################
+
+# Admin routes Above this line
+
+##############################
+
 
 #Run the app on localhost port 5000
 if __name__ == "__main__":
