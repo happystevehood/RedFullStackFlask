@@ -38,33 +38,51 @@ limiter = Limiter(app)
 #protect against Cross-Site Request Forgery:
 csrf = CSRFProtect(app)
 
+#Headers & Clickjacking Prevention
+Talisman(app, content_security_policy=None)
 
+#mobile phone testing
+app.config['WTF_CSRF_ENABLED'] = False
+app.config['WTF_CSRF_SSL_STRICT'] = False    # Avoid issues with non-SSL
 
+app.config.update(
+    SESSION_COOKIE_NAME='session',
+    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_SECURE=False,  # Must be False for HTTP (especially mobile)
+)
+
+#Regenerate session ID on login to avoid fixation attacks.
+#app.config.update(
+#    SESSION_COOKIE_SECURE=True,      # Only send cookies over HTTPS
+#    SESSION_COOKIE_HTTPONLY=True,    # Not accessible via JavaScript
+#    SESSION_COOKIE_SAMESITE='Lax'    # Prevent CSRF in most cases
+#)
+
+'''
+#Error handling
 app.config['TRAP_HTTP_EXCEPTIONS']=True
-
 #some local error handing
 @app.errorhandler(Exception)
 def handle_error(e):
     try:
         if e.code == 401:
-            return  render_template('error.html', string1="Bad Request", string2="The page you're looking for was not found", error_code=401)
+            return  render_template('error.html', string1="Bad Request", string2="The page you're looking for was not found", 
+                                    error_code=401,        
+                                    name= e.name,
+                                    description= e.description)
         elif e.code == 404:
-            return  render_template('error.html', string1="Page Not Found", string2="The page you're looking for was not found", error_code=404)
+            return  render_template('error.html', string1="Page Not Found", string2="The page you're looking for was not found", 
+                                    error_code=401,        
+                                    name= e.name,
+                                    description= e.description)
         raise e
     except:
         return  render_template('error.html', string1="Error", string2="Something went wrong", error_code=500)
-    
+'''    
 
 
-#Headers & Clickjacking Prevention
-Talisman(app, content_security_policy=None)
 
-#Regenerate session ID on login to avoid fixation attacks.
-app.config.update(
-    SESSION_COOKIE_SECURE=True,      # Only send cookies over HTTPS
-    SESSION_COOKIE_HTTPONLY=True,    # Not accessible via JavaScript
-    SESSION_COOKIE_SAMESITE='Lax'    # Prevent CSRF in most cases
-)
+
 
 ####################################################
 
@@ -129,7 +147,7 @@ def gethome():
     
     strlistHome = [ "A Sample of Visualisations you can expect",  
                     "A Selction of Results avaialable",
-                    "Filtered Results under your control"
+                    "Filtered Results under your control",
                     "Search for yourself and your friends",
                     "Example of competitor visualisation"
                     ]
@@ -726,6 +744,5 @@ def set_log_level():
 
 #Run the app on localhost port 5000
 if __name__ == "__main__":
-    app.run('127.0.0.1', 5000, debug = True)
-
-
+#    app.run('127.0.0.1', 5000, debug = True)
+    app.run('0.0.0.0', 5000, debug = True)
