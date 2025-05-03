@@ -74,12 +74,22 @@ def handle_error(e):
     try:
         if e.code == 401:
             return  render_template('error.html', string1="Bad Request", string2="The page you're looking for was not found", 
-                                    error_code=401,        
+                                    error_code=e.code,        
                                     name= e.name,
                                     description= e.description)
         elif e.code == 404:
             return  render_template('error.html', string1="Page Not Found", string2="The page you're looking for was not found", 
-                                    error_code=401,        
+                                    error_code=e.code,        
+                                    name= e.name,
+                                    description= e.description)
+        if e.code == 405:
+            return  render_template('error.html', string1="Method Not Allowed", string2="The page you're looking for was not found", 
+                                    error_code=e.code,        
+                                    name= e.name,
+                                    description= e.description)
+        elif e.code == 500:
+            return  render_template('error.html', string1="Internal Server Error", string2="The page you're looking for was not found", 
+                                    error_code=e.code,        
                                     name= e.name,
                                     description= e.description)
         raise e
