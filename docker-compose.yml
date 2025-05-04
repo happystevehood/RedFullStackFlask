@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: redline-flask-app
+    volumes:
+      - .:/app
+    environment:
+      - FLASK_APP=init.py       # Adjust if your entry point has a different filename
+      - ENV_MODE=development    # development or production
+    ports:
+      - "${PORT}:${PORT}"
+    restart: always  # for production
+
+# Build and run
+# docker-compose --env-file .env.development up --build
+
+# View logs
+#docker-compose logs -f
+
+# Stop
+#docker-compose down

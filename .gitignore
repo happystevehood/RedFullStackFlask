@@ -1,9 +1,6 @@
-visualisation/__pycache__/redline_vis.cpython-312.pyc
-util/__pycache__/search.cpython-312.pyc
-util/__pycache__/data.cpython-312.pyc
+*.pyc
 *.pdf
 *.png
-static/csv/generic/*.csv
-__pycache__/init.cpython-312.pyc
 feedback.csv
-logs/activity.log
+*.log
+

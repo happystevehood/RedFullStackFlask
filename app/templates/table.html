@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Table | Redline Fitness Games{% endblock %}
+
+{% block head %}
+<!-- Bootstrap & DataTables CSS -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap4.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.bootstrap4.min.css">
+{% endblock %}
+
+{% block content %}
+<div class="full-width-wrapper my-4">
+    <h2 class="mb-4">{{ title }}</h2>
+    <div class="table-responsive" style="overflow-x: auto;">
+        <table id="dataTable" class="table table-striped table-bordered nowrap" style="width:100%;">
+            <thead>
+                <tr>
+                    {% for header in headers %}
+                        <th>{{ header }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in data %}
+                    <tr>
+                        {% for header in headers %}
+                            <td>
+                                {% set value = row[header] %}
+                                {% if value is number %}
+                                    {{ "%.1f"|format(value) }}
+                                {% else %}
+                                    {{ value }}
+                                {% endif %}
+                            </td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<!-- jQuery and DataTables JS -->
+<script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap4.min.js"></script>
+<script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
+
+<script>
+$(document).ready(function() {
+    var table = $('#dataTable').DataTable({
+        scrollX: true,
+        pageLength: 25,
+        autoWidth: true,
+        fixedHeader: {
+            header: true,
+            headerOffset: 56
+        }
+        // ⚡ NO "responsive: true" here anymore
+    });
+});
+</script>
+{% endblock %}
