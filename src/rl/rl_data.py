@@ -14,15 +14,16 @@ from logging.handlers import RotatingFileHandler
 
 CSV_INPUT_DIR    = Path('static') / 'csv' / 'input'
 CSV_GENERIC_DIR  = Path('static') / 'csv' / 'generic' 
-CSV_FEEDBACK_DIR = Path('static') / 'csv' / 'feedback'
 PDF_COMP_DIR     = Path('static') / 'pdf' / 'comp' 
 PDF_GENERIC_DIR  = Path('static') / 'pdf' / 'generic' 
 PNG_COMP_DIR     = Path('static') / 'png' / 'comp'
 PNG_GENERIC_DIR  = Path('static') / 'png' / 'generic' 
 PNG_HTML_DIR     = Path('static') / 'png' / 'html' 
 
-LOG_FILE_DIR      = Path('logs') 
+# This data should not be served to the user
+LOG_FILE_DIR      = Path('store') / 'logs'
 LOG_FILE          = LOG_FILE_DIR / 'activity.log'
+CSV_FEEDBACK_DIR  = Path('store') / 'feedback'
 
 #Here are the different logging levels 
 # DEBUG 
@@ -38,9 +39,9 @@ LOG_FILE          = LOG_FILE_DIR / 'activity.log'
 # CRITICAL    logger.critical("This is critical") 
 
 
-DEFAULT_LOG_LEVEL = logging.INFO # Anything LOWER than this will be filtered out.
-DEFAULT_LOG_FILE_LEVEL = logging.INFO # This level or higher will be written to the log file
-DEFAULT_LOG_CONSOLE_LEVEL = logging.ERROR # This level or higher will be written to the console/terminal
+DEFAULT_LOG_LEVEL = logging.DEBUG #INFO # Anything LOWER than this will be filtered out.
+DEFAULT_LOG_FILE_LEVEL = logging.DEBUG #INFO # This level or higher will be written to the log file
+DEFAULT_LOG_CONSOLE_LEVEL = logging.DEBUG #ERROR # This level or higher will be written to the console/terminal
 
 #The 2023 Events Lists
 EVENTLIST23 =      [         'Run','Bike','Sandbag Gauntlet','Battle Rope Pull','Farmer\'s Carry','Row','Deadball Burpee','Sled Push','Pendulum Shots','Agility Climber','Ski','The Mule']
@@ -85,6 +86,7 @@ def remove_files_from_directory(directory):
     """Removes all files within the specified directory, but leaves the directory untouched."""
 
     logger.debug("remove_files_from_directory> %s",str(directory))
+    logger.debug("cwd %s",str(os.getcwd()))
     for filename in os.listdir(directory):
         file_path = os.path.join(directory, filename)
         if os.path.isfile(file_path):
@@ -130,7 +132,9 @@ def setup_logger():
 
     logger.setLevel(DEFAULT_LOG_LEVEL)  # Global level
 
-    formatter = logging.Formatter('[%(asctime)s] %(levelname)s in %(module)s: %(message)s')
+    #formatter = logging.Formatter('[%(asctime)s] %(levelname)s in %(module)s: %(message)s')
+    formatter = logging.Formatter('[%(asctime)s] [PID:%(process)d] %(levelname)s in %(module)s: %(message)s')
+
 
     # File handler
     if not any(isinstance(h, RotatingFileHandler) for h in logger.handlers):
@@ -144,23 +148,24 @@ def setup_logger():
     if not any(type(h) is logging.StreamHandler for h in logger.handlers):
         console_handler = logging.StreamHandler()
         console_handler.setLevel(DEFAULT_LOG_CONSOLE_LEVEL)
-        console_handler.setFormatter(logging.Formatter('[%(levelname)s] %(message)s'))
+        #console_handler.setFormatter(logging.Formatter('[%(levelname)s] %(message)s'))
+        console_handler.setFormatter(logging.Formatter('[PID:%(process)d] [%(levelname)s] %(message)s'))        
         logger.addHandler(console_handler)
 
     logger.debug("Configured log handlers: %s",logger.handlers)
     for handler in logger.handlers:
         logger.debug(f"Handler: {type(handler)}, Level: {logging.getLevelName(handler.level)}")
 
-    logger.debug("setup_logger:Logger debug message test")
-    logger.info("setup_logger:Logger info message test")
-    logger.warning("setup_logger:Logger warning message test")
-    logger.error("setup_logger:Logger error message test")
-    logger.critical("setup_logger:Logger critical message test")
+    logger.debug(f"setup_logger:Logger debug message test")
+    logger.info(f"setup_logger:Logger info message test")
+    logger.warning(f"setup_logger:Logger warning message test")
+    logger.error(f"setup_logger:Logger error message test")
+    logger.critical(f"setup_logger:Logger critical message test")
 
-    logger.debug("setup_logger<")
+    logger.debug(f"setup_logger<")
 
 def update_log_level(global_level=None, handler_levels=None):
-    logger.debug("update_log_level>", global_level, handler_levels)
+    logger.debug(f"update_log_level> {global_level}, {handler_levels}")
     
     if global_level:
         level = getattr(logging, global_level.upper(), None)

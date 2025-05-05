@@ -16,12 +16,14 @@ from flask_talisman import Talisman
 from flask_limiter import Limiter
 
 # local inclusion.
-from util.search import find_competitor
-import util.data
-from visualisation.redline_vis import redline_vis_competitor_html, redline_vis_competitor_pdf, redline_vis_generic, redline_vis_generic_eventpdf, redline_vis_generic_eventhtml
+from rl.rl_search import find_competitor
+import rl.rl_data as rl_data 
+from rl.rl_vis import redline_vis_competitor_html, redline_vis_competitor_pdf, redline_vis_generic, redline_vis_generic_eventpdf, redline_vis_generic_eventhtml
 
+print(">>> Flask app factory started")
 #start the app first
 app = Flask(__name__)
+print(">>> Flask app created")
 
 #get enviroment variables
 # Choose env file based on ENV_MODE variable
@@ -43,6 +45,8 @@ if env_mode == 'production':
         DEBUG=False
     )
 
+    PORT = 8080
+
     print(f"ENV_MODE is production")
     ######
     # END production setting
@@ -61,6 +65,8 @@ elif  env_mode == 'development':
         SESSION_COOKIE_SECURE=False,   # Must be False for HTTP (especially mobile)
         DEBUG=True                      # Do not use in production
     )
+
+    PORT = 5000
     print(f"ENV_MODE is debug")
 
 #get secret key from env variable
@@ -70,7 +76,7 @@ app.secret_key = os.getenv("SECRET_KEY", b' q/\x8ax"\xe9\xfc\x8a0v\x1a\x18\r\x8f
 ADMIN_PASSWORD = os.getenv("SECRET_KEY", 'Admin')
 
 #setup consistent logging
-util.data.setup_logger()
+rl_data.setup_logger()
 
 logger = logging.getLogger()
 #Not an warning but what to output the message
@@ -85,6 +91,7 @@ csrf = CSRFProtect(app)
 #Headers & Clickjacking Prevention
 Talisman(app, content_security_policy=None)
 
+'''
 #Error handling
 app.config['TRAP_HTTP_EXCEPTIONS']=True
 #some local error handing
@@ -113,8 +120,8 @@ def handle_error(e):
                                     description= e.description)
         raise e
     except:
-        return  render_template('error.html', string1="Error", string2="Something went wrong", error_code=500)
-
+        return  render_template('error.html', string1="Error", string2="Something went wrong")
+'''
 
 OutputInfo = True
 
@@ -135,25 +142,38 @@ if(OutputInfo == True):
 ####
 
 
-@app.context_processor
-def inject_csrf_token():
-    from flask_wtf.csrf import generate_csrf
-    return dict(csrf_token=generate_csrf)
+#@app.context_processor
+#def inject_csrf_token():
+#    from flask_wtf.csrf import generate_csrf
+#    return dict(csrf_token=generate_csrf)
+
+
 
 @app.before_request
 def ensure_log_levels_session():
+    #print(">>> ensure_log_levels_session")
     if 'log_levels' not in session:
         session['log_levels'] = {
-            'global': logging.getLevelName(util.data.DEFAULT_LOG_LEVEL),
-            'file': logging.getLevelName(util.data.DEFAULT_LOG_FILE_LEVEL),
-            'console': logging.getLevelName(util.data.DEFAULT_LOG_CONSOLE_LEVEL)
+            'global':  logger.getLevelName(rl_data.DEFAULT_LOG_LEVEL),
+            'file':  logger.getLevelName(rl_data.DEFAULT_LOG_FILE_LEVEL),
+            'console':  logger.getLevelName(rl_data.DEFAULT_LOG_CONSOLE_LEVEL)
         }
 
-#@app.after_request
-def set_csp(response):
-    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' https://code.jquery.com"
-    return response
+    pid = os.getpid()
+    logger.info(f"[PID:{pid}] Started {request.method} {request.path}")
 
+#@app.after_request
+#def set_csp(response):
+#    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' https://code.jquery.com"
+#    return response
+
+@app.after_request
+def log_request_end(response):
+    #print(">>> log_request_end")
+    
+    pid = os.getpid()
+    logger.info(f"[PID:{pid}] Finished {request.method} {request.path}")
+    return response
 
 #################################################
 
@@ -165,11 +185,11 @@ def gethome():
     session.pop('search_results', None)
 
     #list of pngs to be displayed on home page
-    pnglistHome = [ str(util.data.PNG_HTML_DIR / Path('visualisation_samples.png')),  
-                    str(util.data.PNG_HTML_DIR / Path('results_sample.png')),
-                    str(util.data.PNG_HTML_DIR / Path('results_table.png')),
-                    str(util.data.PNG_HTML_DIR / Path('searchlist.png')),
-                    str(util.data.PNG_HTML_DIR / Path('individual_visualisation.png'))
+    pnglistHome = [ str(rl_data.PNG_HTML_DIR / Path('visualisation_samples.png')),  
+                    str(rl_data.PNG_HTML_DIR / Path('results_sample.png')),
+                    str(rl_data.PNG_HTML_DIR / Path('results_table.png')),
+                    str(rl_data.PNG_HTML_DIR / Path('searchlist.png')),
+                    str(rl_data.PNG_HTML_DIR / Path('individual_visualisation.png'))
                     ]
     
     strlistHome = [ "A Sample of Visualisations you can expect",  
@@ -198,7 +218,7 @@ def about():
     logger.critical("/about: This is critical") 
 
     #list of pngs to be displayed on about page
-    pnglistAbout = [ str(util.data.PNG_HTML_DIR / Path('redline_author.png'))]
+    pnglistAbout = [ str(rl_data.PNG_HTML_DIR / Path('redline_author.png'))]
 
     #clear the search results.
     session.pop('search_results', None)
@@ -219,7 +239,7 @@ def feedback():
             flash('Please provide some feedback before submitting.', "warning")
             return redirect('/feedback')
 
-        filename = util.data.CSV_FEEDBACK_DIR / Path('feedback.csv')
+        filename = rl_data.CSV_FEEDBACK_DIR / Path('feedback.csv')
 
         with open(filename, 'a', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
@@ -251,13 +271,13 @@ def results():
     logger.info(f"/results filters: {selected_gender}, {selected_year}, {selected_cat}, {selected_location}")
 
     # Get unique years
-    years = sorted({entry[2] for entry in util.data.EVENT_DATA_LIST})
+    years = sorted({entry[2] for entry in rl_data.EVENT_DATA_LIST})
 
     # Filter based on year selection
     if selected_year:
-        filtered_data = [entry for entry in util.data.EVENT_DATA_LIST if entry[2] == selected_year]
+        filtered_data = [entry for entry in rl_data.EVENT_DATA_LIST if entry[2] == selected_year]
     else:
-        filtered_data = util.data.EVENT_DATA_LIST  # default to show all
+        filtered_data = rl_data.EVENT_DATA_LIST  # default to show all
 
     # Get unique genders
     genders = sorted({entry[3] for entry in filtered_data})
@@ -300,13 +320,13 @@ def getdisplayEvent():
     # get the eventname    
     eventname = request.args.get('eventname')
  
-    #find index  of eventid in util.data.EVENT_DATA_LIST[0]
-    index = next((i for i, item in enumerate(util.data.EVENT_DATA_LIST) if item[0] == eventname), None)
+    #find index  of eventid in rl_data.EVENT_DATA_LIST[0]
+    index = next((i for i, item in enumerate(rl_data.EVENT_DATA_LIST) if item[0] == eventname), None)
 
     return render_template('display.html', 
-                           id=util.data.EVENT_DATA_LIST[index][0], 
-                           description=util.data.EVENT_DATA_LIST[index][1], 
-                           year=util.data.EVENT_DATA_LIST[index][2])
+                           id=rl_data.EVENT_DATA_LIST[index][0], 
+                           description=rl_data.EVENT_DATA_LIST[index][1], 
+                           year=rl_data.EVENT_DATA_LIST[index][2])
 
 
 @app.route('/display', methods=["POST"])
@@ -320,8 +340,8 @@ def postdisplayEvent():
     # get the eventname    
     eventname = request.args.get('eventname')
  
-    #find index  of eventid in util.data.EVENT_DATA_LIST[0]
-    index = next((i for i, item in enumerate(util.data.EVENT_DATA_LIST) if item[0] == eventname), None)
+    #find index  of eventid in rl_data.EVENT_DATA_LIST[0]
+    index = next((i for i, item in enumerate(rl_data.EVENT_DATA_LIST) if item[0] == eventname), None)
 
     selected_view = request.form.get("view_option")
     selected_format = request.form.get("output_format")
@@ -333,7 +353,7 @@ def postdisplayEvent():
         details = {
             'competitor': None, 
             'race_no': None,
-            'event': util.data.EVENT_DATA_LIST[index][0]
+            'event': rl_data.EVENT_DATA_LIST[index][0]
         }
 
         htmlString = ""
@@ -341,12 +361,12 @@ def postdisplayEvent():
 
         htmlString, io_pngList = redline_vis_generic_eventhtml(details, htmlString, io_pngList)
  
-        return render_template('visual.html', description=util.data.EVENT_DATA_LIST[index][1], png_files=io_pngList)
+        return render_template('visual.html', description=rl_data.EVENT_DATA_LIST[index][1], png_files=io_pngList)
     
     if selected_view == "table" and selected_format == "html":
 
-        filepath = Path(util.data.CSV_GENERIC_DIR) / Path('duration' + util.data.EVENT_DATA_LIST[index][0] + ".csv")
-        title = util.data.EVENT_DATA_LIST[index][1]
+        filepath = Path(rl_data.CSV_GENERIC_DIR) / Path('duration' + rl_data.EVENT_DATA_LIST[index][0] + ".csv")
+        title = rl_data.EVENT_DATA_LIST[index][1]
 
         # Load CSV file into a DataFrame
         df = pd.read_csv(filepath)
@@ -359,8 +379,8 @@ def postdisplayEvent():
 
     if selected_view == "orig_table" and selected_format == "html":
 
-        filepath = Path(util.data.CSV_INPUT_DIR) / Path(util.data.EVENT_DATA_LIST[index][0] + ".csv")
-        title = util.data.EVENT_DATA_LIST[index][1]
+        filepath = Path(rl_data.CSV_INPUT_DIR) / Path(rl_data.EVENT_DATA_LIST[index][0] + ".csv")
+        title = rl_data.EVENT_DATA_LIST[index][1]
 
         # Load CSV file into a DataFrame
         df = pd.read_csv(filepath)
@@ -376,14 +396,14 @@ def postdisplayEvent():
         details = {
             'competitor': None, 
             'race_no': None,
-            'event': util.data.EVENT_DATA_LIST[index][0]
+            'event': rl_data.EVENT_DATA_LIST[index][0]
         }
 
         htmlString = ""
         io_pngList = []
 
         # get the file path
-        filepath = Path(util.data.PDF_GENERIC_DIR) / Path(util.data.EVENT_DATA_LIST[index][0] + ".pdf")
+        filepath = Path(rl_data.PDF_GENERIC_DIR) / Path(rl_data.EVENT_DATA_LIST[index][0] + ".pdf")
 
         # check if file exists
         if (os.path.isfile(filepath) == False):
@@ -391,11 +411,11 @@ def postdisplayEvent():
 
     if selected_view == "table" and selected_format == "file":
         # get the file path
-        filepath = Path(util.data.CSV_GENERIC_DIR) / Path('duration' + util.data.EVENT_DATA_LIST[index][0] + ".csv")
+        filepath = Path(rl_data.CSV_GENERIC_DIR) / Path('duration' + rl_data.EVENT_DATA_LIST[index][0] + ".csv")
 
     if selected_view == "orig_table" and selected_format == "file":
         # get the file path
-        filepath = Path(util.data.CSV_INPUT_DIR) / Path(util.data.EVENT_DATA_LIST[index][0] + ".csv")
+        filepath = Path(rl_data.CSV_INPUT_DIR) / Path(rl_data.EVENT_DATA_LIST[index][0] + ".csv")
 
     # dowload the file
     response = send_file(filepath, as_attachment=True)
@@ -467,9 +487,9 @@ def get_display_vis():
         race_no = request.args.get('race_no')
         event = request.args.get('event')
 
-        #find index  of eventid in util.data.EVENT_DATA_LIST[0]
-        index = next((i for i, item in enumerate(util.data.EVENT_DATA_LIST) if item[0] == event), None)
-        description=util.data.EVENT_DATA_LIST[index][1]
+        #find index  of eventid in rl_data.EVENT_DATA_LIST[0]
+        index = next((i for i, item in enumerate(rl_data.EVENT_DATA_LIST) if item[0] == event), None)
+        description=rl_data.EVENT_DATA_LIST[index][1]
 
         try:
             return render_template('display_vis.html', competitor=competitor, race_no=race_no, description=description)
@@ -493,10 +513,10 @@ def post_display_vis():
 
         logger.info(f"selected_format: {selected_format}, competitor: {competitor}, race_no: {race_no}, event: {event}")
 
-        #find index  of eventid in util.data.EVENT_DATA_LIST[0]
-        index = next((i for i, item in enumerate(util.data.EVENT_DATA_LIST) if item[0] == event), None)
+        #find index  of eventid in rl_data.EVENT_DATA_LIST[0]
+        index = next((i for i, item in enumerate(rl_data.EVENT_DATA_LIST) if item[0] == event), None)
 
-        description=util.data.EVENT_DATA_LIST[index][1]
+        description=rl_data.EVENT_DATA_LIST[index][1]
 
         details = {
             'competitor': competitor, 
@@ -516,7 +536,7 @@ def post_display_vis():
         if selected_format == "file":
 
             # get the file path
-            filepath = Path(util.data.PDF_COMP_DIR) / Path(event + competitor + ".pdf")
+            filepath = Path(rl_data.PDF_COMP_DIR) / Path(event + competitor + ".pdf")
 
             # check if file exists
             if (os.path.isfile(filepath) == False):
@@ -584,10 +604,10 @@ def admin():
     #clear the search results.
     session.pop('search_results', None)
 
-    level1 = util.data.get_log_levels()
+    level1 = rl_data.get_log_levels()
     level2 = session.get('log_levels')
 
-    levels = util.data.get_log_levels() or session.get('log_levels')
+    levels = rl_data.get_log_levels() or session.get('log_levels')
     logger.info(f"Log Levels: {levels} {level1} {level2}") 
 
     return render_template("admin.html", current_log_levels=levels)
@@ -613,12 +633,12 @@ def postadmin():
     if generated_delete:
         logger.debug(f"Delete the generated files")
         # Delete all the Generic files include Competitor
-        util.data.delete_generated_files()
+        rl_data.delete_generated_files()
 
     elif competitor_delete:
         logger.debug(f"Delete Competitor files")
         # Delete all the Competitor files include
-        util.data.delete_competitor_files()
+        rl_data.delete_competitor_files()
 
     elif regenerate:
         logger.debug(f"Regenerate output")
@@ -627,10 +647,10 @@ def postadmin():
  
         redline_vis_generic(htmlString, pngList)
 
-    level1 = util.data.get_log_levels()
+    level1 = rl_data.get_log_levels()
     level2 = session.get('log_levels')
 
-    levels = util.data.get_log_levels() or session.get('log_levels')
+    levels = rl_data.get_log_levels() or session.get('log_levels')
     logger.info(f"Log Levels: {levels} {level1} {level2}") 
 
     return render_template("admin.html", current_log_levels=levels)
@@ -645,7 +665,7 @@ def admin_feedback():
     per_page = 10
 
     feedback_list = []
-    filename = util.data.CSV_FEEDBACK_DIR / Path('feedback.csv')
+    filename = rl_data.CSV_FEEDBACK_DIR / Path('feedback.csv')
 
     if os.path.exists(filename):
         with open(filename, newline='', encoding='utf-8') as f:
@@ -669,7 +689,7 @@ def export_feedback():
 
     logger.debug(f"/admin/feedback/export received {request}")
 
-    filename = util.data.CSV_FEEDBACK_DIR / Path('feedback.csv')
+    filename = rl_data.CSV_FEEDBACK_DIR / Path('feedback.csv')
 
     return send_file(filename, as_attachment=True, download_name='feedback.csv')
 
@@ -679,7 +699,7 @@ def clear_feedback():
 
     logger.debug(f"/admin/clear_feedback POST received {request}")
 
-    filename = util.data.CSV_FEEDBACK_DIR / Path('feedback.csv')
+    filename = rl_data.CSV_FEEDBACK_DIR / Path('feedback.csv')
 
     # Overwrite the file with headers only, if exists
     if os.path.exists(filename):
@@ -698,7 +718,7 @@ def download_logs():
 
     logger.debug(f"/admin/logs/download received {request}")
 
-    filename = util.data.LOG_FILE_DIR / Path('activity.log')
+    filename = rl_data.LOG_FILE_DIR / Path('activity.log')
     return send_file(filename, as_attachment=True)
 
 @app.route('/admin/logs/clear', methods=['POST'])
@@ -707,7 +727,7 @@ def clear_logs():
 
     logger.debug(f"/admin/logs/clear POST received {request}")
 
-    filename = util.data.LOG_FILE_DIR / Path('activity.log')
+    filename = rl_data.LOG_FILE_DIR / Path('activity.log')
     with open(filename, 'w') as f:
         f.truncate()
     logger.info(f"All logs have been cleared.")   
@@ -722,7 +742,7 @@ def view_logs():
     ANSI_ESCAPE_RE = re.compile(r'\x1B[@-_][0-?]*[ -/]*[@-~]')
 
     try:
-        filename = util.data.LOG_FILE_DIR / Path('activity.log')
+        filename = rl_data.LOG_FILE_DIR / Path('activity.log')
         with open(filename, 'r') as f:
             raw_log = f.read()
             log_contents = ANSI_ESCAPE_RE.sub('', raw_log)  # 🔍 Strip ANSI codes
@@ -742,7 +762,7 @@ def set_log_level():
     file_level = request.form.get('file_log_level')
     console_level = request.form.get('console_log_level')
 
-    util.data.update_log_level(
+    rl_data.update_log_level(
         global_level=global_level,
         handler_levels={
             'file': file_level,
@@ -773,13 +793,13 @@ def set_log_level():
 ######
 if env_mode == 'development':
 
-    #Run the app on localhost port 5000 when debuggin
+    #Run the app on localhost port PORT when debuggin
     if __name__ == "__main__":
-        app.run('0.0.0.0', os.getenv("PORT",5000), debug = True)
+        app.run('0.0.0.0', PORT, debug = True)
 
 ######
 # START PRODUCTION setting
 ######
 # this will remain commented out even in production as it is not needed here.
 # In your Dockerfile or Cloud Run startup command, use Gunicorn:
-#    gunicorn -b :8080 init:app
+#    gunicorn -b :8080 app:app

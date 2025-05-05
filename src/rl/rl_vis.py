@@ -34,13 +34,16 @@ from flask import session
 import logging
 
 # local inclusion.
-import util.data
+import rl.rl_data
 
 # Otherwise get this warning - UserWarning: Starting a Matplotlib GUI outside of the main thread will likely fail
 mpl.use('agg')
  
 #Boolean to decide if output warningsto terminal
 OutputInfo=False
+
+#call per module.
+logger = logging.getLogger()
 
 #############################
 # Tidy the data/data frame
@@ -105,7 +108,7 @@ def tidyTheData(df, filename):
                     #if value less than 10 seconds, then somthing wrong, data not trust worthy so want to drop the row.
                     if df.loc[x,event] < 10.0:
                         #print data...
-                        if(OutputInfo == True): logging.debug(f"Removed Low value {filename} {x} {event} {df.loc[x,event]} {df.loc[x,'Pos']}")
+                        if(OutputInfo == True): logger.debug(f"Removed Low value {filename} {x} {event} {df.loc[x,event]} {df.loc[x,'Pos']}")
                                                 
                         #drop the row
                         df.drop(x, inplace = True)
@@ -166,7 +169,7 @@ def tidyTheData(df, filename):
                                 twoEventDuration = timedelta.total_seconds(datetime.strptime(dforig.loc[x,event],"%H:%M:%S.%f") - datetime.strptime(dforig.loc[x,runtimeVars['EventListStart'][MyIndex-2]] ,"%H:%M:%S.%f"))
 
                             if (twoEventDuration < 60.0):
-                                    if(OutputInfo == True): logging.debug(f"2 EventDurLow {filename} {x} {event} {twoEventDuration}")
+                                    if(OutputInfo == True): logger.debug(f"2 EventDurLow {filename} {x} {event} {twoEventDuration}")
                                     #drop the row
                                     df.drop(x, inplace = True)
 
@@ -205,7 +208,7 @@ def tidyTheData(df, filename):
             #if net time less than 6 minutes
             if ((df.loc[x,'Net Time']) < 360.0):
                 #print data...
-                if(OutputInfo == True): logging.debug(f"Removed Low NetTime {filename} {x} {df.loc[x,'Net Time']} {df.loc[x,'Pos']}")
+                if(OutputInfo == True): logger.debug(f"Removed Low NetTime {filename} {x} {df.loc[x,'Net Time']} {df.loc[x,'Pos']}")
                 #drop the row
                 df.drop(x, inplace = True)
 
@@ -323,9 +326,9 @@ def competitorDataOutput(df):
         if (('Category' in df.columns) and (compCat != "All Ages")):
             runtimeVars['stringPdf'] += '<tr><td><strong>Cat Pos         </strong></td><td>' +  str(df.loc[compIndex, "Cat Pos"])+ ' of '+ str(df['Category'].value_counts()[compCat]) + ' finishers.' + "</td></tr>"
             
-        runtimeVars['stringPdf'] += '<tr><td><strong>Calc Time</strong></td><td>' + util.data.format_seconds(df.loc[compIndex, "Calc Time"]) + "</td></tr>"
-        runtimeVars['stringPdf'] += '<tr><td><strong>Time Adj</strong></td><td>' + util.data.format_seconds(df.loc[compIndex, "Time Adj"]) + "</td></tr>"
-        runtimeVars['stringPdf'] += '<tr><td><strong>Net Time</strong></td><td>' + util.data.format_seconds(df.loc[compIndex, "Net Time"]) + "</td></tr>"
+        runtimeVars['stringPdf'] += '<tr><td><strong>Calc Time</strong></td><td>' + rl.rl_data.format_seconds(df.loc[compIndex, "Calc Time"]) + "</td></tr>"
+        runtimeVars['stringPdf'] += '<tr><td><strong>Time Adj</strong></td><td>' + rl.rl_data.format_seconds(df.loc[compIndex, "Time Adj"]) + "</td></tr>"
+        runtimeVars['stringPdf'] += '<tr><td><strong>Net Time</strong></td><td>' + rl.rl_data.format_seconds(df.loc[compIndex, "Net Time"]) + "</td></tr>"
         runtimeVars['stringPdf'] += '<tr><td><strong>Average Event Rank </strong></td><td>{:.1f}'.format(df.loc[compIndex, "Average Rank"]) + "</td></tr>"
 
         #if category column exist.
@@ -470,7 +473,7 @@ def ShowCorrInfo(df,competitorIndex=-1):
     
     if( config['showHeat'] ):
 
-        filepath = Path(util.data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'CorrHeat' + '.png')
+        filepath = Path(rl.rl_data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'CorrHeat' + '.png')
 
         #for PDF creation
         runtimeVars['pngList'].append(str(filepath)) 
@@ -488,7 +491,7 @@ def ShowCorrInfo(df,competitorIndex=-1):
             if ( config['pltPngOut'] or  config['pltShow']):   plt.close()
 
 
-    filepath = Path(util.data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'Corr' + '.png')
+    filepath = Path(rl.rl_data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'Corr' + '.png')
     #for PDF creation
     runtimeVars['pngList'].append(str(filepath))
 
@@ -539,7 +542,7 @@ def ShowHistAgeCat(df):
 
     runtimeVars = session.get('runtime', {})
 
-    filepath = Path(util.data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'Hist' + '.png')
+    filepath = Path(rl.rl_data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'Hist' + '.png')
     #for PDF creation
     runtimeVars['pngList'].append(str(filepath))
 
@@ -657,9 +660,9 @@ def ShowBarChartEvent(df,competitorIndex=-1):
     runtimeVars = session.get('runtime', {})
 
     if (competitorIndex == -1):
-        filepath = Path(util.data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'Bar' + '.png')
+        filepath = Path(rl.rl_data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'Bar' + '.png')
     else:
-        filepath = Path(util.data.PNG_COMP_DIR) / Path(runtimeVars['eventDataList'][0] + runtimeVars['competitorName'] + 'Bar' + '.png')
+        filepath = Path(rl.rl_data.PNG_COMP_DIR) / Path(runtimeVars['eventDataList'][0] + runtimeVars['competitorName'] + 'Bar' + '.png')
     
     #for PDF creation
     runtimeVars['pngList'].append(str(filepath))
@@ -729,9 +732,9 @@ def ShowViolinChartEvent(df,competitorIndex=-1):
     runtimeVars = session.get('runtime', {})
 
     if (competitorIndex == -1):
-        filepath = Path(util.data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'Violin' + '.png')
+        filepath = Path(rl.rl_data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'Violin' + '.png')
     else:
-        filepath = Path(util.data.PNG_COMP_DIR) / Path(runtimeVars['eventDataList'][0] + runtimeVars['competitorName'] + 'Violin' + '.png')
+        filepath = Path(rl.rl_data.PNG_COMP_DIR) / Path(runtimeVars['eventDataList'][0] + runtimeVars['competitorName'] + 'Violin' + '.png')
 
     #for PDF creation
     runtimeVars['pngList'].append(str(filepath))
@@ -782,7 +785,7 @@ def ShowBarChartCutOffEvent(df):
 
     runtimeVars = session.get('runtime', {})
 
-    filepath = Path(util.data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'CutOffBar' + '.png')
+    filepath = Path(rl.rl_data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'CutOffBar' + '.png')
     #for PDF creation
     runtimeVars['pngList'].append(str(filepath))
 
@@ -830,7 +833,7 @@ def ShowPieChartAverage(df,competitorIndex=-1):
     # Just do Generic pie chart based on mean time per event.
     if(competitorIndex==-1):
 
-        filepath = Path(util.data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'Pie' + '.png')
+        filepath = Path(rl.rl_data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'Pie' + '.png')
         #for PDF creation
         runtimeVars['pngList'].append(str(filepath))
 
@@ -867,7 +870,7 @@ def ShowPieChartAverage(df,competitorIndex=-1):
     # else do competitor specific pie chart based on actual time per event.
     else:
 
-        filepath = Path(util.data.PNG_COMP_DIR) / Path(runtimeVars['eventDataList'][0] + runtimeVars['competitorName'] + 'Pie' + '.png')
+        filepath = Path(rl.rl_data.PNG_COMP_DIR) / Path(runtimeVars['eventDataList'][0] + runtimeVars['competitorName'] + 'Pie' + '.png')
 
         #for PDF creation
         runtimeVars['pngList'].append(str(filepath))
@@ -907,9 +910,9 @@ def ShowScatterPlot(df, eventName, corr, competitorIndex=-1):
     runtimeVars = session.get('runtime', {})
 
     if (competitorIndex == -1):
-        filepath = Path(util.data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + eventName + 'Scat' + '.png')
+        filepath = Path(rl.rl_data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + eventName + 'Scat' + '.png')
     else:
-        filepath = Path(util.data.PNG_COMP_DIR) / Path(runtimeVars['eventDataList'][0] + eventName + runtimeVars['competitorName'] + 'Scat' + '.png')
+        filepath = Path(rl.rl_data.PNG_COMP_DIR) / Path(runtimeVars['eventDataList'][0] + eventName + runtimeVars['competitorName'] + 'Scat' + '.png')
     
     #for PDF creation
     runtimeVars['pngList'].append(str(filepath))
@@ -1006,7 +1009,7 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
         #then a single competitor in a single file has already been selected
         #print("competitorDetails",competitorDetails,runtimeVars['competitorRaceNo'])
 
-        for element in util.data.EVENT_DATA_LIST:
+        for element in rl.rl_data.EVENT_DATA_LIST:
             if (element[0] == competitorDetails['event']):
                 runtimeVars['eventDataList'] = element
                 break
@@ -1018,14 +1021,14 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
     elif (competitorDetails == None):
 
         #configure the complete file list for the next loop
-        thisFileList = util.data.EVENT_DATA_LIST
+        thisFileList = rl.rl_data.EVENT_DATA_LIST
 
     else:
         #then a general analysis of one event has been selected
         details = competitorDetails
         #print("details",details)
 
-        for element in util.data.EVENT_DATA_LIST:
+        for element in rl.rl_data.EVENT_DATA_LIST:
             if (element[0] == details['event']):
                 runtimeVars['eventDataList'] = element
                 break
@@ -1038,12 +1041,12 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
 
         #configure for 2023 format or 2024 format
         if (runtimeVars['eventDataList'][2]=='2023'):
-            runtimeVars['EventList'] = util.data.EVENTLIST23
-            runtimeVars['EventListStart'] = util.data.EVENTLISTSTART23
+            runtimeVars['EventList'] = rl.rl_data.EVENTLIST23
+            runtimeVars['EventListStart'] = rl.rl_data.EVENTLISTSTART23
 
         else:
-            runtimeVars['EventList'] = util.data.EVENTLIST24
-            runtimeVars['EventListStart'] = util.data.EVENTLISTSTART24
+            runtimeVars['EventList'] = rl.rl_data.EVENTLIST24
+            runtimeVars['EventListStart'] = rl.rl_data.EVENTLISTSTART24
 
 
         #reset PNG list
@@ -1052,7 +1055,7 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
         dataOutputThisLoop=False
         runtimeVars['stringPdf'] = ""
 
-        indatafile = Path(util.data.CSV_INPUT_DIR) / Path(runtimeVars['eventDataList'][0] + '.csv')
+        indatafile = Path(rl.rl_data.CSV_INPUT_DIR) / Path(runtimeVars['eventDataList'][0] + '.csv')
 
         #read in the data.
         df = pd.read_csv(indatafile)
@@ -1073,7 +1076,7 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
                 #Outpuy the tidy1 data to csv
                 if (config['csvDurationOut']): 
                     
-                    outdatafile = Path(util.data.CSV_GENERIC_DIR) / Path('duration' + runtimeVars['eventDataList'][0] + '.csv')
+                    outdatafile = Path(rl.rl_data.CSV_GENERIC_DIR) / Path('duration' + runtimeVars['eventDataList'][0] + '.csv')
 
                     # check if file exists
                     if (os.path.isfile(outdatafile) == False):
@@ -1095,7 +1098,7 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
             #Outpuy the tidy data to csv
             if (config['csvDurationOut']):
                 
-                outdatafile = Path(util.data.CSV_GENERIC_DIR) / Path('duration' + runtimeVars['eventDataList'][0] + '.csv')
+                outdatafile = Path(rl.rl_data.CSV_GENERIC_DIR) / Path('duration' + runtimeVars['eventDataList'][0] + '.csv')
 
                 # check if file exists
                 if (os.path.isfile(outdatafile) == False):
@@ -1117,7 +1120,7 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
             #Outpuy the tidy2 data frame to csv
             if (config['csvDfOut']): 
                 tidyTheData2(df=df)
-                outdatafile = Path(util.data.CSV_GENERIC_DIR) / Path('df' + runtimeVars['eventDataList'][0] + '.csv')
+                outdatafile = Path(rl.rl_data.CSV_GENERIC_DIR) / Path('df' + runtimeVars['eventDataList'][0] + '.csv')
                 
                 # check if file exists
                 if (os.path.isfile(outdatafile) == False):
@@ -1127,9 +1130,9 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
             if (config['createPdf']):
 
                 if(config['competitorAnalysis']==True and competitorIndex != -1):
-                    filepath = Path(util.data.PDF_COMP_DIR) /  Path(runtimeVars['eventDataList'][0] + runtimeVars['competitorName'] + '.pdf')
+                    filepath = Path(rl.rl_data.PDF_COMP_DIR) /  Path(runtimeVars['eventDataList'][0] + runtimeVars['competitorName'] + '.pdf')
                 else:
-                    filepath = Path(util.data.PDF_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] +  '.pdf')
+                    filepath = Path(rl.rl_data.PDF_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] +  '.pdf')
 
                 # check if file exists
                 if (os.path.isfile(filepath) == False):            
@@ -1173,7 +1176,7 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
 
 def redline_vis_competitor_html(competitorDetails, io_stringHtml, io_pngList):
     
-    logging.info(f"redline_vis_competitor_html {competitorDetails}")
+    logger.info(f"redline_vis_competitor_html {competitorDetails}")
     
     # Value always initialised as below but will be updated in function
     runtime = {
@@ -1214,7 +1217,7 @@ def redline_vis_competitor_html(competitorDetails, io_stringHtml, io_pngList):
 
 def redline_vis_competitor_pdf(competitorDetails, io_stringHtml, io_pngList):
     
-    logging.info(f"redline_vis_competitor_pdf {competitorDetails}")
+    logger.info(f"redline_vis_competitor_pdf {competitorDetails}")
 
     # Value always initialised as below but will be updated in function
     runtime = {
@@ -1256,7 +1259,7 @@ def redline_vis_competitor_pdf(competitorDetails, io_stringHtml, io_pngList):
 # used when regenerating all generic output for all events.
 def redline_vis_generic(io_stringHtml, io_pngList):
 
-    logging.info(f"redline_vis_generic")
+    logger.info(f"redline_vis_generic")
 
     # Value always initialised as below but will be updated in function
     runtime = {
@@ -1304,7 +1307,7 @@ def redline_vis_generic(io_stringHtml, io_pngList):
 # used when generating generic pdf (if not already generated)
 def redline_vis_generic_eventpdf(details, io_stringHtml, io_pngList):
  
-    logging.info(f"redline_vis_generic_eventpdf {details}")
+    logger.info(f"redline_vis_generic_eventpdf {details}")
 
     # Value always initialised as below but will be updated in function
     runtime = {
@@ -1347,7 +1350,7 @@ def redline_vis_generic_eventpdf(details, io_stringHtml, io_pngList):
 # used when generating generic event html (and generating string pdf and displaying pngs)
 def redline_vis_generic_eventhtml(details, io_stringHtml, io_pngList):
 
-    logging.info(f"redline_vis_generic_eventhtml {details}")
+    logger.info(f"redline_vis_generic_eventhtml {details}")
 
     # Value always initialised as below but will be updated in function
     runtime = {

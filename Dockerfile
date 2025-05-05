@@ -1,12 +1,13 @@
-# Use an official lightweight Python image
+# Use slim base image with Python
 FROM python:3.11-slim
 
-# Set environment variables
+# Set environment vars
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app/src
 
-# Create and set work directory
-WORKDIR /app
+# Create working directory
+WORKDIR /app/src
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -17,11 +18,11 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Copy the app code
-COPY . .
+# Copy the application code
+COPY ./src .
 
-# Expose port (match .env)
-EXPOSE 5000
+# Set environment mode dynamically (can be overridden)
+ENV ENV_MODE=development
 
-# Default command (override in compose or deploy)
-CMD ["gunicorn", "-b", "0.0.0.0:5000", "init:app"]
+# Run with Gunicorn
+CMD ["gunicorn", "-w", "4", "--preload", "--timeout", "90" , "-b", "0.0.0.0:5000", "app:app", "--worker-class gevent"]
