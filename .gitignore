@@ -4,3 +4,6 @@
 feedback.csv
 *.log
 
+src/store/logs/log_config.json.lock
+src/store/logs/activity.log.lock
+src/store/logs/activity.lock

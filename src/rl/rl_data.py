@@ -1,8 +1,19 @@
-import csv
 import os
 from pathlib import Path
 import logging
+
+import os
+import uuid
+import logging
+import json
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
+import threading
+import portalocker  # Cross-platform file locking
+
+from flask import g, render_template as flask_render_template
+
+import rl.rl_data as rl_data 
 
 # file sturcture 'constants'
 # static - csv 	- input
@@ -23,6 +34,8 @@ PNG_HTML_DIR     = Path('static') / 'png' / 'html'
 # This data should not be served to the user
 LOG_FILE_DIR      = Path('store') / 'logs'
 LOG_FILE          = LOG_FILE_DIR / 'activity.log'
+LOG_CONFIG_FILE   = LOG_FILE_DIR / 'log_config.json'
+
 CSV_FEEDBACK_DIR  = Path('store') / 'feedback'
 
 #Here are the different logging levels 
@@ -77,14 +90,290 @@ EVENT_DATA_LIST = [
     ["TeamRelayMixed2024", "REDLINE Fitness Games '24 Mixed Team Relay", "2024", "MIXED", "RELAY", "KL"],
 ]
 
-#call per module.
-logger = logging.getLogger()
+# Generate a unique worker ID that persists for this worker process
+WORKER_ID = str(uuid.uuid4())[:8]
+
+# Create a thread-local storage for request context information
+thread_local = threading.local()
+
+"""
+Improved logging implementation for Flask with multiple workers
+- Uses a central log configuration file
+- Adds worker ID for better tracking
+- Uses file locks to prevent race conditions
+- Supports graceful reloading
+"""
+class WorkerInfoFilter(logging.Filter):
+    """Filter that adds worker ID and request info to log records"""
+    def filter(self, record):
+         
+        #print(f"filter: {record.getMessage()}")
+
+        # Add worker_id attribute to the record
+        if not hasattr(record, 'worker_id'):
+            record.worker_id = WORKER_ID
+                    
+        # Add request info if available
+        if not hasattr(record, 'request_id'):
+            if hasattr(thread_local, 'request_id'):
+                record.request_id = thread_local.request_id
+            else:
+                record.request_id = '-'
+
+        #print(f"record.worker_id: {record.worker_id} {record.request_id} {record.getMessage()}")
+
+        return True
+
+class SafeRotatingFileHandler(RotatingFileHandler):
+    """Thread and process-safe RotatingFileHandler using cross-platform file locking"""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.lock_file = f"{kwargs.get('filename', args[0])}.lock"
+    
+    def _open(self):
+        """Open the file with exclusive creation to avoid race conditions"""
+        return open(self.baseFilename, self.mode)
+    
+    def doRollover(self):
+        """Use file locking to safely rotate logs across processes"""
+        lock_path = str(self.lock_file)
+        try:
+            # Use portalocker with a file path, not a file object
+            with portalocker.Lock(lock_path, 'w', timeout=10):
+                super().doRollover()
+        except (portalocker.LockException, IOError, OSError) as e:
+            # If locking fails, try without locking
+            print(f"Warning: Lock failed during log rotation: {e}")
+            super().doRollover()
+    
+    def emit(self, record):
+        import sys # Import here to avoid circular imports
+
+        """Thread and process-safe emit with file locking"""
+        # The original code seems to have a problem with non local moduls
+        ## Quick check for log level before trying to lock
+        ##if not self.filter(record):
+        ##    print(f"if not self.filter(record)") 
+        ##    return
+        
+        # So replaced with the follwoing 2 if statements. ones.....
+
+        # Add worker_id attribute to the record
+        if not hasattr(record, 'worker_id'):
+            record.worker_id = WORKER_ID
+                    
+        # Add request info if available
+        if not hasattr(record, 'request_id'):
+            if hasattr(thread_local, 'request_id'):
+                record.request_id = thread_local.request_id
+            else:
+                record.request_id = '-'
+        try:
+            # Use portalocker with a file path, not a file object
+            lock_path = str(self.lock_file)
+            with portalocker.Lock(lock_path, 'w', timeout=5):
+                #print(f"super().emit({record})") 
+                super().emit(record)
+        except (portalocker.LockException, IOError, OSError) as e:
+            # If locking fails, still try to emit without lock
+            try:
+                #print(f"!super().emit({record})") 
+                super().emit(record)
+            except Exception as e2:
+                # Last resort - print to stderr
+                print(f"Error emitting log record: {e2}", file=sys.stderr)
+
+def load_log_config():
+    """Load logging configuration from file, or create with defaults if doesn't exist"""
+    os.makedirs(LOG_FILE_DIR, exist_ok=True)
+    
+    try:
+        with open(LOG_CONFIG_FILE, 'r') as f:
+            config = json.load(f)
+        return config
+    except (FileNotFoundError, json.JSONDecodeError):
+        # Create default config
+        config = {
+            'global': logging.getLevelName(DEFAULT_LOG_LEVEL),
+            'file': logging.getLevelName(DEFAULT_LOG_FILE_LEVEL),
+            'console': logging.getLevelName(DEFAULT_LOG_CONSOLE_LEVEL)
+        }
+        save_log_config(config)
+        return config
+
+def save_log_config(config):
+    """Save logging configuration to file with cross-platform locking"""
+    os.makedirs(LOG_FILE_DIR, exist_ok=True)
+    
+    lock_path = str(LOG_CONFIG_FILE) + ".lock"
+    try:
+        # Use portalocker with a file path directly
+        with portalocker.Lock(lock_path, 'w', timeout=10):
+            with open(LOG_CONFIG_FILE, 'w') as f:
+                json.dump(config, f)
+    except (portalocker.LockException, IOError, OSError) as e:
+        # If locking fails, try without lock
+        print(f"Warning: Lock failed during config save: {e}")
+        with open(LOG_CONFIG_FILE, 'w') as f:
+            json.dump(config, f)
+
+def get_logger(name=None):
+    """Get a properly configured logger instance"""
+    if name:
+        logger = logging.getLogger(name)
+    else:
+        logger = logging.getLogger()
+    
+    # Ensure the logger has our filter
+    has_worker_filter = False
+    for filter in logger.filters:
+        if isinstance(filter, WorkerInfoFilter):
+            has_worker_filter = True
+            break
+    
+    if not has_worker_filter:
+        logger.addFilter(WorkerInfoFilter())
+    
+    return logger
+
+def setup_logger():
+    """Setup logging with proper configuration for multiple workers"""
+    import sys  # Import here to avoid circular imports
+    
+    os.makedirs(LOG_FILE_DIR, exist_ok=True)
+    
+    # Get the root logger
+    logger = logging.getLogger()
+    
+    # Check if the logger is already configured properly
+    if logger.handlers:
+        for handler in logger.handlers:
+            # Check if our custom formatter is already there
+            if hasattr(handler, 'formatter') and hasattr(handler.formatter, '_fmt'):
+                if 'worker_id' in handler.formatter._fmt:
+                    # Logger already set up, just ensure the filter is there
+                    logger.addFilter(WorkerInfoFilter())
+                    logger.debug(f"Logger already configured with {len(logger.handlers)} handlers. Skipping setup.")
+                    return logger
+        
+        # No handler has our custom formatter, remove all handlers to reconfigure
+        for handler in logger.handlers[:]:
+            logger.removeHandler(handler)
+    
+    # Load configuration from file
+    config = load_log_config()
+    
+    # Set global level
+    global_level = getattr(logging, config['global'], DEFAULT_LOG_LEVEL)
+    logger.setLevel(global_level)
+    
+    # Create formatter with worker ID and request ID
+    formatter = logging.Formatter(
+        '[%(asctime)s] [W:%(worker_id)s] [R:%(request_id)s] [PID:%(process)d] '
+        '%(levelname)s in %(module)s: %(message)s'
+    )
+
+    # Add worker ID filter to all log records
+    logger.addFilter(WorkerInfoFilter())
+    
+    # File handler with safe rotation
+    file_level = getattr(logging, config['file'], DEFAULT_LOG_FILE_LEVEL)
+    try:
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+        
+        file_handler = SafeRotatingFileHandler(
+            str(LOG_FILE),  # Convert to string for Windows compatibility
+            maxBytes=5_000_000, 
+            backupCount=3,
+            delay=True  # Don't open the file until first emit
+        )
+        file_handler.setLevel(file_level)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+    except Exception as e:
+        print(f"Error setting up file handler: {e}", file=sys.stderr)
+    
+    # Console handler
+    try:
+        console_level = getattr(logging, config['console'], DEFAULT_LOG_CONSOLE_LEVEL)
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(console_level)
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
+    except Exception as e:
+        print(f"Error setting up console handler: {e}", file=sys.stderr)
+    
+    logger.info(f"Logger initialized for worker {WORKER_ID}")
+    return logger
+
+def update_log_level(global_level=None, handler_levels=None):
+    """Update log levels and save to config file"""
+    logger = get_logger()
+    logger.debug(f"update_log_level> {global_level}, {handler_levels}")
+    
+    # Load current config
+    config = load_log_config()
+    
+    # Update global level if specified
+    if global_level:
+        level = getattr(logging, global_level.upper(), None)
+        if isinstance(level, int):
+            logger.setLevel(level)
+            config['global'] = global_level.upper()
+    
+    # Update handler levels if specified
+    if handler_levels:
+        for handler in logger.handlers:
+            if isinstance(handler, (SafeRotatingFileHandler, RotatingFileHandler)) and 'file' in handler_levels:
+                level = getattr(logging, handler_levels['file'].upper(), None)
+                if isinstance(level, int):
+                    handler.setLevel(level)
+                    config['file'] = handler_levels['file'].upper()
+            elif isinstance(handler, logging.StreamHandler) and 'console' in handler_levels:
+                level = getattr(logging, handler_levels['console'].upper(), None)
+                if isinstance(level, int):
+                    handler.setLevel(level)
+                    config['console'] = handler_levels['console'].upper()
+    
+    # Save updated config
+    save_log_config(config)
+    
+    logger.debug("Log levels updated and saved to config file")
+    return get_log_levels()
+
+def get_log_levels():
+    """Get current log levels from the active logger"""
+    logger = get_logger()
+    logger.debug("get_log_levels>")
+    
+    levels = {
+        'global': logging.getLevelName(logger.level),
+        'file': None,
+        'console': None
+    }
+    
+    for handler in logger.handlers:
+        if isinstance(handler, (SafeRotatingFileHandler, RotatingFileHandler)):
+            levels['file'] = logging.getLevelName(handler.level)
+        elif isinstance(handler, logging.StreamHandler):
+            levels['console'] = logging.getLevelName(handler.level)
+    
+    logger.debug("get_log_levels<")
+    return levels
+
+#############################
+# Non log based helper functions
+#############################
 
 
-# helper function
+
+
 def remove_files_from_directory(directory):
     """Removes all files within the specified directory, but leaves the directory untouched."""
 
+    logger = get_logger()
+    
     logger.debug("remove_files_from_directory> %s",str(directory))
     logger.debug("cwd %s",str(os.getcwd()))
     for filename in os.listdir(directory):
@@ -96,6 +385,8 @@ def remove_files_from_directory(directory):
 
 def delete_generated_files():
     """Removes all data files generated here included competitor files"""
+
+    logger = get_logger()
     logger.debug("delete_generated_files>")
     
     remove_files_from_directory(CSV_GENERIC_DIR);
@@ -108,6 +399,7 @@ def delete_generated_files():
 
 def delete_competitor_files():
     
+    logger = get_logger()
     logger.debug("delete_competitor_files>")
     
     """Removes all competitor data files generated here"""
@@ -121,84 +413,10 @@ def delete_competitor_files():
 #############################
 
 def format_seconds(seconds):
+    
+    logger = get_logger()
+
     logger.debug("format_seconds>")
     minutes = int(seconds // 60)
     sec = round(seconds % 60, 1)
     return f"{minutes}m {sec:.1f}s"
-
-
-def setup_logger():
-    os.makedirs(LOG_FILE_DIR, exist_ok=True)
-
-    logger.setLevel(DEFAULT_LOG_LEVEL)  # Global level
-
-    #formatter = logging.Formatter('[%(asctime)s] %(levelname)s in %(module)s: %(message)s')
-    formatter = logging.Formatter('[%(asctime)s] [PID:%(process)d] %(levelname)s in %(module)s: %(message)s')
-
-
-    # File handler
-    if not any(isinstance(h, RotatingFileHandler) for h in logger.handlers):
-        # File handler
-        file_handler = RotatingFileHandler(LOG_FILE, maxBytes=5_000_000, backupCount=3)
-        file_handler.setLevel(DEFAULT_LOG_FILE_LEVEL)  # Can customize
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
-
-    # console handler
-    if not any(type(h) is logging.StreamHandler for h in logger.handlers):
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(DEFAULT_LOG_CONSOLE_LEVEL)
-        #console_handler.setFormatter(logging.Formatter('[%(levelname)s] %(message)s'))
-        console_handler.setFormatter(logging.Formatter('[PID:%(process)d] [%(levelname)s] %(message)s'))        
-        logger.addHandler(console_handler)
-
-    logger.debug("Configured log handlers: %s",logger.handlers)
-    for handler in logger.handlers:
-        logger.debug(f"Handler: {type(handler)}, Level: {logging.getLevelName(handler.level)}")
-
-    logger.debug(f"setup_logger:Logger debug message test")
-    logger.info(f"setup_logger:Logger info message test")
-    logger.warning(f"setup_logger:Logger warning message test")
-    logger.error(f"setup_logger:Logger error message test")
-    logger.critical(f"setup_logger:Logger critical message test")
-
-    logger.debug(f"setup_logger<")
-
-def update_log_level(global_level=None, handler_levels=None):
-    logger.debug(f"update_log_level> {global_level}, {handler_levels}")
-    
-    if global_level:
-        level = getattr(logging, global_level.upper(), None)
-        if isinstance(level, int):
-            logger.setLevel(level)
-
-    if handler_levels:
-        for handler in logger.handlers:
-            if isinstance(handler, RotatingFileHandler) and 'file' in handler_levels:
-                level = getattr(logging, handler_levels['file'].upper(), None)
-                if isinstance(level, int):
-                    handler.setLevel(level)
-            elif isinstance(handler, logging.StreamHandler) and 'console' in handler_levels:
-                level = getattr(logging, handler_levels['console'].upper(), None)
-                if isinstance(level, int):
-                    handler.setLevel(level)
-
-    logger.debug("update_log_level<")
-
-def get_log_levels():
-    logger.debug("get_log_levels>" )
-    
-    levels = {
-        'global': logging.getLevelName(logger.level),
-        'file': None,
-        'console': None
-    }
-    for handler in logger.handlers:
-        if isinstance(handler, RotatingFileHandler):
-            levels['file'] = logging.getLevelName(handler.level)
-        elif isinstance(handler, logging.StreamHandler):
-            levels['console'] = logging.getLevelName(handler.level)
-
-    logger.debug("get_log_levels<")
-    return levels
-

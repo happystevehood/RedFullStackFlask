@@ -1,19 +1,24 @@
-from flask import Flask, request, jsonify, render_template, send_file, abort, session, redirect, url_for,  flash
+from flask import Flask, request, jsonify, render_template, send_file, abort, session, redirect, url_for,  flash, g
 from markupsafe import escape
 from functools import wraps
 from datetime import datetime
+
+import base64
 
 import pandas as pd
 
 import os, csv, math, re
 from dotenv import load_dotenv
 from pathlib import Path
-import logging
+import uuid
+
+import secrets
 
 #for security purposes
 from flask_wtf.csrf import CSRFProtect, generate_csrf, CSRFError
 from flask_talisman import Talisman
 from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 # local inclusion.
 from rl.rl_search import find_competitor
@@ -73,15 +78,17 @@ app.secret_key = os.getenv("SECRET_KEY", b' q/\x8ax"\xe9\xfc\x8a0v\x1a\x18\r\x8f
 #get secret key from env variable
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", 'Admin')
 
-#setup consistent logging
-rl_data.setup_logger()
+"""Initialize Flask app with improved logging"""
+# Set up the logger
+logger = rl_data.setup_logger()
 
-logger = logging.getLogger()
-#Not an warning but what to output the message
-logger.warning(f"ENV Mode is {env_mode}")
+# Replace Flask's logger with our improved logger
+app.logger = logger
 
-#To prevent abuse (e.g., bots spamming the search box), consider adding Flask-Limiter:
-limiter = Limiter(app)
+#To prevent abuse (e.g., bots spamming the search box), need to review if limits are appropriate
+limiter = Limiter(app=app,
+    key_func=get_remote_address,
+    default_limits=["50 per minute", "500 per hour", "2000 per day"])
 
 #protect against Cross-Site Request Forgery:
 #csrf = CSRFProtect(app)
@@ -92,6 +99,7 @@ csp = {
     'default-src': "'self'",
     'script-src': [
         "'self'",
+#        "'unsafe-inline'",   # to remove in production
         'https://code.jquery.com',
         'https://cdn.jsdelivr.net',
         'https://cdn.datatables.net'
@@ -108,8 +116,12 @@ csp = {
     'frame-ancestors': "'self'"
 }
 
-Talisman(app, content_security_policy=csp, content_security_policy_nonce_in=['script-src'], force_https=False)
-
+Talisman(
+    app,
+    content_security_policy=csp,
+    content_security_policy_nonce_in=['script-src'],
+    force_https=False
+)
 
 '''
 #Error handling
@@ -155,13 +167,12 @@ if(OutputInfo == True):
     import sys;
 
     #set debut level to warning so output as start
-    logger.warning(f"python versions {sys.version}")
-    logger.warning(f"pandas {pd.__version__}, numpy {np.__version__}, matplotlib { mpl.__version__} 'seaborn {sns.__version__}")
+    app.logger.warning(f"python versions {sys.version}")
+    app.logger.warning(f"pandas {pd.__version__}, numpy {np.__version__}, matplotlib { mpl.__version__} 'seaborn {sns.__version__}")
 
 #####
 ### pre-post processor functions
 ####
-
 
 #@app.context_processor
 #def inject_csrf_token():
@@ -169,32 +180,42 @@ if(OutputInfo == True):
 #    return dict(csrf_token=generate_csrf)
 
 
+# Register before/after request handlers
 @app.before_request
-def ensure_log_levels_session():
-    #print(">>> ensure_log_levels_session")
-    if 'log_levels' not in session:
-        session['log_levels'] = {
-            'global':  app.logger.getLevelName(rl_data.DEFAULT_LOG_LEVEL),
-            'file':  app.logger.getLevelName(rl_data.DEFAULT_LOG_FILE_LEVEL),
-            'console':  app.logger.getLevelName(rl_data.DEFAULT_LOG_CONSOLE_LEVEL)
-        }
+def setup_request_logging():
+    # Generate a unique ID for this request
+    request_id = str(uuid.uuid4())[:8]
+    g.request_id = request_id
+    
+    # Store in thread local for the logger
+    rl_data.thread_local.request_id = request_id
+    
+    # Log the request
+    app.logger.debug(f"Request started: {request.method} {request.path}")
 
-    pid = os.getpid()
-    app.logger.info(f"[PID:{pid}] Started {request.method} {request.path}")
 
 @app.after_request
-def log_request_end(response):
-    print(">>> log_request_end")
-    
-    pid = os.getpid()
-    logger.info(f"[PID:{pid}] Finished {request.method} {request.path}")
+def log_after_request(response):
+    app.logger.debug(f"Request completed: {response.status_code}")
     return response
 
-#################################################
+@app.teardown_request
+def teardown_request_logging(exception=None):
+    # Clean up thread local
+    if hasattr(rl_data.thread_local, 'request_id'):
+        delattr(rl_data.thread_local, 'request_id')
+    
+    if exception:
+        app.logger.error(f"Request failed: {str(exception)}")
+
+#####
+### app.routes
+####
 
 @app.route('/', methods=["GET"])
 def gethome():
-    logger.debug(f"/ GET received {request}")
+
+    app.logger.debug(f"/ GET received {request}")
 
     #clear the search results.
     session.pop('search_results', None)
@@ -223,14 +244,14 @@ def gethome():
 @app.route('/about')
 def about():
     
-    logger.debug(f"/about received {request}")
+    app.logger.debug(f"/about received {request}")
 
     #Just debug messages to test out logging
-    logger.debug("/about: This is a debug message")    # Typically used for detailed dev info
-    logger.info("/about: This is an info message")     # General application info
-    logger.warning("/about: This is a warning")        # Something unexpected, but not fatal
-    logger.error("/about: This is an error message")   # Serious problem, app still running
-    logger.critical("/about: This is critical") 
+    app.logger.debug("/about: This is a debug message")    # Typically used for detailed dev info
+    app.logger.info("/about: This is an info message")     # General application info
+    app.logger.warning("/about: This is a warning")        # Something unexpected, but not fatal
+    app.logger.error("/about: This is an error message")   # Serious problem, app still running
+    app.logger.critical("/about: This is critical") 
 
     #list of pngs to be displayed on about page
     pnglistAbout = [ str(rl_data.PNG_HTML_DIR / Path('redline_author.png'))]
@@ -242,7 +263,7 @@ def about():
 
 @app.route('/feedback', methods=['GET', 'POST'])
 def feedback():
-    logger.debug(f"/feedback received {request}")
+    app.logger.debug(f"/feedback received {request}")
 
     if request.method == 'POST':
 
@@ -267,13 +288,13 @@ def feedback():
 
 @app.route('/search')
 def index():
-    logger.debug(f"/search received {request}")
+    app.logger.debug(f"/search received {request}")
     return render_template('search.html' )
 
 
 @app.route('/results', methods=["GET", "POST"])
 def results():
-    logger.debug(f"/results received {request}")
+    app.logger.debug(f"/results received {request}")
 
     #clear the search results.
     session.pop('search_results', None)
@@ -283,7 +304,7 @@ def results():
     selected_cat = request.form.get("cat_filter")
     selected_location = request.form.get("location_filter")
 
-    logger.info(f"/results filters: {selected_gender}, {selected_year}, {selected_cat}, {selected_location}")
+    app.logger.info(f"/results filters: {selected_gender}, {selected_year}, {selected_cat}, {selected_location}")
 
     # Get unique years
     years = sorted({entry[2] for entry in rl_data.EVENT_DATA_LIST})
@@ -330,7 +351,7 @@ def results():
 @app.route('/display', methods=["GET"])
 def getdisplayEvent():
 
-    logger.debug(f"/display GET received {request}")
+    app.logger.debug(f"/display GET received {request}")
 
     # get the eventname    
     eventname = request.args.get('eventname')
@@ -347,7 +368,7 @@ def getdisplayEvent():
 @app.route('/display', methods=["POST"])
 def postdisplayEvent():
 
-    logger.debug(f"/display POST received {request}")
+    app.logger.debug(f"/display POST received {request}")
 
     selected_view = None
     selected_format = None
@@ -361,7 +382,7 @@ def postdisplayEvent():
     selected_view = request.form.get("view_option")
     selected_format = request.form.get("output_format")
 
-    logger.info(f"/display filters: {selected_view}, {selected_format}")
+    app.logger.info(f"/display filters: {selected_view}, {selected_format}")
 
     if selected_view == "visualization" and selected_format == "html":
 
@@ -438,24 +459,23 @@ def postdisplayEvent():
     return response
 
 @app.route('/api/search', methods=['GET'])
-@limiter.limit("10 per minute")
 def get_search_results():
         
-    logger.debug(f"/api/search GET received {request}")
+    app.logger.debug(f"/api/search GET received {request}")
 
     search_results = session.get('search_results', [])
 
     if not search_results:
-        logger.debug(f"/api/search GET No matches found")
+        app.logger.debug(f"/api/search GET No matches found")
         return jsonify("No matches found")
-    logger.debug(f"/api/search return results {search_results}")
+    app.logger.debug(f"/api/search return results {search_results}")
     return jsonify(search_results)
 
 
 @app.route('/api/search', methods=['POST'])
 def new_search():
     
-    logger.debug(f"/api/search POST received {request}")
+    app.logger.debug(f"/api/search POST received {request}")
 
     # call the find_competitor function, and store result in matches
 
@@ -470,12 +490,12 @@ def new_search():
 
     # Optionally, apply further filtering:
     if len(search_query) > 100:
-        logger.debug(f"/api/search POST Search term too long: {search_query}")
+        app.logger.debug(f"/api/search POST Search term too long: {search_query}")
         flash("Search term too long.", "danger")
         return jsonify("No matches found")
 
     if not search_query:
-        logger.debug(f"/api/search POST No search query found")
+        app.logger.debug(f"/api/search POST No search query found")
         return jsonify("No matches found")
 
     # We'll define a local variable to store the matches
@@ -485,7 +505,7 @@ def new_search():
     find_competitor(search_query, lambda competitor, returned_matches: matches.extend(list(returned_matches)))
 
     if not matches:
-        logger.debug(f"/api/search POST No matches query found")
+        app.logger.debug(f"/api/search POST No matches query found")
         return jsonify("No matches found")
 
     # Store in session
@@ -496,7 +516,7 @@ def new_search():
 
 @app.route('/display_vis', methods=['GET'])
 def get_display_vis():
-        logger.debug(f"/display_vis GET received {request}")
+        app.debug(f"/display_vis GET received {request}")
 
         competitor = request.args.get('competitor').title()
         race_no = request.args.get('race_no')
@@ -509,7 +529,7 @@ def get_display_vis():
         try:
             return render_template('display_vis.html', competitor=competitor, race_no=race_no, description=description)
         except Exception as e:
-            logger.error(f"Template render error: {e}")
+            app.logger.error(f"Template render error: {e}")
             return abort(500)
 
 
@@ -519,14 +539,14 @@ def post_display_vis():
         htmlString = " "
         io_pngList = []
 
-        logger.debug(f"/display_vis POST received {request}")
+        app.logger.debug(f"/display_vis POST received {request}")
 
         selected_format = request.form.get('output_format')
         competitor = request.args.get('competitor')
         race_no = request.args.get('race_no')
         event = request.args.get('event')
 
-        logger.info(f"selected_format: {selected_format}, competitor: {competitor}, race_no: {race_no}, event: {event}")
+        app.logger.info(f"selected_format: {selected_format}, competitor: {competitor}, race_no: {race_no}, event: {event}")
 
         #find index  of eventid in rl_data.EVENT_DATA_LIST[0]
         index = next((i for i, item in enumerate(rl_data.EVENT_DATA_LIST) if item[0] == event), None)
@@ -545,7 +565,7 @@ def post_display_vis():
             try:
                 return render_template('display_vis.html', selected_format = selected_format, competitor=competitor.title(),  race_no=race_no, description=description, htmlString=htmlString, png_files=io_pngList)
             except Exception as e:
-                logger.error(f"Template render error: {e}")
+                app.logger.error(f"Template render error: {e}")
                 return abort(500)
 
         if selected_format == "file":
@@ -561,7 +581,7 @@ def post_display_vis():
             response = send_file(filepath, as_attachment=True)
             response.headers["Content-Disposition"] = f"attachment; filename={os.path.basename(filepath)}"
 
-            logger.info(f"File downloaded: {response}")
+            app.logger.info(f"File downloaded: {response}")
             return response
         
 ##############################
@@ -576,14 +596,14 @@ def login_required(f):
     def decorated_function(*args, **kwargs):
         if session.get('logged_in') != True:
             flash("You must log in to access this page.", "warning")
-            logger.warning(f"You must log in to access this page.")
+            app.logger.warning(f"You must log in to access this page.")
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    logger.debug(f"/login received {request}")
+    app.logger.debug(f"/login received {request}")
 
     if request.method == 'POST':
 
@@ -591,7 +611,7 @@ def login():
         if password == ADMIN_PASSWORD:
             session['logged_in'] = True
             flash("Login successful!", "success")
-            logger.warning(f"Login successful!")            
+            app.logger.warning(f"Login successful!")            
             return redirect(url_for('admin'))
         else:
             flash("Incorrect password. Try again.", "danger")
@@ -601,11 +621,11 @@ def login():
 @login_required
 def logout():
 
-    logger.debug(f"/logout received {request}")
+    app.logger.debug(f"/logout received {request}")
     session.pop('logged_in', None)
 
     flash("You have been logged out.", "info")
-    logger.warning(f"You have been logged out!")  
+    app.logger.warning(f"You have been logged out!")  
     
     return redirect(url_for('login'))
 
@@ -614,25 +634,25 @@ def logout():
 @login_required
 def admin():
 
-    logger.debug(f"/admin received {request}")
+    app.logger.debug(f"/admin received {request}")
     
     #clear the search results.
     session.pop('search_results', None)
 
-    level1 = rl_data.get_log_levels()
-    level2 = session.get('log_levels')
+    # Get current log levels for display
+    log_levels = rl_data.get_log_levels()
+    
+    # Store in g for template access (not in session)
+    g.log_levels = log_levels
 
-    levels = rl_data.get_log_levels() or session.get('log_levels')
-    logger.info(f"Log Levels: {levels} {level1} {level2}") 
-
-    return render_template("admin.html", current_log_levels=levels)
+    return render_template("admin.html", current_log_levels=log_levels)
 
 
 @app.route('/admin', methods=["POST"])
 @login_required
 def postadmin():
 
-    logger.debug(f"/admin POST received {request}")
+    app.logger.debug(f"/admin POST received {request}")
 
     #Adming actity to clear the results on request.
     session.pop('search_results', None)
@@ -646,17 +666,17 @@ def postadmin():
     competitor_delete = request.form.get("deleteCompetitorFilesBtn")
 
     if generated_delete:
-        logger.debug(f"Delete the generated files")
+        app.logger.debug(f"Delete the generated files")
         # Delete all the Generic files include Competitor
         rl_data.delete_generated_files()
 
     elif competitor_delete:
-        logger.debug(f"Delete Competitor files")
+        app.logger.debug(f"Delete Competitor files")
         # Delete all the Competitor files include
         rl_data.delete_competitor_files()
 
     elif regenerate:
-        logger.debug(f"Regenerate output")
+        app.logger.debug(f"Regenerate output")
         htmlString = " "
         pngList = []
  
@@ -666,7 +686,7 @@ def postadmin():
     level2 = session.get('log_levels')
 
     levels = rl_data.get_log_levels() or session.get('log_levels')
-    logger.info(f"Log Levels: {levels} {level1} {level2}") 
+    app.logger.info(f"Log Levels: {levels} {level1} {level2}") 
 
     return render_template("admin.html", current_log_levels=levels)
 
@@ -674,7 +694,7 @@ def postadmin():
 @login_required
 def admin_feedback():
 
-    logger.debug(f"/admin/feedback received {request}")
+    app.logger.debug(f"/admin/feedback received {request}")
 
     page = int(request.args.get('page', 1))
     per_page = 10
@@ -702,7 +722,7 @@ def admin_feedback():
 @login_required
 def export_feedback():
 
-    logger.debug(f"/admin/feedback/export received {request}")
+    app.logger.debug(f"/admin/feedback/export received {request}")
 
     filename = rl_data.CSV_FEEDBACK_DIR / Path('feedback.csv')
 
@@ -712,7 +732,7 @@ def export_feedback():
 @login_required
 def clear_feedback():
 
-    logger.debug(f"/admin/clear_feedback POST received {request}")
+    app.logger.debug(f"/admin/clear_feedback POST received {request}")
 
     filename = rl_data.CSV_FEEDBACK_DIR / Path('feedback.csv')
 
@@ -722,61 +742,62 @@ def clear_feedback():
             writer = csv.writer(f)
 
     flash("All feedback has been cleared.", "success")
-    logger.info(f"All feedback has been cleared.")   
+    app.logger.info(f"All feedback has been cleared.")   
     return redirect(url_for('admin_feedback'))
 
-
-
+# Admin routes for log management
 @app.route('/admin/logs/download')
-@login_required
 def download_logs():
+    app.logger.debug(f"/admin/logs/download received {request}")
 
-    logger.debug(f"/admin/logs/download received {request}")
-
-    filename = rl_data.LOG_FILE_DIR / Path('activity.log')
-    return send_file(filename, as_attachment=True)
+    return send_file(rl_data.LOG_FILE, as_attachment=True, download_name='activity.log')
 
 @app.route('/admin/logs/clear', methods=['POST'])
-@login_required
 def clear_logs():
-
-    logger.debug(f"/admin/logs/clear POST received {request}")
-
-    filename = rl_data.LOG_FILE_DIR / Path('activity.log')
-    with open(filename, 'w') as f:
-        f.truncate()
-    logger.info(f"All logs have been cleared.")   
-    return redirect(url_for('view_logs'))  # adjust route as needed
-
-@app.route('/admin/logs')
-@login_required
-def view_logs():
-
-    logger.debug(f"/admin/logs received {request}")
-
-    ANSI_ESCAPE_RE = re.compile(r'\x1B[@-_][0-?]*[ -/]*[@-~]')
+    app.logger.debug(f"/admin/logs/clear POST received {request}")
+    
+    filename = f"{str(rl_data.LOG_FILE)}.lock"
 
     try:
-        filename = rl_data.LOG_FILE_DIR / Path('activity.log')
-        with open(filename, 'r') as f:
-            raw_log = f.read()
-            log_contents = ANSI_ESCAPE_RE.sub('', raw_log)  # 🔍 Strip ANSI codes
-    except FileNotFoundError:
-        logger.info(f"Log file not found") 
-        log_contents = 'Log file not found.'
+        import portalocker
+        # Use portalocker with a file path, not a file object
+        with portalocker.Lock(filename,  timeout=10):
+            with open(rl_data.LOG_FILE, 'w') as f:
+                f.truncate()
+    except (portalocker.LockException, IOError, OSError) as e:
+            # If locking fails, try without locking
+            print(f"Warning: Lock failed during log clear: {e}")
+            with open(rl_data.LOG_FILE, 'w') as f:
+                   f.truncate()
+            
+    app.logger.info(f"All logs have been cleared.")
+    return app.redirect(app.url_for('view_logs'))
 
+@app.route('/admin/logs')
+def view_logs():
+    app.logger.debug(f"/admin/logs received {request}")
+    
+    import re
+    ANSI_ESCAPE_RE = re.compile(r'\x1B[@-_][0-?]*[ -/]*[@-~]')
+    
+    try:
+        with open(rl_data.LOG_FILE, 'r') as f:
+            raw_log = f.read()
+            log_contents = ANSI_ESCAPE_RE.sub('', raw_log)  # Strip ANSI codes
+    except FileNotFoundError:
+        app.logger.info(f"Log file not found")
+        log_contents = 'Log file not found.'
+    
     return render_template('admin_logs.html', log_contents=log_contents)
 
 @app.route('/admin/set-log-level', methods=['POST'])
-@login_required
 def set_log_level():
+    app.logger.debug(f"/admin/set-log-level POST received {request}")
     
-    logger.debug(f"/admin/set-log-level POST received {request}")
-
     global_level = request.form.get('global_log_level')
     file_level = request.form.get('file_log_level')
     console_level = request.form.get('console_log_level')
-
+    
     rl_data.update_log_level(
         global_level=global_level,
         handler_levels={
@@ -784,18 +805,9 @@ def set_log_level():
             'console': console_level
         }
     )
-
-    # Store in session for display in dropdowns
-    session['log_levels'] = {
-        'global': global_level,
-        'file': file_level,
-        'console': console_level
-        }
-
-    flash("Log levels updated.", "success")
-    logger.info(f"Log levels updated, global: {global_level}, file: {file_level}, console: {console_level}")
-    return redirect(url_for('admin'))
-
+    
+    app.logger.info(f"Log levels updated, global: {global_level}, file: {file_level}, console: {console_level}")
+    return app.redirect(app.url_for('admin'))
 
 ##############################
 
@@ -810,7 +822,11 @@ if env_mode == 'development':
 
     #Run the app on localhost port PORT when debuggin
     if __name__ == "__main__":
-        app.run('0.0.0.0', PORT)
+        env_mode = os.environ.get('FLASK_ENV', 'development')
+        app.logger.warning(f"ENV Mode is {env_mode}")
+        
+        # Run app with desired configuration
+        app.run('0.0.0.0', PORT, debug=env_mode == 'development')
 
 ######
 # START PRODUCTION setting

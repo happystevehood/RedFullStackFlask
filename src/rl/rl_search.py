@@ -1,24 +1,22 @@
 import csv
 from pathlib import Path
-import logging
 
-import rl.rl_data
+import rl.rl_data as rl_data 
 
-
-#call per module.
-logger = logging.getLogger()
 
 # Find competitor function
 def find_competitor(competitor, callback):
     matches = []
     matchcount = 0
+
+    logger = rl_data.get_logger()
     
     logger.debug(f"find_competitor called {competitor}")
 
     #for each element in EVENT_DATA_LIST
-    for element in rl.rl_data.EVENT_DATA_LIST:
+    for element in rl_data.EVENT_DATA_LIST:
         #equivalent to the following filepath = './data/input/' + filename
-        filepath = Path(rl.rl_data.CSV_INPUT_DIR) / Path(element[0] + '.csv')
+        filepath = Path(rl_data.CSV_INPUT_DIR) / Path(element[0] + '.csv')
 
         try:
             with open(filepath, newline='', encoding='utf-8') as csvfile:

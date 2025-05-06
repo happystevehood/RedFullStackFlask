@@ -1,17 +1,16 @@
 {% extends "base.html" %}
 
 {% block head %}
-<style nonce="{{ nonce }}">
+<style nonce="{{ csp_nonce() }}">
     .log-container {
         width: 100%;
-        
         padding: 1rem;
         overflow-x: auto;
     }
 
     pre.log-output {
-        font-size: 0.75rem;         /* Smaller font */
-        white-space: pre;           /* Prevent text wrapping */
+        font-size: 0.75rem;
+        white-space: pre;
         overflow-x: auto;
         background-color: #f9f9f9;
         border: 1px solid #ccc;
@@ -31,30 +30,206 @@
         display: inline-block;
         margin: 0.25rem;
     }
+    
+    .log-controls {
+        margin-bottom: 1rem;
+        padding: 1rem;
+        background-color: #f5f5f5;
+        border-radius: 4px;
+    }
+    
+    .log-filter {
+        margin-bottom: 1rem;
+    }
+    
+    .log-filter input {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    
+    /* Highlight for different log levels */
+    .log-level-debug { color: #6c757d; }
+    .log-level-info { color: #17a2b8; }
+    .log-level-warning { color: #ffc107; }
+    .log-level-error { color: #dc3545; }
+    .log-level-critical { color: #721c24; background-color: #f8d7da; }
+    
+    /* Highlight for worker IDs */
+    .worker-highlight {
+        background-color: #e2f0ff;
+        padding: 0 2px;
+        border-radius: 2px;
+    }
+    
+    /* Highlight for request IDs */
+    .request-highlight {
+        background-color: #e2ffe2;
+        padding: 0 2px;
+        border-radius: 2px;
+    }
 </style>
+<script nonce="{{ csp_nonce() }}">
+    // Will be initialized once DOM is loaded
+    function initLogViewer() {
+        const logOutput = document.getElementById('log-output');
+        const filterInput = document.getElementById('log-filter');
+        const levelSelect = document.getElementById('log-level-filter');
+        const workerSelect = document.getElementById('worker-filter');
+        const autoScrollCheckbox = document.getElementById('auto-scroll');
+        const rawLogContent = logOutput.textContent;
+        
+        // Extract all worker IDs from log content
+        const workerIds = new Set();
+        const workerRegex = /\[W:([a-zA-Z0-9-]+)\]/g;
+        let match;
+        while ((match = workerRegex.exec(rawLogContent)) !== null) {
+            workerIds.add(match[1]);
+        }
+        
+        // Fill worker dropdown
+        workerIds.forEach(workerId => {
+            const option = document.createElement('option');
+            option.value = workerId;
+            option.textContent = workerId;
+            workerSelect.appendChild(option);
+        });
+        
+        // Function to filter and format logs
+        function updateLogDisplay() {
+            const filter = filterInput.value.toLowerCase();
+            const levelFilter = levelSelect.value;
+            const workerFilter = workerSelect.value;
+            
+            // Split log into lines
+            const lines = rawLogContent.split('\n');
+            
+            // Apply filters
+            const filteredLines = lines.filter(line => {
+                // Apply text filter
+                if (filter && !line.toLowerCase().includes(filter)) {
+                    return false;
+                }
+                
+                // Apply level filter
+                if (levelFilter !== 'all') {
+                    const levelMatch = line.match(/\] ([A-Z]+) in /);
+                    if (!levelMatch || levelMatch[1].toLowerCase() !== levelFilter) {
+                        return false;
+                    }
+                }
+                
+                // Apply worker filter
+                if (workerFilter !== 'all') {
+                    const workerMatch = line.match(/\[W:([a-zA-Z0-9-]+)\]/);
+                    if (!workerMatch || workerMatch[1] !== workerFilter) {
+                        return false;
+                    }
+                }
+                
+                return true;
+            });
+            
+            // Format lines with highlighting
+            const formattedLines = filteredLines.map(line => {
+                // Highlight log levels
+                line = line.replace(/\] (DEBUG) in /, '] <span class="log-level-debug">$1</span> in ');
+                line = line.replace(/\] (INFO) in /, '] <span class="log-level-info">$1</span> in ');
+                line = line.replace(/\] (WARNING) in /, '] <span class="log-level-warning">$1</span> in ');
+                line = line.replace(/\] (ERROR) in /, '] <span class="log-level-error">$1</span> in ');
+                line = line.replace(/\] (CRITICAL) in /, '] <span class="log-level-critical">$1</span> in ');
+                
+                // Highlight worker IDs
+                line = line.replace(/\[W:([a-zA-Z0-9-]+)\]/, '[W:<span class="worker-highlight">$1</span>]');
+                
+                // Highlight request IDs
+                line = line.replace(/\[R:([a-zA-Z0-9-]+)\]/, '[R:<span class="request-highlight">$1</span>]');
+                
+                return line;
+            });
+            
+            // Update display
+            logOutput.innerHTML = formattedLines.join('\n');
+            
+            // Auto-scroll if enabled
+            if (autoScrollCheckbox.checked) {
+                logOutput.scrollTop = logOutput.scrollHeight;
+            }
+        }
+        
+        // Set up event listeners
+        filterInput.addEventListener('input', updateLogDisplay);
+        levelSelect.addEventListener('change', updateLogDisplay);
+        workerSelect.addEventListener('change', updateLogDisplay);
+        autoScrollCheckbox.addEventListener('change', updateLogDisplay);
+        
+        // Initial display
+        updateLogDisplay();
+    }
+    
+    // Initialize once DOM is loaded
+    document.addEventListener('DOMContentLoaded', initLogViewer);
+</script>
 {% endblock %}
 
 {% block content %}
 <div class="container mt-4">
     <h2>Activity Log</h2>
-
-    <div class="log-container">
-        <h2>Activity Log</h2>
     
+    <div class="log-container">
         <div class="log-toolbar">
             <form method="GET" action="{{ url_for('download_logs') }}">
-                <!--<input type="hidden" name="csrf_token" value="[[ csrf_token() ]]">-->
-                <button class="btn btn-sm btn-success">Download Logs as .txt</button>
+                <button class="btn btn-sm btn-success">Download Logs</button>
             </form>
-    
+            
             <form method="POST" action="{{ url_for('clear_logs') }}" onsubmit="return confirm('Are you sure you want to clear the log file?');">
-                <!--<input type="hidden" name="csrf_token" value="[[ csrf_token() ]]">-->
-                <button class="btn btn-sm btn-danger">Clear Log File</button>
+                <button class="btn btn-sm btn-danger">Clear Logs</button>
             </form>
         </div>
-    
-        <pre class="log-output">{{ log_contents }}</pre>
+        
+        <div class="log-controls">
+            <div class="log-filter">
+                <input type="text" id="log-filter" placeholder="Filter logs..." class="form-control">
+            </div>
+            
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="log-level-filter">Log Level:</label>
+                        <select id="log-level-filter" class="form-control">
+                            <option value="all">All Levels</option>
+                            <option value="debug">DEBUG</option>
+                            <option value="info">INFO</option>
+                            <option value="warning">WARNING</option>
+                            <option value="error">ERROR</option>
+                            <option value="critical">CRITICAL</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="worker-filter">Worker ID:</label>
+                        <select id="worker-filter" class="form-control">
+                            <option value="all">All Workers</option>
+                            <!-- Worker options will be populated by JavaScript -->
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="auto-scroll">
+                            <input type="checkbox" id="auto-scroll" checked>
+                            Auto-scroll to bottom
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <pre id="log-output" class="log-output">{{ log_contents }}</pre>
     </div>
-
 </div>
 {% endblock %}

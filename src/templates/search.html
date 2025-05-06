@@ -28,7 +28,7 @@
 
     </div>
 </div>
-<style nonce="{{ nonce }}">
+<style nonce="{{ csp_nonce() }}">
     #display, #searchDetail {
         display: none;
     }
@@ -37,7 +37,7 @@
 {% endblock %}
 
 {% block script %}
-<script  nonce="{{ nonce }}">
+<script  nonce="{{ csp_nonce() }}">
 $(document).ready(function() {
 
     //const csrfToken = $('meta[name="csrf-token"]').attr('content');
