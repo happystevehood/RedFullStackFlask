@@ -106,7 +106,7 @@ csp = {
     ],
     'style-src': [
         "'self'",
-        "'unsafe-inline'",   # to remove in production
+#        "'unsafe-inline'",   # to remove in production
         'https://cdn.jsdelivr.net',
         'https://cdn.datatables.net'
     ],
@@ -119,7 +119,7 @@ csp = {
 Talisman(
     app,
     content_security_policy=csp,
-    content_security_policy_nonce_in=['script-src'],
+    content_security_policy_nonce_in=['script-src','style-src'],
     force_https=False
 )
 
@@ -516,7 +516,7 @@ def new_search():
 
 @app.route('/display_vis', methods=['GET'])
 def get_display_vis():
-        app.debug(f"/display_vis GET received {request}")
+        app.logger.debug(f"/display_vis GET received {request}")
 
         competitor = request.args.get('competitor').title()
         race_no = request.args.get('race_no')

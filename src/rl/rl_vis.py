@@ -29,7 +29,7 @@ from datetime import datetime, timedelta
 #pdf creation
 import os, pymupdf
 from pathlib import Path
-
+import re
 from flask import session
 
 # local inclusion.
@@ -377,17 +377,21 @@ def competitorDataOutput(df):
                 catrank_val = dfcat.loc[compIndex, f"{event} CatRank"]
                 tableDF.loc[event, 'CatRank'] = f"{catrank_val:.1f}" if pd.notnull(catrank_val) else ''
 
-        styled_table = tableDF.style.set_table_styles(
-            [{'selector': 'th',
-            'props': [('background-color', '#f2f2f2'), ('padding', '8px'), ('text-align', 'left')]},
-            {'selector': 'td',
-            'props': [('padding', '8px'), ('border', '1px solid #ddd')]}]
-        ).set_properties(**{
-            'border-collapse': 'collapse',
-            'font-family': 'sans-serif',
-            'font-size': '14px'
-        })
-        runtimeVars['stringPdf'] += styled_table.to_html()
+        #style added directly to HTML for security reasons.
+        #styled_table = tableDF.style.set_table_styles()
+        #    [{'selector': 'th',
+        #    'props': [('background-color', '#f2f2f2'), ('padding', '8px'), ('text-align', 'left')]},
+        #    {'selector': 'td',
+        #    'props': [('padding', '8px'), ('border', '1px solid #ddd')]}]
+        #).set_properties(**{
+        #    'border-collapse': 'collapse',
+        #    'font-family': 'sans-serif',
+        #    'font-size': '14px'
+        #})
+
+        #forcibly remove the style attribute from string
+        runtimeVars['stringPdf'] += re.sub( ' style=\"text-align: right;\"','',tableDF.to_html())
+        runtimeVars['stringPdf'] += '<br><br>'
 
     return compIndex
 

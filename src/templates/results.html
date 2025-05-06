@@ -58,8 +58,24 @@
         </div>
     </form>
 
+    <style nonce="{{ csp_nonce() }}">
+        /* Fix table layout issues with DataTables */
+        div.dataTables_wrapper {
+            width: 100%;
+            overflow-x: auto;
+        }
+    
+        table.dataTable {
+            width: 100% !important;
+        }
+    
+        table.dataTable th, table.dataTable td {
+            white-space: nowrap;
+        }
+    </style>
+
     <div class="table-responsive">
-        <table id="resultsTable" class="table table-striped table-bordered" style="width:100%">
+        <table id="resultsTable" class="table table-striped table-bordered nowrap">
             <thead>
                 <tr>
                     <th>Select</th>
@@ -98,7 +114,7 @@
         var table = $('#resultsTable').DataTable({
             scrollX: true,
             pageLength: 25,
-            autoWidth: true,
+            autoWidth: false,  // override DataTables default
             fixedHeader: {
                 header: true,
                 headerOffset: 56

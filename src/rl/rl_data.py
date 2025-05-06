@@ -366,9 +366,6 @@ def get_log_levels():
 # Non log based helper functions
 #############################
 
-
-
-
 def remove_files_from_directory(directory):
     """Removes all files within the specified directory, but leaves the directory untouched."""
 

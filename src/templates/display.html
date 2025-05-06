@@ -7,7 +7,7 @@
     <h2 class="mb-4">Time to Display the following results:</h2>
     <h5>{{ description | default("No description passed", true) }}</h5>
     <p> So two more questions left?</p>
-    <form method="POST" id="optionForm" onsubmit="showLoading()">
+    <form method="POST" id="optionForm" >
         <!--<input type="hidden" name="csrf_token" value="[[ csrf_token() ]]">-->
         <h3>Which of the following options do you want to see:</h3>
         <label>
@@ -46,8 +46,17 @@
     {% endif %}
 
     <!-- This shows the loading message -->
-    <div id="loading-message" style="display:none; font-weight: bold; color: darkblue; margin-top: 10px;">
-        <strong></strong>Processing... please be patient!<strong>
+    <style nonce="{{ csp_nonce() }}">
+        .myloading-message 
+        {
+            display:     none; 
+            font-weight: bold; 
+            color:     darkblue; 
+            margin-top:  10px;
+        } 
+    </style>
+    <div id="loading-message" class=myloading-message >
+        <strong>Processing... please be patient!</strong>
     </div>
 </div>
 
@@ -68,9 +77,25 @@
         radio.addEventListener('change', checkRadios);
     });
 
+    form.addEventListener("submit", showLoading);
+
+    // dispaly update on submit button
     function showLoading() {
-            document.getElementById('loading-message').style.display = 'block';
-        }
+        document.getElementById('loading-message').style.display = 'block';
+        submitBtn.disabled = true;
+        submitBtn.value = 'Loading...';
+
+        // Optional: If you're staying on the same page and re-rendering via Flask,
+        // you can reset the button in a script at the end of the response:
+        // window.addEventListener('pageshow', () => {
+        //    const btn = document.getElementById('submitBtn');
+        //    if (btn) {
+        //        btn.disabled = false;
+        //        btn.value = 'Generate';
+        //    }
+        //
+        // });
+    }
 
 </script>
 {% endblock %}

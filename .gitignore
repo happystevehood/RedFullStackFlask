@@ -1,9 +1,8 @@
 *.pyc
 *.pdf
 *.png
-feedback.csv
 *.log
-
-src/store/logs/log_config.json.lock
-src/store/logs/activity.log.lock
-src/store/logs/activity.lock
+*.lock
+*feedback.csv
+*duration*.csv
+src/static/csv/generic/durationMensSinglesCompetitive2023.csv
