@@ -7,14 +7,17 @@ services:
       dockerfile: Dockerfile
     container_name: redfullstackflask-web
     ports:
-      - "5000:5000"
+#      - "5000:5000"
+      - "8080:8080"
     environment:
-      - ENV_MODE=development
+#      - ENV_MODE=development
+      - ENV_MODE=production
     volumes:
       - ./src:/app/src
       - ./src/static:/app/src/static
     env_file:
-      - .env.development
+#      - .env.development
+      - .env.production
     restart: always
 
 # Build and run

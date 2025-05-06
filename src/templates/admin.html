@@ -17,23 +17,23 @@
     <h1 class="mb-4">Magic Admin Powers:</h1>
 
     <form method="POST" id="regenerateOutput">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <!--<input type="hidden" name="csrf_token" value="[[ csrf_token() ]]">-->
         <h3>Regenerate Generic Output:</h3>
         <input type="submit" id="regenerateBtn" name="regenerateBtn" value="Regenerate">
     </form>
     <form method="POST" id="deleteGeneratedFilesForm">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <!--<input type="hidden" name="csrf_token" value="[[ csrf_token() ]]">-->
         <h3>Delete Generated files:</h3>
         <input type="submit" id="deleteGeneratedFilesBtn" name="deleteGeneratedFilesBtn" value="Delete Generated">
     </form>
     <form method="POST" id="deleteCompetitorFilesForm">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <!--<input type="hidden" name="csrf_token" value="[[ csrf_token() ]]">-->
         <h3>Delete Competitor files:</h3>
         <input type="submit" id="deleteCompetitorFilesBtn" name="deleteCompetitorFilesBtn" value="Delete Competitor">
     </form>
     <br/>
     <form method="POST" action="/admin/set-log-level" class="form-inline my-2">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <!--<input type="hidden" name="csrf_token" value="[[ csrf_token() ]]">-->
         <label class="mr-2">Global Log Level:</label>
         <select name="global_log_level" class="form-control mr-2">
             {% for level in ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] %}

@@ -16,7 +16,7 @@
     <h2 class="mb-4">Results by Event, Competitor, Category, Year, and More</h2>
 
     <form method="POST" class="mb-4 row g-3">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <!-- <input type="hidden" name="csrf_token" value="[[ csrf_token() ]]"> -->
         <div class="col-md-3">
             <label for="year_filter" class="form-label">Filter by Year:</label>
             <select name="year_filter" id="year_filter" class="form-select" onchange="this.form.submit()">
@@ -93,7 +93,7 @@
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
 
-    <script>
+    <script  nonce="{{ nonce }}">
     $(document).ready(function() {
         var table = $('#resultsTable').DataTable({
             scrollX: true,

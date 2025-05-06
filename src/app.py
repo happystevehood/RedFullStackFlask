@@ -20,10 +20,8 @@ from rl.rl_search import find_competitor
 import rl.rl_data as rl_data 
 from rl.rl_vis import redline_vis_competitor_html, redline_vis_competitor_pdf, redline_vis_generic, redline_vis_generic_eventpdf, redline_vis_generic_eventhtml
 
-print(">>> Flask app factory started")
 #start the app first
 app = Flask(__name__)
-print(">>> Flask app created")
 
 #get enviroment variables
 # Choose env file based on ENV_MODE variable
@@ -36,8 +34,8 @@ if env_mode == 'production':
     # START production setting
     ######
     app.config.update(
-        WTF_CSRF_ENABLED=True,           # Enable CSRF protection
-        WTF_CSRF_SSL_STRICT=True,        # Avoid issues with non-SSL
+        #WTF_CSRF_ENABLED=True,           # Enable CSRF protection
+        #WTF_CSRF_SSL_STRICT=True,        # Avoid issues with non-SSL
         SESSION_COOKIE_SECURE=True,      # Only send cookies over HTTPS
         SESSION_COOKIE_HTTPONLY=True,    # Not accessible via JavaScript
         SESSION_COOKIE_SAMESITE='Lax',   # Prevent CSRF in most cases
@@ -73,7 +71,7 @@ elif  env_mode == 'development':
 app.secret_key = os.getenv("SECRET_KEY", b' q/\x8ax"\xe9\xfc\x8a0v\x1a\x18\r\x8f\xc1\xb7\xf4\x14\xd0\xb8j:\xb1')
 
 #get secret key from env variable
-ADMIN_PASSWORD = os.getenv("SECRET_KEY", 'Admin')
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", 'Admin')
 
 #setup consistent logging
 rl_data.setup_logger()
@@ -86,14 +84,37 @@ logger.warning(f"ENV Mode is {env_mode}")
 limiter = Limiter(app)
 
 #protect against Cross-Site Request Forgery:
-csrf = CSRFProtect(app)
+#csrf = CSRFProtect(app)
 
-#Headers & Clickjacking Prevention
-Talisman(app, content_security_policy=None)
+#Headers & Clickjacking Prevention - updated to use nonce - number once
+# For local dev, disable HTTPS enforcement
+csp = {
+    'default-src': "'self'",
+    'script-src': [
+        "'self'",
+        'https://code.jquery.com',
+        'https://cdn.jsdelivr.net',
+        'https://cdn.datatables.net'
+    ],
+    'style-src': [
+        "'self'",
+        "'unsafe-inline'",   # to remove in production
+        'https://cdn.jsdelivr.net',
+        'https://cdn.datatables.net'
+    ],
+    'font-src': "'self' data:",
+    'img-src': "'self' data:",
+    'connect-src': "'self'",
+    'frame-ancestors': "'self'"
+}
+
+Talisman(app, content_security_policy=csp, content_security_policy_nonce_in=['script-src'], force_https=False)
+
 
 '''
 #Error handling
 app.config['TRAP_HTTP_EXCEPTIONS']=True
+
 #some local error handing
 @app.errorhandler(Exception)
 def handle_error(e):
@@ -148,28 +169,22 @@ if(OutputInfo == True):
 #    return dict(csrf_token=generate_csrf)
 
 
-
 @app.before_request
 def ensure_log_levels_session():
     #print(">>> ensure_log_levels_session")
     if 'log_levels' not in session:
         session['log_levels'] = {
-            'global':  logger.getLevelName(rl_data.DEFAULT_LOG_LEVEL),
-            'file':  logger.getLevelName(rl_data.DEFAULT_LOG_FILE_LEVEL),
-            'console':  logger.getLevelName(rl_data.DEFAULT_LOG_CONSOLE_LEVEL)
+            'global':  app.logger.getLevelName(rl_data.DEFAULT_LOG_LEVEL),
+            'file':  app.logger.getLevelName(rl_data.DEFAULT_LOG_FILE_LEVEL),
+            'console':  app.logger.getLevelName(rl_data.DEFAULT_LOG_CONSOLE_LEVEL)
         }
 
     pid = os.getpid()
-    logger.info(f"[PID:{pid}] Started {request.method} {request.path}")
-
-#@app.after_request
-#def set_csp(response):
-#    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' https://code.jquery.com"
-#    return response
+    app.logger.info(f"[PID:{pid}] Started {request.method} {request.path}")
 
 @app.after_request
 def log_request_end(response):
-    #print(">>> log_request_end")
+    print(">>> log_request_end")
     
     pid = os.getpid()
     logger.info(f"[PID:{pid}] Finished {request.method} {request.path}")
@@ -795,7 +810,7 @@ if env_mode == 'development':
 
     #Run the app on localhost port PORT when debuggin
     if __name__ == "__main__":
-        app.run('0.0.0.0', PORT, debug = True)
+        app.run('0.0.0.0', PORT)
 
 ######
 # START PRODUCTION setting

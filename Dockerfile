@@ -25,4 +25,4 @@ COPY ./src .
 ENV ENV_MODE=development
 
 # Run with Gunicorn
-CMD ["gunicorn", "-w", "4", "--preload", "--timeout", "90" , "-b", "0.0.0.0:5000", "app:app", "--worker-class gevent"]
+CMD ["gunicorn", "-w", "4", "--preload", "--timeout", "90" , "-b", "0.0.0.0:8080", "app:app", "--worker-class gevent"]
