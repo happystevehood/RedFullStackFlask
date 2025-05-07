@@ -19,7 +19,7 @@
         <h2 class="mb-3">Search by Competitor Name:</h2>
 
         <form id="newSearchForm" class="row gy-2 gx-3 align-items-center mb-4">
-            <!--<input type="hidden" name="csrf_token" value="[[ csrf_token() ]]">-->
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="col-auto">
                 <label for="competitorToSearch" class="visually-hidden">Competitor Name</label>
                 <input type="text" class="form-control" id="competitorToSearch" name="competitor" placeholder="Joe Bloggs" maxlength="100">
@@ -49,13 +49,13 @@
 <script  nonce="{{ csp_nonce() }}">
 $(document).ready(function() {
 
-    //const csrfToken = $('meta[name="csrf-token"]').attr('content');
+    const csrfToken = $('meta[name="csrf-token"]').attr('content');
 
-    //$.ajaxSetup({
-    //     headers: {
-    //        'X-CSRFToken': csrfToken
-    //    }
-    //});
+    $.ajaxSetup({
+         headers: {
+            'X-CSRFToken': csrfToken
+        }
+    });
 
     let itemsRaw = [];
 

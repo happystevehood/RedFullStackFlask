@@ -5,4 +5,4 @@
 *.lock
 *feedback.csv
 *duration*.csv
-src/static/csv/generic/durationMensSinglesCompetitive2023.csv
+.env.production

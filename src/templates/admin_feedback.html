@@ -42,7 +42,7 @@
         </nav>
 
         <form method="POST" action="{{ url_for('clear_feedback') }}" onsubmit="return confirm('Are you sure you want to delete all feedback?');">
-            <!--<input type="hidden" name="csrf_token" value="[[ csrf_token() ]]">-->
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-danger">Clear All Feedback</button>
         </form>
 

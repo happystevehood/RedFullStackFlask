@@ -180,10 +180,12 @@
     <div class="log-container">
         <div class="log-toolbar">
             <form method="GET" action="{{ url_for('download_logs') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-sm btn-success">Download Logs</button>
             </form>
             
             <form method="POST" action="{{ url_for('clear_logs') }}" onsubmit="return confirm('Are you sure you want to clear the log file?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-sm btn-danger">Clear Logs</button>
             </form>
         </div>

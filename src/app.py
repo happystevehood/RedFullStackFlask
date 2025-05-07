@@ -28,24 +28,35 @@ from rl.rl_vis import redline_vis_competitor_html, redline_vis_competitor_pdf, r
 #start the app first
 app = Flask(__name__)
 
-#get enviroment variables
 # Choose env file based on ENV_MODE variable
 env_mode = os.getenv('ENV_MODE', 'development')  # default to development
 
 if env_mode == 'production':
-    load_dotenv('.env.production')
+
+    #load environment variables from .env.prod file
+    res = load_dotenv(rl_data.ENV_PROD_FILE)
+    if(res != True):
+        print(f"load_dotenv returned {res}, {rl_data.ENV_PROD_FILE}")
+
+    #sanity check FLASK_DEBUG is 0 in Production
+    flask_debug = os.getenv("FLASK_DEBUG", -1)
+    if flask_debug != '0':
+        print (f"FLASK_DEBUG is {flask_debug} in ERROR")
 
     ######
     # START production setting
     ######
     app.config.update(
-        #WTF_CSRF_ENABLED=True,           # Enable CSRF protection
-        #WTF_CSRF_SSL_STRICT=True,        # Avoid issues with non-SSL
-        SESSION_COOKIE_SECURE=True,      # Only send cookies over HTTPS
-        SESSION_COOKIE_HTTPONLY=True,    # Not accessible via JavaScript
+        WTF_CSRF_ENABLED=True,           # Enable CSRF protection
+        WTF_CSRF_SSL_STRICT=True,        # Avoid issues with non-SSL
+        
         SESSION_COOKIE_SAMESITE='Lax',   # Prevent CSRF in most cases
-        FLASK_RUN_RELOAD=1,              # Enable auto-reloading
-        DEBUG=False
+        SESSION_COOKIE_SECURE=True,      # Only send cookies over HTTPS
+
+        SESSION_COOKIE_HTTPONLY=True,    # Not accessible via JavaScript
+        
+        FLASK_RUN_RELOAD=False,   #True,  # Enable auto-reloading
+        DEBUG=False,
     )
 
     PORT = 8080
@@ -56,21 +67,42 @@ if env_mode == 'production':
     ######
 
 elif  env_mode == 'development':
-    load_dotenv('.env.development') 
 
-    #mobile phone/depug testing
-    app.config['WTF_CSRF_ENABLED'] = False
-    app.config['WTF_CSRF_SSL_STRICT'] = False    # Avoid issues with non-SSL
+    #load environment variables from .env.prod file
+    res = load_dotenv(rl_data.ENV_DEVEL_FILE)
+    if(res != True):
+        print(f"load_dotenv returned {res}, {rl_data.ENV_DEVEL_FILE}")
+
+    #sanity check FLASK_DEBUG is 1 in Developemtn
+    flask_debug = os.getenv("FLASK_DEBUG", -1)
+    if flask_debug != '1':
+        print (f"FLASK_DEBUG is {flask_debug} in ERROR")
+
+    #mobile phone/debug testing
+    app.config['WTF_CSRF_ENABLED'] = True #False
+    app.config['WTF_CSRF_SSL_STRICT'] = True     # Avoid issues with non-SSL
     
     app.config.update(
-        SESSION_COOKIE_NAME='session',
+        WTF_CSRF_ENABLED=True,     #False  # Enable CSRF protection
+        WTF_CSRF_SSL_STRICT=True,  #False  # Avoid issues with non-SSL 
+
         SESSION_COOKIE_SAMESITE='Lax',
-        SESSION_COOKIE_SECURE=False,   # Must be False for HTTP (especially mobile)
-        DEBUG=True                      # Do not use in production
+        SESSION_COOKIE_SECURE=False,    # Must be False for HTTP (especially mobile)
+        
+        SESSION_COOKIE_NAME='session',
+
+        DEBUG=True,                     # Do not use in production
     )
 
     PORT = 5000
     print(f"ENV_MODE is debug")
+
+
+#print (f"ENV_MODE is {os.getenv("ENV_MODE", -1)}")
+#print (f"FLASK_ENV is {os.getenv("FLASK_ENV", -1)}")
+#print (f"FLASK_DEBUG is {os.getenv("FLASK_DEBUG", -1)}")
+#print (f"SECRET_KEY is {os.getenv("SECRET_KEY", -1)}")
+#print (f"ADMIN_PASSWORD is {os.getenv("ADMIN_PASSWORD", -1)}")
 
 #get secret key from env variable
 app.secret_key = os.getenv("SECRET_KEY", b' q/\x8ax"\xe9\xfc\x8a0v\x1a\x18\r\x8f\xc1\xb7\xf4\x14\xd0\xb8j:\xb1')
@@ -91,7 +123,7 @@ limiter = Limiter(app=app,
     default_limits=["50 per minute", "500 per hour", "2000 per day"])
 
 #protect against Cross-Site Request Forgery:
-#csrf = CSRFProtect(app)
+csrf = CSRFProtect(app)
 
 #Headers & Clickjacking Prevention - updated to use nonce - number once
 # For local dev, disable HTTPS enforcement
@@ -175,9 +207,9 @@ if(OutputInfo == True):
 ####
 
 #@app.context_processor
-#def inject_csrf_token():
-#    from flask_wtf.csrf import generate_csrf
-#    return dict(csrf_token=generate_csrf)
+def inject_csrf_token():
+    from flask_wtf.csrf import generate_csrf
+    return dict(csrf_token=generate_csrf)
 
 
 # Register before/after request handlers
@@ -815,18 +847,22 @@ def set_log_level():
 
 ##############################
 
+#One line of code cut our Flask page load times by 60%
+#https://medium.com/building-socratic/the-one-weird-trick-that-cut-our-flask-page-load-time-by-70-87145335f679
+#https://www.reddit.com/r/programming/comments/2er5nj/one_line_of_code_cut_our_flask_page_load_times_by/
+app.jinja_env.cache = {}
+
 ######
 # START DEBUG setting
 ######
-if env_mode == 'development':
+#if env_mode == 'development':
 
-    #Run the app on localhost port PORT when debuggin
-    if __name__ == "__main__":
-        env_mode = os.environ.get('FLASK_ENV', 'development')
-        app.logger.warning(f"ENV Mode is {env_mode}")
-        
-        # Run app with desired configuration
-        app.run('0.0.0.0', PORT, debug=env_mode == 'development')
+#Run the app on localhost port PORT when debuggin
+if __name__ == "__main__":
+    env_mode = os.environ.get('ENV_MODE', 'development')
+    
+    # Run app with desired configuration
+    app.run('0.0.0.0', PORT, debug= (env_mode == 'development'))
 
 ######
 # START PRODUCTION setting

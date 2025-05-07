@@ -16,10 +16,10 @@
     <h2 class="mb-4">Results by Event, Competitor, Category, Year, and More</h2>
 
     <form method="POST" class="mb-4 row g-3">
-        <!-- <input type="hidden" name="csrf_token" value="[[ csrf_token() ]]"> -->
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="col-md-3">
             <label for="year_filter" class="form-label">Filter by Year:</label>
-            <select name="year_filter" id="year_filter" class="form-select" onchange="this.form.submit()">
+            <select name="year_filter" id="year_filter" class="form-select">
                 <option value="">-- All Years --</option>
                 {% for year in years %}
                     <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>{{ year }}</option>
@@ -29,7 +29,7 @@
 
         <div class="col-md-3">
             <label for="gender_filter" class="form-label">Filter by Gender:</label>
-            <select name="gender_filter" id="gender_filter" class="form-select" onchange="this.form.submit()">
+            <select name="gender_filter" id="gender_filter" class="form-select">
                 <option value="">-- All Genders --</option>
                 {% for gender in genders %}
                     <option value="{{ gender }}" {% if gender == selected_gender %}selected{% endif %}>{{ gender }}</option>
@@ -39,7 +39,7 @@
 
         <div class="col-md-3">
             <label for="cat_filter" class="form-label">Filter by Category:</label>
-            <select name="cat_filter" id="cat_filter" class="form-select" onchange="this.form.submit()">
+            <select name="cat_filter" id="cat_filter" class="form-select">
                 <option value="">-- All Categories --</option>
                 {% for cat in cats %}
                     <option value="{{ cat }}" {% if cat == selected_cat %}selected{% endif %}>{{ cat }}</option>
@@ -49,7 +49,7 @@
 
         <div class="col-md-3">
             <label for="location_filter" class="form-label">Filter by Location:</label>
-            <select name="location_filter" id="location_filter" class="form-select" onchange="this.form.submit()">
+            <select name="location_filter" id="location_filter" class="form-select">
                 <option value="">-- All Locations --</option>
                 {% for location in locations %}
                     <option value="{{ location }}" {% if location == selected_location %}selected{% endif %}>{{ location }}</option>
@@ -110,6 +110,41 @@
     <script nonce="{{ csp_nonce() }}" src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
 
     <script nonce="{{ csp_nonce() }}">
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const yearFilter = document.getElementById('year_filter');
+        if (yearFilter) {
+            yearFilter.addEventListener('change', function () {
+                this.form.submit();
+            });
+        }
+    });
+    document.addEventListener('DOMContentLoaded', function () {
+        const genderFilter = document.getElementById('gender_filter');
+        if (genderFilter) {
+            genderFilter.addEventListener('change', function () {
+                this.form.submit();
+            });
+        }
+    });
+    document.addEventListener('DOMContentLoaded', function () {
+        const catFilter = document.getElementById('cat_filter');
+        if (catFilter) {
+            catFilter.addEventListener('change', function () {
+                this.form.submit();
+            });
+        }
+    });
+    document.addEventListener('DOMContentLoaded', function () {
+        const locationFilter = document.getElementById('location_filter');
+        if (locationFilter) {
+            locationFilter.addEventListener('change', function () {
+                this.form.submit();
+            });
+        }
+    });   
+
+
     $(document).ready(function() {
         var table = $('#resultsTable').DataTable({
             scrollX: true,
