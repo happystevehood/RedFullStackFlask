@@ -280,15 +280,15 @@ def competitorDataOutput(df):
     
     #if relay 
     if 'Member1' in df.columns:
-        nameMask = df['Name'].str.contains(runtimeVars['competitorName'], na=False) 
-        mem1Mask = df['Member1'].str.contains(runtimeVars['competitorName'], na=False) 
-        mem2Mask = df['Member2'].str.contains(runtimeVars['competitorName'], na=False)
-        mem3Mask = df['Member3'].str.contains(runtimeVars['competitorName'], na=False)
-        mem4Mask = df['Member4'].str.contains(runtimeVars['competitorName'], na=False)
-        compMask = nameMask | mem1Mask | mem2Mask | mem3Mask | mem4Mask & df['Race No'].astype(str).str.contains(runtimeVars['competitorRaceNo'], na=False)
+        nameMask = df['Name'].str.contains(runtimeVars['competitorName'], na=False, regex=False) 
+        mem1Mask = df['Member1'].str.contains(runtimeVars['competitorName'], na=False, regex=False) 
+        mem2Mask = df['Member2'].str.contains(runtimeVars['competitorName'], na=False, regex=False)
+        mem3Mask = df['Member3'].str.contains(runtimeVars['competitorName'], na=False, regex=False)
+        mem4Mask = df['Member4'].str.contains(runtimeVars['competitorName'], na=False, regex=False)
+        compMask = nameMask | mem1Mask | mem2Mask | mem3Mask | mem4Mask & df['Race No'].astype(str).str.contains(runtimeVars['competitorRaceNo'], na=False, regex=False)
 
     else:
-        compMask = df['Name'].str.contains(runtimeVars['competitorName']) & df['Race No'].astype(str).str.contains(runtimeVars['competitorRaceNo'], na=False)
+        compMask = df['Name'].str.contains(runtimeVars['competitorName'], regex=False) & df['Race No'].astype(str).str.contains(runtimeVars['competitorRaceNo'], na=False, regex=False)
 
     #dataframe with matching competitors and race number
     compDF = df[compMask]

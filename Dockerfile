@@ -4,10 +4,11 @@ FROM python:3.11-slim
 # Set environment vars
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app/src
+    PYTHONPATH=/app \
+    USE_DOCKER=True
 
 # Create working directory
-WORKDIR /app/src
+WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -19,10 +20,11 @@ COPY requirements.txt .
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
 # Copy the application code
-COPY ./src .
+COPY ./src /app/src
+COPY .env.* /app/
 
-# Set environment mode dynamically (can be overridden)
-ENV ENV_MODE=development
+# Set the entrypoint
+COPY docker-entrypoint.sh /app/
+RUN chmod +x /app/docker-entrypoint.sh
 
-# Run with Gunicorn
-CMD ["gunicorn", "-w", "4", "--preload", "--timeout", "90" , "-b", "0.0.0.0:8080", "app:app", "--worker-class gevent"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

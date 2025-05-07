@@ -1,4 +1,4 @@
-version: "3.9"
+version: '3'
 
 services:
   web:
@@ -6,25 +6,14 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: redfullstackflask-web
-    ports:
-#      - "5000:5000"
-      - "8080:8080"
+    env_file:
+      - ${ENV_FILE:-.env.development}
     environment:
-#      - ENV_MODE=development
-      - ENV_MODE=production
+      - USE_DOCKER=True
+      - PORT=${PORT:-5000}
+    ports:
+      - "${PORT:-5000}:${PORT:-5000}"
     volumes:
       - ./src:/app/src
       - ./src/static:/app/src/static
-    env_file:
-#      - .env.development
-      - .env.production
     restart: always
-
-# Build and run
-# docker-compose --env-file .env.development up --build
-
-# View logs
-#docker-compose --env-file .env.development logs -f
-
-# Stop
-#docker-compose down

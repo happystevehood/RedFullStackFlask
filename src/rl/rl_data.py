@@ -39,9 +39,9 @@ LOG_CONFIG_FILE   = LOG_FILE_DIR / 'log_config.json'
 CSV_FEEDBACK_DIR  = Path('store') / 'feedback'
 
 ENV_PROD_FILENAME = '.env.production'
-ENV_PROD_FILE = Path('.') / '..' / ENV_PROD_FILENAME
+ENV_PROD_FILE = Path('.') / ENV_PROD_FILENAME
 ENV_DEVEL_FILENAME = '.env.development'
-ENV_DEVEL_FILE = Path('.') / '..' / ENV_DEVEL_FILENAME
+ENV_DEVEL_FILE = Path('.') / ENV_DEVEL_FILENAME
 
 
 #Here are the different logging levels 

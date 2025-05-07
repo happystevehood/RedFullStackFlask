@@ -23,184 +23,128 @@ from flask_limiter.util import get_remote_address
 # local inclusion.
 from rl.rl_search import find_competitor
 import rl.rl_data as rl_data 
+from rl.config import get_config 
 from rl.rl_vis import redline_vis_competitor_html, redline_vis_competitor_pdf, redline_vis_generic, redline_vis_generic_eventpdf, redline_vis_generic_eventhtml
 
-#start the app first
-app = Flask(__name__)
-
-# Choose env file based on ENV_MODE variable
-env_mode = os.getenv('ENV_MODE', 'development')  # default to development
-
-if env_mode == 'production':
-
-    #load environment variables from .env.prod file
-    res = load_dotenv(rl_data.ENV_PROD_FILE)
-    if(res != True):
-        print(f"load_dotenv returned {res}, {rl_data.ENV_PROD_FILE}")
-
-    #sanity check FLASK_DEBUG is 0 in Production
-    flask_debug = os.getenv("FLASK_DEBUG", -1)
-    if flask_debug != '0':
-        print (f"FLASK_DEBUG is {flask_debug} in ERROR")
-
-    ######
-    # START production setting
-    ######
-    app.config.update(
-        WTF_CSRF_ENABLED=True,           # Enable CSRF protection
-        WTF_CSRF_SSL_STRICT=True,        # Avoid issues with non-SSL
-        
-        SESSION_COOKIE_SAMESITE='Lax',   # Prevent CSRF in most cases
-        SESSION_COOKIE_SECURE=True,      # Only send cookies over HTTPS
-
-        SESSION_COOKIE_HTTPONLY=True,    # Not accessible via JavaScript
-        
-        FLASK_RUN_RELOAD=False,   #True,  # Enable auto-reloading
-        DEBUG=False,
-    )
-
-    PORT = 8080
-
-    print(f"ENV_MODE is production")
-    ######
-    # END production setting
-    ######
-
-elif  env_mode == 'development':
-
-    #load environment variables from .env.prod file
-    res = load_dotenv(rl_data.ENV_DEVEL_FILE)
-    if(res != True):
-        print(f"load_dotenv returned {res}, {rl_data.ENV_DEVEL_FILE}")
-
-    #sanity check FLASK_DEBUG is 1 in Developemtn
-    flask_debug = os.getenv("FLASK_DEBUG", -1)
-    if flask_debug != '1':
-        print (f"FLASK_DEBUG is {flask_debug} in ERROR")
-
-    #mobile phone/debug testing
-    app.config['WTF_CSRF_ENABLED'] = True #False
-    app.config['WTF_CSRF_SSL_STRICT'] = True     # Avoid issues with non-SSL
+def create_app():
+    """Create and configure the Flask application."""
+    # Print current working directory for debugging
+    # print(f"Current working directory: {os.getcwd()}")
     
-    app.config.update(
-        WTF_CSRF_ENABLED=True,     #False  # Enable CSRF protection
-        WTF_CSRF_SSL_STRICT=True,  #False  # Avoid issues with non-SSL 
+    # Get configuration based on environment
+    config_class, use_docker = get_config()
+    
+    # Create Flask app
+    app = Flask(__name__)
+    
+    # Apply configuration
+    app.config.from_object(config_class)
+    config_class.init_app(app)
 
-        SESSION_COOKIE_SAMESITE='Lax',
-        SESSION_COOKIE_SECURE=False,    # Must be False for HTTP (especially mobile)
-        
-        SESSION_COOKIE_NAME='session',
+    #get secret key from configutration
+    app.secret_key = config_class.SECRET_KEY   
 
-        DEBUG=True,                     # Do not use in production
+    """Initialize Flask app with improved logging"""
+    # Set up the logger
+    logger = rl_data.setup_logger()
+
+    # Replace Flask's logger with our improved logger
+    app.logger = logger
+
+    #To prevent abuse (e.g., bots spamming the search box), need to review if limits are appropriate
+    limiter = Limiter(app=app,
+        key_func=get_remote_address,
+        default_limits=["50 per minute", "500 per hour", "2000 per day"],
+        storage_uri="memory://")    # Use in-memory storage for now, memcache seems like an alternative.
+
+    #protect against Cross-Site Request Forgery:
+    csrf = CSRFProtect(app)
+
+    #Headers & Clickjacking Prevention - updated to use nonce - number once
+    # For local dev, disable HTTPS enforcement
+    csp = {
+        'default-src': "'self'",
+        'script-src': [
+            "'self'",
+    #        "'unsafe-inline'",   # to remove in production
+            'https://code.jquery.com',
+            'https://cdn.jsdelivr.net',
+            'https://cdn.datatables.net'
+        ],
+        'style-src': [
+            "'self'",
+    #        "'unsafe-inline'",   # to remove in production
+            'https://cdn.jsdelivr.net',
+            'https://cdn.datatables.net'
+        ],
+        'font-src': "'self' data:",
+        'img-src': "'self' data:",
+        'connect-src': "'self'",
+        'frame-ancestors': "'self'"
+    }
+
+    Talisman(
+        app,
+        content_security_policy=csp,
+        content_security_policy_nonce_in=['script-src','style-src'],
+        force_https=False
     )
 
-    PORT = 5000
-    print(f"ENV_MODE is debug")
+    '''
+    #Error handling
+    app.config['TRAP_HTTP_EXCEPTIONS']=True
+
+    #some local error handing
+    @app.errorhandler(Exception)
+    def handle_error(e):
+        try:
+            if e.code == 401:
+                return  render_template('error.html', string1="Bad Request", string2="The page you're looking for was not found", 
+                                        error_code=e.code,        
+                                        name= e.name,
+                                        description= e.description)
+            elif e.code == 404:
+                return  render_template('error.html', string1="Page Not Found", string2="The page you're looking for was not found", 
+                                        error_code=e.code,        
+                                        name= e.name,
+                                        description= e.description)
+            if e.code == 405:
+                return  render_template('error.html', string1="Method Not Allowed", string2="The page you're looking for was not found", 
+                                        error_code=e.code,        
+                                        name= e.name,
+                                        description= e.description)
+            elif e.code == 500:
+                return  render_template('error.html', string1="Internal Server Error", string2="The page you're looking for was not found", 
+                                        error_code=e.code,        
+                                        name= e.name,
+                                        description= e.description)
+            raise e
+        except:
+            return  render_template('error.html', string1="Error", string2="Something went wrong")
+    '''
+
+    OutputInfo = True
+
+    # printout to confirm pkg versions.
+    if(OutputInfo == True): 
+
+        import numpy as np
+        import matplotlib as mpl
+        import seaborn as sns
+        import sys;
+
+        #set debut level to warning so output as start
+        app.logger.warning(f"python versions {sys.version}")
+        app.logger.warning(f"pandas {pd.__version__}, numpy {np.__version__}, matplotlib { mpl.__version__} 'seaborn {sns.__version__}")
+
+    return app, config_class
 
 
-#print (f"ENV_MODE is {os.getenv("ENV_MODE", -1)}")
-#print (f"FLASK_ENV is {os.getenv("FLASK_ENV", -1)}")
-#print (f"FLASK_DEBUG is {os.getenv("FLASK_DEBUG", -1)}")
-#print (f"SECRET_KEY is {os.getenv("SECRET_KEY", -1)}")
-#print (f"ADMIN_PASSWORD is {os.getenv("ADMIN_PASSWORD", -1)}")
+#########################
+# Create the application here so its available to use!!!
+#########################
+app, config_class = create_app()
 
-#get secret key from env variable
-app.secret_key = os.getenv("SECRET_KEY", b' q/\x8ax"\xe9\xfc\x8a0v\x1a\x18\r\x8f\xc1\xb7\xf4\x14\xd0\xb8j:\xb1')
-
-#get secret key from env variable
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", 'Admin')
-
-"""Initialize Flask app with improved logging"""
-# Set up the logger
-logger = rl_data.setup_logger()
-
-# Replace Flask's logger with our improved logger
-app.logger = logger
-
-#To prevent abuse (e.g., bots spamming the search box), need to review if limits are appropriate
-limiter = Limiter(app=app,
-    key_func=get_remote_address,
-    default_limits=["50 per minute", "500 per hour", "2000 per day"])
-
-#protect against Cross-Site Request Forgery:
-csrf = CSRFProtect(app)
-
-#Headers & Clickjacking Prevention - updated to use nonce - number once
-# For local dev, disable HTTPS enforcement
-csp = {
-    'default-src': "'self'",
-    'script-src': [
-        "'self'",
-#        "'unsafe-inline'",   # to remove in production
-        'https://code.jquery.com',
-        'https://cdn.jsdelivr.net',
-        'https://cdn.datatables.net'
-    ],
-    'style-src': [
-        "'self'",
-#        "'unsafe-inline'",   # to remove in production
-        'https://cdn.jsdelivr.net',
-        'https://cdn.datatables.net'
-    ],
-    'font-src': "'self' data:",
-    'img-src': "'self' data:",
-    'connect-src': "'self'",
-    'frame-ancestors': "'self'"
-}
-
-Talisman(
-    app,
-    content_security_policy=csp,
-    content_security_policy_nonce_in=['script-src','style-src'],
-    force_https=False
-)
-
-'''
-#Error handling
-app.config['TRAP_HTTP_EXCEPTIONS']=True
-
-#some local error handing
-@app.errorhandler(Exception)
-def handle_error(e):
-    try:
-        if e.code == 401:
-            return  render_template('error.html', string1="Bad Request", string2="The page you're looking for was not found", 
-                                    error_code=e.code,        
-                                    name= e.name,
-                                    description= e.description)
-        elif e.code == 404:
-            return  render_template('error.html', string1="Page Not Found", string2="The page you're looking for was not found", 
-                                    error_code=e.code,        
-                                    name= e.name,
-                                    description= e.description)
-        if e.code == 405:
-            return  render_template('error.html', string1="Method Not Allowed", string2="The page you're looking for was not found", 
-                                    error_code=e.code,        
-                                    name= e.name,
-                                    description= e.description)
-        elif e.code == 500:
-            return  render_template('error.html', string1="Internal Server Error", string2="The page you're looking for was not found", 
-                                    error_code=e.code,        
-                                    name= e.name,
-                                    description= e.description)
-        raise e
-    except:
-        return  render_template('error.html', string1="Error", string2="Something went wrong")
-'''
-
-OutputInfo = True
-
-# printout to confirm pkg versions.
-if(OutputInfo == True): 
-
-    import numpy as np
-    import matplotlib as mpl
-    import seaborn as sns
-    import sys;
-
-    #set debut level to warning so output as start
-    app.logger.warning(f"python versions {sys.version}")
-    app.logger.warning(f"pandas {pd.__version__}, numpy {np.__version__}, matplotlib { mpl.__version__} 'seaborn {sns.__version__}")
 
 #####
 ### pre-post processor functions
@@ -225,6 +169,9 @@ def setup_request_logging():
     # Log the request
     app.logger.debug(f"Request started: {request.method} {request.path}")
 
+#@app.before_request
+#def check_cookie():
+#    print("Session cookie:", request.cookies.get("session"))
 
 @app.after_request
 def log_after_request(response):
@@ -638,9 +585,8 @@ def login():
     app.logger.debug(f"/login received {request}")
 
     if request.method == 'POST':
-
         password = request.form.get('password')
-        if password == ADMIN_PASSWORD:
+        if password == config_class.ADMIN_PASSWORD:
             session['logged_in'] = True
             flash("Login successful!", "success")
             app.logger.warning(f"Login successful!")            
@@ -847,26 +793,20 @@ def set_log_level():
 
 ##############################
 
+
 #One line of code cut our Flask page load times by 60%
 #https://medium.com/building-socratic/the-one-weird-trick-that-cut-our-flask-page-load-time-by-70-87145335f679
 #https://www.reddit.com/r/programming/comments/2er5nj/one_line_of_code_cut_our_flask_page_load_times_by/
-app.jinja_env.cache = {}
+#app.jinja_env.cache = {}
 
-######
-# START DEBUG setting
-######
-#if env_mode == 'development':
-
-#Run the app on localhost port PORT when debuggin
+# Run the app if executed directly
 if __name__ == "__main__":
-    env_mode = os.environ.get('ENV_MODE', 'development')
-    
-    # Run app with desired configuration
-    app.run('0.0.0.0', PORT, debug= (env_mode == 'development'))
-
-######
-# START PRODUCTION setting
-######
-# this will remain commented out even in production as it is not needed here.
-# In your Dockerfile or Cloud Run startup command, use Gunicorn:
-#    gunicorn -b :8080 app:app
+    # Only run the app directly if not using Docker
+    if os.environ.get('USE_DOCKER', 'False').lower() not in ('true', '1', 'yes'):
+        debug_mode = app.config.get('DEBUG', False)
+        port = app.config.get('PORT', 5000)
+        
+        print(f"Starting Flask app on port {port} with debug={debug_mode}")
+        app.run('0.0.0.0', port, debug=debug_mode)
+    else:
+        print("Not starting Flask server directly as USE_DOCKER=True")

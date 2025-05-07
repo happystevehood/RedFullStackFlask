@@ -1,0 +1,51 @@
+version: '3'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: redfullstackflask-web-prod
+    env_file:
+      - .env.production
+    environment:
+      - USE_DOCKER=True
+      - ENV_MODE=production
+      - SESSION_COOKIE_SECURE=True  # Enable secure cookies for HTTPS
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./src:/app/src
+    restart: always
+    networks:
+      - web-network
+
+  nginx:
+    image: nginx:latest
+    container_name: redfullstackflask-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./production-config/nginx:/etc/nginx/conf.d
+      - ./production-config/certbot/conf:/etc/letsencrypt
+      - ./production-config/certbot/www:/var/www/certbot
+    depends_on:
+      - web
+    restart: always
+    networks:
+      - web-network
+
+  certbot:
+    image: certbot/certbot
+    container_name: redfullstackflask-certbot
+    volumes:
+      - ./production-config/certbot/conf:/etc/letsencrypt
+      - ./production-config/certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - web-network
+
+networks:
+  web-network:
+    driver: bridge
