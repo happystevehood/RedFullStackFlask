@@ -38,7 +38,7 @@ import rl.rl_data as rl_data
 # Otherwise get this warning - UserWarning: Starting a Matplotlib GUI outside of the main thread will likely fail
 mpl.use('agg')
  
-#Boolean to decide if output warningsto terminal
+#Boolean to decide if output warningsto log
 OutputInfo=False
 
 
@@ -51,8 +51,8 @@ def tidyTheData(df, filename):
     runtimeVars = session.get('runtime', {})
 
     #Clean a few uneeded columns first.
-    if 'Fav' in df.columns:
-        df.drop('Fav', axis=1, inplace = True)
+    #if 'Fav' in df.columns:
+    #    df.drop('Fav', axis=1, inplace = True)
 
     if 'Share' in df.columns:
         df.drop('Share', axis=1, inplace = True)
@@ -70,6 +70,9 @@ def tidyTheData(df, filename):
 
     #in 2023 doubles "The Mule" Column is called "Finish Column"
     df.rename(columns={'Finish':'The Mule'},inplace=True)
+
+    name_column = df.pop('Name')  # Remove the Name column and store it
+    df.insert(0, 'Name', name_column)  # Insert it at position 0 (leftmost)
 
     #make a copy of original data frame during tidying process.
     dforig = df.copy(deep=True)
@@ -96,13 +99,10 @@ def tidyTheData(df, filename):
 
                 #if time format wrong, it causes excpetions.
                 try:
-                    #2023 does not have decimal places
-                    if (runtimeVars['eventDataList'][2]=='2023'):
-                        df.loc[x,event] = timedelta.total_seconds(datetime.strptime(df.loc[x,event],"%H:%M:%S") - datetime.strptime(df.loc[x,runtimeVars['EventListStart'][MyIndex-1]] ,"%H:%M:%S"))
-                    #2024 time has decimal places
-                    else:
-                        df.loc[x,event] = timedelta.total_seconds(datetime.strptime(df.loc[x,event],"%H:%M:%S.%f") - datetime.strptime(df.loc[x,runtimeVars['EventListStart'][MyIndex-1]] ,"%H:%M:%S.%f"))
 
+                    df.loc[x,event] = timedelta.total_seconds(datetime.strptime(rl_data.convert_to_standard_time(df.loc[x,event]                                   ) ,"%H:%M:%S.%f") 
+                                                            - datetime.strptime(rl_data.convert_to_standard_time(df.loc[x,runtimeVars['EventListStart'][MyIndex-1]]) ,"%H:%M:%S.%f"))
+ 
                     #if value less than 10 seconds, then somthing wrong, data not trust worthy so want to drop the row.
                     if df.loc[x,event] < 10.0:
                         #print data...
@@ -158,21 +158,18 @@ def tidyTheData(df, filename):
                         # then need to calculate the duration of two events.
 
                         #if time format wrong, it causes excpetions.
-                        try:
-                            #2023 does not have decimal places
-                            if (runtimeVars['eventDataList'][2]=='2023'):
-                                twoEventDuration = timedelta.total_seconds(datetime.strptime(dforig.loc[x,event],"%H:%M:%S") - datetime.strptime(dforig.loc[x,runtimeVars['EventListStart'][MyIndex-2]] ,"%H:%M:%S"))
-                            #2024 time has decimal places
-                            else:
-                                twoEventDuration = timedelta.total_seconds(datetime.strptime(dforig.loc[x,event],"%H:%M:%S.%f") - datetime.strptime(dforig.loc[x,runtimeVars['EventListStart'][MyIndex-2]] ,"%H:%M:%S.%f"))
+                        try: 
+
+                            twoEventDuration = timedelta.total_seconds(datetime.strptime(rl_data.convert_to_standard_time(dforig.loc[x,event]                                   ),"%H:%M:%S.%f") 
+                                                                     - datetime.strptime(rl_data.convert_to_standard_time(dforig.loc[x,runtimeVars['EventListStart'][MyIndex-2]]),"%H:%M:%S.%f"))
 
                             if (twoEventDuration < 60.0):
-                                    if(OutputInfo == True): logger.debug(f"2 EventDurLow {filename} {x} {event} {twoEventDuration}")
-                                    #drop the row
-                                    df.drop(x, inplace = True)
-
-                            df.loc[x,runtimeVars['EventListStart'][MyIndex-1]] = (twoEventDuration * meanEventList[MyIndex-2] )/(meanEventList[MyIndex-2] + meanEventList[MyIndex-1])
-                            df.loc[x,runtimeVars['EventListStart'][MyIndex]]  = (twoEventDuration * meanEventList[MyIndex-1] )/(meanEventList[MyIndex-2] + meanEventList[MyIndex-1])
+                                if(OutputInfo == True): logger.debug(f"2 EventDurLow {filename} {x} {event} {twoEventDuration}")
+                                #drop the row
+                                df.drop(x, inplace = True)
+                            else:        
+                                df.loc[x,runtimeVars['EventListStart'][MyIndex-1]] = (twoEventDuration * meanEventList[MyIndex-2] )/(meanEventList[MyIndex-2] + meanEventList[MyIndex-1])
+                                df.loc[x,runtimeVars['EventListStart'][MyIndex]]  = (twoEventDuration * meanEventList[MyIndex-1] )/(meanEventList[MyIndex-2] + meanEventList[MyIndex-1])
 
                         except (ValueError, TypeError):
                                 #This will catch the competitors where NET time is "DNF" etc....
@@ -181,6 +178,8 @@ def tidyTheData(df, filename):
                                 df.loc[x,runtimeVars['EventListStart'][MyIndex-1]] = float("nan")
                                 df.loc[x,runtimeVars['EventListStart'][MyIndex]] = float("nan")
 
+                                #print(f"tidyTheData ValueError, TypeError: {x} {event} {MyIndex} {rl_data.convert_to_standard_time(dforig.loc[x,event])} {rl_data.convert_to_standard_time(dforig.loc[x,runtimeVars['EventListStart'][MyIndex-2]])}")
+
         MyIndex = MyIndex - 1
 
     # convert Net Time Column to float in seconds.
@@ -188,18 +187,18 @@ def tidyTheData(df, filename):
 
         #if time format wrong, it causes excpetions.
         try:
-            #2023 does not have decimal places
-            if (runtimeVars['eventDataList'][2]=='2023'):
-                df.loc[x,'Net Time'] =  timedelta.total_seconds(datetime.strptime(df.loc[x,'Net Time'],"%H:%M:%S") - datetime.strptime("00:00:00","%H:%M:%S"))
-                df.loc[x,'Start']    =  timedelta.total_seconds(datetime.strptime(df.loc[x,'Start']   ,"%H:%M:%S") - datetime.strptime("00:00:00","%H:%M:%S"))
-            else:
-                df.loc[x,'Net Time'] =  timedelta.total_seconds(datetime.strptime(df.loc[x,'Net Time'],"%H:%M:%S.%f") - datetime.strptime("00:00:00.0","%H:%M:%S.%f"))
-                df.loc[x,'Start']    =  timedelta.total_seconds(datetime.strptime(df.loc[x,'Start']   ,"%H:%M:%S.%f") - datetime.strptime("00:00:00.0","%H:%M:%S.%f"))
 
+            df.loc[x,'Net Time'] =  timedelta.total_seconds(datetime.strptime(rl_data.convert_to_standard_time(df.loc[x,'Net Time']),"%H:%M:%S.%f") 
+                                                          - datetime.strptime(rl_data.convert_to_standard_time("00:00:00.0")        ,"%H:%M:%S.%f"))
+            df.loc[x,'Start']    =  timedelta.total_seconds(datetime.strptime(rl_data.convert_to_standard_time(df.loc[x,'Start'])   ,"%H:%M:%S.%f") 
+                                                          - datetime.strptime(rl_data.convert_to_standard_time("00:00:00.0")        ,"%H:%M:%S.%f"))
+          
             #time Adjust format is the samve
             if ('Time Adj' in df.columns and pd.isna(df.loc[x, "Time Adj"]) == False):
+                #print(f"Time Adj 1: {df.loc[x,'Time Adj']}")
                 timeAdj = df.loc[x,"Time Adj"].replace("+", "")
-                df.loc[x,'Time Adj'] = timedelta.total_seconds(datetime.strptime(timeAdj   ,"%H:%M:%S") - datetime.strptime("00:00:00","%H:%M:%S"))
+                df.loc[x,'Time Adj'] = timedelta.total_seconds(datetime.strptime(rl_data.convert_to_standard_time(df.loc[x,'Time Adj']),"%H:%M:%S.%f") 
+                                                             - datetime.strptime(rl_data.convert_to_standard_time("00:00:00.0")        ,"%H:%M:%S.%f"))
             else:
                 df.loc[x,'Time Adj'] = 0.0
 
@@ -209,34 +208,31 @@ def tidyTheData(df, filename):
                 if(OutputInfo == True): logger.debug(f"Removed Low NetTime {filename} {x} {df.loc[x,'Net Time']} {df.loc[x,'Pos']}")
                 #drop the row
                 df.drop(x, inplace = True)
-
+                # added as this can cause problems dur the next calculations below.
+                continue
+               
             #Reset Calculated time for this index
             calculatedNetTime = 0.0
 
             #iterate the event list in reverse order
             for event in runtimeVars['EventListStart']:
-                #add each event time.
+                #print(f"event in {x} {event}")
                 calculatedNetTime = calculatedNetTime + df.loc[x,event] 
 
             #Store the event time.
             df.loc[x,'Calc Time'] = calculatedNetTime    
 
             #if NetTime - Calculated time is less than 12 seconds
-            #if (abs(df.loc[x,'Net Time'] - calculatedNetTime) > 12):
-                                
-                #print ('NetTime Mismatch ', df.loc[x,'Net Time'], calculatedNetTime, abs(df.loc[x,'Net Time'] - calculatedNetTime), x  )
+            if (abs(df.loc[x,'Net Time'] - calculatedNetTime) > 12):                               
+                if(OutputInfo == True):  logger.debug(f'NetTime Mismatch {filename} {df.loc[x,'Net Time']}, {calculatedNetTime, abs(df.loc[x,'Net Time'] - calculatedNetTime)}, {x}'  )
 
         except (ValueError, TypeError):
-                #This will catch the competitors where NET time is "DNF" etc....
-
-                #Set Time values to None
+                 #Set Time values to None
                 #df.loc[x,'Calc Time'] = float("nan")
                 #df.loc[x,'Net Time'] = float("nan")
 
                 #drop the row
                 df.drop(x, inplace = True)
-
-    #gonna create some rank data.
 
     #On a column by colum basis 
     for event in runtimeVars['EventList'][::1]:
@@ -245,7 +241,6 @@ def tidyTheData(df, filename):
 
     #add a Rank Average Column initialised to 0
     df['Average Rank'] = 0.0
-
 
     # Calculate the Average Ranks per competitor
     for x in df.index:
@@ -258,9 +253,8 @@ def tidyTheData(df, filename):
 
         #write the rank average to the df.
         df.loc[x,'Average Rank'] = RankTotal / len(runtimeVars['EventList'])
-
-
-################################
+    
+ ################################
 # Ouyput the compentitors data
 # returns a competitor index
 ################################
@@ -276,9 +270,8 @@ def competitorDataOutput(df):
     #search for the competitor name in the dataframe
     
     # get mask based on substring matching competitor name.
-    #print('competitorDataOutput competitorName',competitorName, competitorRaceNo)
-    
-    #if relay 
+ 
+     #if relay 
     if 'Member1' in df.columns:
         nameMask = df['Name'].str.contains(runtimeVars['competitorName'], na=False, regex=False) 
         mem1Mask = df['Member1'].str.contains(runtimeVars['competitorName'], na=False, regex=False) 
@@ -802,9 +795,7 @@ def ShowBarChartCutOffEvent(df):
         MyIndex = 0
 
         for event in runtimeVars['EventList'][::]:
-            #print ('Event CutOff %s %d %d %2.2f' % (event, EventCutOffCount[MyIndex], len(df.index), EventCutOffCount[MyIndex] / len(df.index)))
-
-            #add percentage to list
+             #add percentage to list
             cutOffEventList.append((100*runtimeVars['EventCutOffCount'][MyIndex]) / len(df.index))
             MyIndex = MyIndex + 1
 
@@ -998,6 +989,8 @@ def ShowScatterPlot(df, eventName, corr, competitorIndex=-1):
 #############################
 def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
 
+    logger = rl_data.get_logger()
+
     #need to figure out why this needed.
     runtimeVars = session.get('runtime', {})
     config = session.get('config', {})
@@ -1028,7 +1021,6 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
     else:
         #then a general analysis of one event has been selected
         details = competitorDetails
-        #print("details",details)
 
         for element in rl_data.EVENT_DATA_LIST:
             if (element[0] == details['event']):
@@ -1059,6 +1051,8 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
 
         indatafile = Path(rl_data.CSV_INPUT_DIR) / Path(runtimeVars['eventDataList'][0] + '.csv')
 
+        print("eventDataList[0]",runtimeVars['eventDataList'][0])
+
         #read in the data.
         df = pd.read_csv(indatafile)
 
@@ -1082,7 +1076,7 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
 
                     # check if file exists
                     if (os.path.isfile(outdatafile) == False):
-                        df.to_csv(outdatafile)
+                        df.to_csv(outdatafile,index=False)
 
                 #show the competitor plots.
                 if(config['showHist']): ShowHistAgeCat(df=df)
@@ -1104,7 +1098,7 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
 
                 # check if file exists
                 if (os.path.isfile(outdatafile) == False):
-                    df.to_csv(outdatafile)
+                    df.to_csv(outdatafile, index=False)
 
             #show the event plots.
             if(config['showHist']): ShowHistAgeCat(df=df)
@@ -1126,7 +1120,7 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
                 
                 # check if file exists
                 if (os.path.isfile(outdatafile) == False):
-                    df.to_csv(outdatafile)
+                    df.to_csv(outdatafile, index=False)
 
             #creates a pdf of the PNGs processed here for each event
             if (config['createPdf']):
@@ -1284,7 +1278,7 @@ def redline_vis_generic(io_stringHtml, io_pngList):
     config = {
         "pltShow" : False,
         "allScatter" : True,
-        "csvDfOut" : False,
+        "csvDfOut" : True, #False,
         "csvDurationOut" : True,
         "pltPngOut" : True,
         "createPdf" : True,

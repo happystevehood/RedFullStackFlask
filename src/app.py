@@ -400,6 +400,9 @@ def postdisplayEvent():
         # Load CSV file into a DataFrame
         df = pd.read_csv(filepath)
 
+        name_column = df.pop('Name')  # Remove the Name column and store it
+        df.insert(0, 'Name', name_column)  # Insert it at position 0 (leftmost)
+
         # Convert DataFrame to list of dicts (records) for Jinja2
         data = df.to_dict(orient='records')
         headers = df.columns.tolist()
@@ -586,6 +589,7 @@ def login():
 
     if request.method == 'POST':
         password = request.form.get('password')
+        print(f"password: {config_class.ADMIN_PASSWORD} {password}")
         if password == config_class.ADMIN_PASSWORD:
             session['logged_in'] = True
             flash("Login successful!", "success")

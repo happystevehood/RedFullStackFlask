@@ -5,4 +5,8 @@
 *.lock
 *feedback.csv
 *duration*.csv
+*df*.csv
 .env.production
+store/logs/log_config.json
+*.log.*
+src/static/csv/generic/durationWomensSinglesOpen2023.csv

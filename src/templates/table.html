@@ -1,11 +1,24 @@
 {% extends "base.html" %}
 
-{% block title %}Table | Redline Fitness Games{% endblock %}
+{% block title %}Table | Redline Fitness Games
+
+
+function isDesktopDevice() {
+    return (window.innerWidth > 768);
+}
+// Function to detect mobile devices
+function isMobileDevice() {
+    return (window.innerWidth <= 768);
+}
+
+{% endblock %}
 
 {% block head %}
 <!-- Bootstrap & DataTables CSS -->
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap4.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.bootstrap4.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/fixedcolumns/4.3.0/css/fixedColumns.dataTables.min.css">
+
 {% endblock %}
 
 {% block content %}
@@ -16,7 +29,21 @@
     }
     .overflow {
         overflow-x: auto;
-    }         
+    }     
+    .dtfc-fixed-left {
+        background-color: white;
+        z-index: 2;
+    }
+    /* Improve mobile experience */
+    @media (max-width: 768px) {
+        /* Allow pinch-zoom on mobile */
+        html, body {
+            touch-action: manipulation;
+            
+            /* This scales everything down to 60% for mobile */
+            font-size: 60%;
+        }
+    }
 </style>
 
 <div class="full-width-wrapper my-4">
@@ -34,14 +61,21 @@
                 {% for row in data %}
                     <tr>
                         {% for header in headers %}
-                            <td>
-                                {% set value = row[header] %}
-                                {% if value is number %}
-                                    {{ "%.1f"|format(value) }}
-                                {% else %}
-                                    {{ value }}
-                                {% endif %}
-                            </td>
+                            {% if 'Name' in header %}
+                                <td>
+                                    {% set value = row[header] %}
+                                    <strong>{{ value }}</strong>
+                                </td>                           
+                            {% else %}
+                                <td>
+                                    {% set value = row[header] %}
+                                    {% if value is number %}
+                                        {{ "%.1f"|format(value) }}
+                                    {% else %}
+                                        {{ value }}
+                                    {% endif %}
+                                </td>
+                            {% endif %}
                         {% endfor %}
                     </tr>
                 {% endfor %}
@@ -58,19 +92,32 @@
 <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap4.min.js"></script>
 <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
+<script src="https://cdn.datatables.net/fixedcolumns/4.3.0/js/dataTables.fixedColumns.min.js"></script>
 
 <script  nonce="{{ csp_nonce() }}">
 $(document).ready(function() {
     var table = $('#dataTable').DataTable({
         scrollX: true,
+        scrollCollapse: true,
         pageLength: 25,
         autoWidth: true,
         fixedHeader: {
             header: true,
             headerOffset: 56
+        },
+        fixedColumns: {
+            left: 1, // Fix only the leftmost column
+            rightColumns: 0
         }
         // ⚡ NO "responsive: true" here anymore
     });
+    // Handle window resize events to refresh the table layout
+    $(window).on('resize', function() {
+        table.columns.adjust().draw();
+    });
+    
+
+
 });
 </script>
 {% endblock %}

@@ -310,6 +310,9 @@ def setup_logger():
     except Exception as e:
         print(f"Error setting up console handler: {e}", file=sys.stderr)
     
+    #disable all those messages
+    logging.getLogger('matplotlib.font_manager').setLevel(logging.WARNING)
+
     logger.info(f"Logger initialized for worker {WORKER_ID}")
     return logger
 
@@ -423,3 +426,86 @@ def format_seconds(seconds):
     minutes = int(seconds // 60)
     sec = round(seconds % 60, 1)
     return f"{minutes}m {sec:.1f}s"
+
+def convert_to_standard_time(time_str):
+    """
+    Convert a time string to the standard format "%H:%M:%S.%f" with one decimal place
+    
+    Parameters:
+    -----------
+    time_str : str or nan
+        Time string in various formats like "%M:%S.%f", "%H:%M:%S", or nan
+        
+    Returns:
+    --------
+    str
+        Time string in the format "%H:%M:%S.%f" with exactly one decimal place
+        Returns "00:00:00.0" if the input is nan or invalid
+    """
+    # Handle nan or None
+    if time_str is None or str(time_str).lower() == 'nan':
+        return float("nan")
+    
+    # Convert to string if not already
+    time_str = str(time_str).strip()
+    
+    # If empty string
+    if not time_str:
+        return float("nan")
+    
+    try:
+        parts = time_str.split(':')
+        
+        # Handle %M:%S.%f format (two parts with colon)
+        if len(parts) == 2:
+            minutes = int(parts[0])
+            
+            # Check if seconds part has a decimal point
+            if '.' in parts[1]:
+                seconds_parts = parts[1].split('.')
+                seconds = int(seconds_parts[0])
+                decimal = float(f"0.{seconds_parts[1]}")
+            else:
+                seconds = int(parts[1])
+                decimal = 0.0
+                
+            # Calculate hours from minutes if needed
+            hours = minutes // 60
+            minutes = minutes % 60
+            
+            return f"{hours:02d}:{minutes:02d}:{seconds:02d}.{int(decimal * 10):1d}"
+        
+        # Handle %H:%M:%S format (three parts with colons)
+        elif len(parts) == 3:
+            hours = int(parts[0])
+            minutes = int(parts[1])
+            
+            # Check if seconds part has a decimal point
+            if '.' in parts[2]:
+                seconds_parts = parts[2].split('.')
+                seconds = int(seconds_parts[0])
+                decimal = float(f"0.{seconds_parts[1]}")
+            else:
+                seconds = int(parts[2])
+                decimal = 0.0
+                
+            return f"{hours:02d}:{minutes:02d}:{seconds:02d}.{int(decimal * 10):1d}"
+        
+        else:
+            # Invalid format
+            return float("nan")
+            
+    except (ValueError, IndexError):
+        # Return default for any parsing errors
+        return float("nan")
+
+
+# Example usage
+#print(convert_to_standard_time("30:15.5"))      # Minutes:Seconds.Microseconds format -> "00:30:15.5"
+#print(convert_to_standard_time("30:15.567"))    # Minutes:Seconds.Microseconds format -> "00:30:15.5"
+#print(convert_to_standard_time("2:45:30"))      # Hours:Minutes:Seconds format -> "02:45:30.0"
+#print(convert_to_standard_time("2:45:30.5"))    # Hours:Minutes:Seconds.Microseconds format -> "02:45:30.5"
+#print(convert_to_standard_time("2:45:30.567"))  # Hours:Minutes:Seconds.Microseconds format -> "02:45:30.5"
+#print(convert_to_standard_time("nan"))          # NaN value -> "00:00:00.0"
+#print(convert_to_standard_time(None))           # None value -> "00:00:00.0"
+#print(convert_to_standard_time(""))             # Empty string -> "00:00:00.0"
