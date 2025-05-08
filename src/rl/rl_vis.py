@@ -71,8 +71,8 @@ def tidyTheData(df, filename):
     #in 2023 doubles "The Mule" Column is called "Finish Column"
     df.rename(columns={'Finish':'The Mule'},inplace=True)
 
-    name_column = df.pop('Name')  # Remove the Name column and store it
-    df.insert(0, 'Name', name_column)  # Insert it at position 0 (leftmost)
+    #name_column = df.pop('Name')  # Remove the Name column and store it
+    #df.insert(1, 'Name', name_column)  # Insert it at position 2 (leftmost)
 
     #make a copy of original data frame during tidying process.
     dforig = df.copy(deep=True)
@@ -224,7 +224,7 @@ def tidyTheData(df, filename):
 
             #if NetTime - Calculated time is less than 12 seconds
             if (abs(df.loc[x,'Net Time'] - calculatedNetTime) > 12):                               
-                if(OutputInfo == True):  logger.debug(f'NetTime Mismatch {filename} {df.loc[x,'Net Time']}, {calculatedNetTime, abs(df.loc[x,'Net Time'] - calculatedNetTime)}, {x}'  )
+                if(OutputInfo == True):  logger.debug(f"NetTime Mismatch {filename} {abs(df.loc[x,'Net Time'] - calculatedNetTime)}, {x}"  )
 
         except (ValueError, TypeError):
                  #Set Time values to None

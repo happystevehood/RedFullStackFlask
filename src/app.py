@@ -249,6 +249,8 @@ def feedback():
         name = request.form.get('name', '').strip()
         email = request.form.get('email', '').strip()
         comments = request.form.get('comments', '').strip()
+        category = request.form.get('category', '').strip()
+        rating = request.form.get('rating', '').strip()
 
         if not comments:
             flash('Please provide some feedback before submitting.', "warning")
@@ -258,7 +260,7 @@ def feedback():
 
         with open(filename, 'a', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
-            writer.writerow([datetime.now().isoformat(), name, email, comments])
+            writer.writerow([datetime.now().isoformat(), name, email, comments, category, rating])
 
         flash('Thanks for your feedback!', "success")
         return redirect('/feedback')
@@ -386,6 +388,12 @@ def postdisplayEvent():
         # Load CSV file into a DataFrame
         df = pd.read_csv(filepath)
 
+        # If you want to ensure it's sorted by index (which is just row number in this case)
+        df = df.sort_index()
+
+        name_column = df.pop('Name')  # Remove the Name column and store it
+        df.insert(1, 'Name', name_column)  # Insert it at position 1 (2nd leftmost)
+
         # Convert DataFrame to list of dicts (records) for Jinja2
         data = df.to_dict(orient='records')
         headers = df.columns.tolist()
@@ -400,10 +408,14 @@ def postdisplayEvent():
         # Load CSV file into a DataFrame
         df = pd.read_csv(filepath)
 
-        name_column = df.pop('Name')  # Remove the Name column and store it
-        df.insert(0, 'Name', name_column)  # Insert it at position 0 (leftmost)
+        # If you want to ensure it's sorted by index (which is just row number in this case)
+        df = df.sort_index()
 
+        name_column = df.pop('Name')  # Remove the Name column and store it
+        df.insert(1, 'Name', name_column)  # Insert it at position 1 (2nd leftmost)
+       
         # Convert DataFrame to list of dicts (records) for Jinja2
+        # This naturally excludes the index
         data = df.to_dict(orient='records')
         headers = df.columns.tolist()
 

@@ -2,15 +2,6 @@
 
 {% block title %}Table | Redline Fitness Games
 
-
-function isDesktopDevice() {
-    return (window.innerWidth > 768);
-}
-// Function to detect mobile devices
-function isMobileDevice() {
-    return (window.innerWidth <= 768);
-}
-
 {% endblock %}
 
 {% block head %}
@@ -37,11 +28,11 @@ function isMobileDevice() {
     /* Improve mobile experience */
     @media (max-width: 768px) {
         /* Allow pinch-zoom on mobile */
-        html, body {
+        body {
             touch-action: manipulation;
             
-            /* This scales everything down to 60% for mobile */
-            font-size: 60%;
+            /* This scales everything down to 50% for mobile */
+            font-size: 50%;
         }
     }
 </style>
@@ -100,24 +91,17 @@ $(document).ready(function() {
         scrollX: true,
         scrollCollapse: true,
         pageLength: 25,
-        autoWidth: true,
+//        autoWidth: true,
         fixedHeader: {
             header: true,
             headerOffset: 56
         },
         fixedColumns: {
-            left: 1, // Fix only the leftmost column
+            left: 2, // Fix two leftmost column
             rightColumns: 0
         }
         // ⚡ NO "responsive: true" here anymore
     });
-    // Handle window resize events to refresh the table layout
-    $(window).on('resize', function() {
-        table.columns.adjust().draw();
-    });
-    
-
-
 });
 </script>
 {% endblock %}

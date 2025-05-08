@@ -16,6 +16,8 @@
                         <th>Name</th>
                         <th>Email</th>
                         <th>Comments</th>
+                        <th>Category</th>
+                        <th>Rating</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -25,6 +27,8 @@
                             <td>{{ entry[1] or 'Anonymous' }}</td>
                             <td>{{ entry[2] or 'N/A' }}</td>
                             <td>{{ entry[3] }}</td>
+                            <td>{{ entry[4] or 'N/A'}}</td>
+                            <td>{{ entry[5] or 'N/A'}}</td>
                         </tr>
                     {% endfor %}
                 </tbody>

@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="container my-5">
-    <h2 class="mb-4">You have selected the following: </h2> 
+    <h2 class="mb-4">You have selected the following to visualise: </h2> 
     <p><strong>Competitor: {{ competitor | default("No competitor passed", true) }}, No: {{ race_no | default("No race_no passed", true) }}</strong></h4>
     <p><strong>Event: {{ description | default("No description passed", true) }} </strong></h4>
     <br>

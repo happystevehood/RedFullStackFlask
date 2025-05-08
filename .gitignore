@@ -9,4 +9,4 @@
 .env.production
 store/logs/log_config.json
 *.log.*
-src/static/csv/generic/durationWomensSinglesOpen2023.csv
+src/static/csv/generic/duration*.csv
