@@ -5,12 +5,14 @@ Handles different environments and deployment scenarios.
 import os
 import secrets
 from dotenv import load_dotenv
+from datetime import timedelta
 
 class Config:
     """Base configuration class with common settings."""
     # Default settings
-    SECRET_KEY = os.environ.get('SECRET_KEY') or secrets.token_bytes(24)
-    ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin')
+    #SECRET_KEY = os.environ.get('SECRET_KEY',b' q/\x8ax"\xe9\xfc\x8a0v\x1a\x18\r\x8f\xc1\xb7\xf4\x14\xd0\xb8j:\xb1') #or secrets.token_bytes(24)
+    SECRET_KEY = b' q/\x8ax"\xe9\xfc\x8a0v\x1a\x18\r\x8f\xc1\xb7\xf4\x14\xd0\xb8j:\xb1'
+    ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'Admin')
     
     # Security settings (common to all configurations)
     WTF_CSRF_ENABLED = False     # Enable CSRF protection, change to True in production
@@ -18,7 +20,20 @@ class Config:
     SESSION_COOKIE_NAME = 'session'
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
-    
+
+
+    # Critical fix: Set the session cookie domain to match both localhost and IP access
+    # When None, Flask automatically uses the domain from the request
+    SESSION_COOKIE_DOMAIN = None  
+    # Ensure consistent session ID between requests
+    SESSION_USE_SIGNER = True
+    # Set session type
+    SESSION_TYPE = 'filesystem'
+    # Make sessions permanent with a reasonable timeout
+    PERMANENT_SESSION_LIFETIME = timedelta(hours=4)
+    # Fix for server name used in redirects and cookies
+    SERVER_NAME  = None  # Let Flask handle this automatically
+
     @staticmethod
     def init_app(app):
         """Initialize the application with this configuration."""

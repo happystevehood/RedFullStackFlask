@@ -187,6 +187,18 @@ def teardown_request_logging(exception=None):
     if exception:
         app.logger.error(f"Request failed: {str(exception)}")
 
+@app.before_request
+def make_session_permanent():
+    session.permanent = True
+
+    # Store the request origin for debugging and potentially for domain restrictions
+    #g.request_origin = request.host
+
+#@app.before_request
+#def debug_session():
+#    app.logger.debug(f"Session data at {request.path}: {dict(session)}")
+#    app.logger.debug(f"Session cookie: {request.cookies.get('session')}")
+
 #####
 ### app.routes
 ####
@@ -386,13 +398,10 @@ def postdisplayEvent():
         title = rl_data.EVENT_DATA_LIST[index][1]
 
         # Load CSV file into a DataFrame
-        df = pd.read_csv(filepath)
-
-        # If you want to ensure it's sorted by index (which is just row number in this case)
-        df = df.sort_index()
+        df = pd.read_csv(filepath, na_filter=False)
 
         name_column = df.pop('Name')  # Remove the Name column and store it
-        df.insert(1, 'Name', name_column)  # Insert it at position 1 (2nd leftmost)
+        df.insert(0, 'Name', name_column)  # Insert it at position 0(leftmost)
 
         # Convert DataFrame to list of dicts (records) for Jinja2
         data = df.to_dict(orient='records')
@@ -406,13 +415,10 @@ def postdisplayEvent():
         title = rl_data.EVENT_DATA_LIST[index][1]
 
         # Load CSV file into a DataFrame
-        df = pd.read_csv(filepath)
-
-        # If you want to ensure it's sorted by index (which is just row number in this case)
-        df = df.sort_index()
+        df = pd.read_csv(filepath, na_filter=False)
 
         name_column = df.pop('Name')  # Remove the Name column and store it
-        df.insert(1, 'Name', name_column)  # Insert it at position 1 (2nd leftmost)
+        df.insert(0, 'Name', name_column)  # Insert it at position 0 (leftmost)
        
         # Convert DataFrame to list of dicts (records) for Jinja2
         # This naturally excludes the index
@@ -588,27 +594,50 @@ def post_display_vis():
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        session_cookie = request.cookies.get("session")
+        #app.logger.debug(f"=== SESSION DEBUG ===")
+        #app.logger.debug(f"Request host: {request.host}")
+        #app.logger.debug(f"Request URL: {request.url}")
+        #app.logger.debug(f"Session cookie: {request.cookies.get('session')}")
+        #app.logger.debug(f"Session data: {dict(session)}")
+        #app.logger.debug(f"===================")
         if session.get('logged_in') != True:
             flash("You must log in to access this page.", "warning")
             app.logger.warning(f"You must log in to access this page.")
+
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
 
+# Updated login route with improved session handling
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     app.logger.debug(f"/login received {request}")
-
+    
+    # Debug session before login attempt
+    #app.logger.debug(f"Pre-login session: {dict(session)}")
+    
     if request.method == 'POST':
         password = request.form.get('password')
-        print(f"password: {config_class.ADMIN_PASSWORD} {password}")
+        #app.logger.debug(f"Login attempt with password: {'*' * len(password)}")
+        
         if password == config_class.ADMIN_PASSWORD:
+            # Clear any existing session data first
+            session.clear()
+            
+            # Set session variables
             session['logged_in'] = True
+            session.modified = True  # Ensure the session is saved
+            
+            #app.logger.debug(f"Post-login session: {dict(session)}")
             flash("Login successful!", "success")
-            app.logger.warning(f"Login successful!")            
-            return redirect(url_for('admin'))
+            app.logger.warning(f"Login successful!")
+            
+            # Use the same scheme and host as the request
+            return redirect(url_for('admin', _external=True, _scheme=request.scheme))
         else:
             flash("Incorrect password. Try again.", "danger")
+            
     return render_template('login.html')
 
 @app.route('/logout')
@@ -741,12 +770,14 @@ def clear_feedback():
 
 # Admin routes for log management
 @app.route('/admin/logs/download')
+@login_required
 def download_logs():
     app.logger.debug(f"/admin/logs/download received {request}")
 
     return send_file(rl_data.LOG_FILE, as_attachment=True, download_name='activity.log')
 
 @app.route('/admin/logs/clear', methods=['POST'])
+@login_required
 def clear_logs():
     app.logger.debug(f"/admin/logs/clear POST received {request}")
     
@@ -768,6 +799,7 @@ def clear_logs():
     return app.redirect(app.url_for('view_logs'))
 
 @app.route('/admin/logs')
+@login_required
 def view_logs():
     app.logger.debug(f"/admin/logs received {request}")
     
@@ -785,6 +817,7 @@ def view_logs():
     return render_template('admin_logs.html', log_contents=log_contents)
 
 @app.route('/admin/set-log-level', methods=['POST'])
+@login_required
 def set_log_level():
     app.logger.debug(f"/admin/set-log-level POST received {request}")
     

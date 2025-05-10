@@ -25,22 +25,25 @@
         background-color: white;
         z-index: 2;
     }
-    /* Improve mobile experience */
-    @media (max-width: 768px) {
-        /* Allow pinch-zoom on mobile */
-        body {
-            touch-action: manipulation;
-            
-            /* This scales everything down to 50% for mobile */
-            font-size: 50%;
-        }
+
+   .dataTable td {
+        white-space: nowrap;
     }
+    /* Adjust navbar items on mobile */
+    @media (max-width: 768px) {
+        .dataTable td:first-child {
+            white-space: wrap;
+            max-width: 180px; /* Adjust this value based on your needs */
+        }   
+    
+    }
+
 </style>
 
 <div class="full-width-wrapper my-4">
     <h2 class="mb-4">{{ title }}</h2>
-    <div class="table-responsive overflow-x-auto">
-        <table id="dataTable" class="table table-striped table-bordered nowrap full-width-wrapper" >
+    <div class="table-responsive ">
+        <table id="dataTable" class="table table-striped table-bordered ">
             <thead>
                 <tr>
                     {% for header in headers %}
@@ -59,12 +62,27 @@
                                 </td>                           
                             {% else %}
                                 <td>
-                                    {% set value = row[header] %}
-                                    {% if value is number %}
-                                        {{ "%.1f"|format(value) }}
+                             {% set value = row[header] %}
+                            {% if value is defined and value is not none %}
+                                {% if value is number %}
+                                    {{ "%.1f"|format(value) }}
+                                {% else %}
+                                    {% set val_str = value|string|trim %}
+                                    {% if val_str != '' %}
+                                        {% set converted = val_str|float(none) %}
+                                        {% if converted is not none %}
+                                            {{ "%.1f"|format(converted) }}
+                                        {% else %}
+                                            {{ value }}
+                                        {% endif %}
                                     {% else %}
                                         {{ value }}
                                     {% endif %}
+                                {% endif %}
+                            {% else %}
+                                {{ '' }}
+                            {% endif %}
+
                                 </td>
                             {% endif %}
                         {% endfor %}
@@ -87,21 +105,57 @@
 
 <script  nonce="{{ csp_nonce() }}">
 $(document).ready(function() {
+
+    // Function to detect mobile devices
+    function isMobileDevice() {
+        return (window.innerWidth <= 768);
+    }
+    
+    // Add custom sorting method for numbers with empty values at bottom
+    $.fn.dataTable.ext.type.order['numbers-empty-last-pre'] = function(data) {
+        // Check if the data can be converted to a number
+        if ($.isNumeric(data)) {
+            // Return number for sorting
+            return parseFloat(data);
+        }
+        // Return a very large number to push non-numeric values to the end
+        return Number.MAX_SAFE_INTEGER;
+    };
+
     var table = $('#dataTable').DataTable({
         scrollX: true,
         scrollCollapse: true,
         pageLength: 25,
-//        autoWidth: true,
+        // Default ordering: column 1 (index starts at 0) in ascending order
+        order: [[1, 'asc']],
+        ordering: true,  // Ensures users can click column headers to sort
+        orderCellsTop: true,  // For header cells to be orderable
+ 
         fixedHeader: {
             header: true,
             headerOffset: 56
         },
         fixedColumns: {
-            left: 2, // Fix two leftmost column
-            rightColumns: 0
-        }
-        // ⚡ NO "responsive: true" here anymore
+            left: 1, // Fix leftmost columns
+            right: 0
+        },
+        // Define column-specific sorting
+        columnDefs: [
+            {
+                // Apply to column index 1
+                targets: 1,
+                // Use our custom sorting type
+                type: 'numbers-empty-last'
+            }
+        ]
     });
+
+    // Mobile-specific enhancements
+    if (isMobileDevice()) {
+        // Add meta viewport tag to allow zooming on mobile (both in and out)
+        $('meta[name=viewport]').attr('content', 'width=device-width, initial-scale=0.8, user-scalable=yes, minimum-scale=0.5, maximum-scale=5.0');
+
+    }
 });
 </script>
 {% endblock %}
