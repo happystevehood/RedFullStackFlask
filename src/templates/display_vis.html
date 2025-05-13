@@ -47,9 +47,11 @@
 
 {% if selected_format %}
     <br>
+    <p> The Event visualisations for the <strong>{{ description }}</strong> can be accessed <a href = {{ link }} target="_blank"> here</a>.</p>
+    <p> The Individual Visualisation of <strong>{{ competitor }}</strong> are displayed below. </p>
     <div>
     <style nonce="{{ csp_nonce() }}">
-        table.dataframe {
+        table.dataframe, .styled-table {
             margin-top: 1.5rem;
             margin-bottom: 1.5rem;
             border-collapse: collapse;
@@ -67,16 +69,26 @@
             font-weight: bold;
         }
 
-        table.dataframe tbody th {
+        table.dataframe tbody th{
             background-color: #f8f9fa;
             font-weight: 500;
             text-align: left;
-            padding-left: 0.75rem;
+            padding-left: 1.0rem;
+            padding-right: 1.0rem;
+            border:#343a40 1px solid;
         }
 
-        table.dataframe td {
-            padding: 0.5rem 0.75rem;
+        table.dataframe td{
+            padding: 0.5rem 1.0rem;
             vertical-align: middle;
+            border:#343a40 1px solid;
+        }
+
+        .styled-table td {
+            padding: 0.5rem 0.75rem;
+            vertical-align: left;
+            text-align: left;
+            border:#343a40 1px solid;
         }
 
         @media (max-width: 768px) {

@@ -42,7 +42,8 @@ def create_app():
     config_class.init_app(app)
 
     #get secret key from configutration
-    app.secret_key = config_class.SECRET_KEY   
+    app.secret_key = config_class.SECRET_KEY
+    print(f"Secret key: {config_class.SECRET_KEY}")
 
     """Initialize Flask app with improved logging"""
     # Set up the logger
@@ -169,10 +170,6 @@ def setup_request_logging():
     # Log the request
     app.logger.debug(f"Request started: {request.method} {request.path}")
 
-#@app.before_request
-#def check_cookie():
-#    print("Session cookie:", request.cookies.get("session"))
-
 @app.after_request
 def log_after_request(response):
     app.logger.debug(f"Request completed: {response.status_code}")
@@ -194,10 +191,8 @@ def make_session_permanent():
     # Store the request origin for debugging and potentially for domain restrictions
     #g.request_origin = request.host
 
-#@app.before_request
-#def debug_session():
-#    app.logger.debug(f"Session data at {request.path}: {dict(session)}")
-#    app.logger.debug(f"Session cookie: {request.cookies.get('session')}")
+    app.logger.debug(f"Session data at {request.path}: {dict(session)}")
+    app.logger.debug(f"Session cookie: {request.cookies.get('session')}")
 
 #####
 ### app.routes
@@ -526,8 +521,11 @@ def get_display_vis():
         index = next((i for i, item in enumerate(rl_data.EVENT_DATA_LIST) if item[0] == event), None)
         description=rl_data.EVENT_DATA_LIST[index][1]
 
+        #get the link to the race results page
+        link = "/display?eventname=" + event
+
         try:
-            return render_template('display_vis.html', competitor=competitor, race_no=race_no, description=description)
+            return render_template('display_vis.html', competitor=competitor, race_no=race_no, description=description, link=link)
         except Exception as e:
             app.logger.error(f"Template render error: {e}")
             return abort(500)
@@ -562,8 +560,11 @@ def post_display_vis():
         if selected_format == "html":
             htmlString, io_pngList = redline_vis_competitor_html(details, htmlString, io_pngList)
 
+            #get the link to the race results page
+            link = "/display?eventname=" + event
+
             try:
-                return render_template('display_vis.html', selected_format = selected_format, competitor=competitor.title(),  race_no=race_no, description=description, htmlString=htmlString, png_files=io_pngList)
+                return render_template('display_vis.html', selected_format = selected_format, competitor=competitor.title(),  race_no=race_no, description=description, htmlString=htmlString, png_files=io_pngList, link=link)
             except Exception as e:
                 app.logger.error(f"Template render error: {e}")
                 return abort(500)
@@ -595,12 +596,12 @@ def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         session_cookie = request.cookies.get("session")
-        #app.logger.debug(f"=== SESSION DEBUG ===")
-        #app.logger.debug(f"Request host: {request.host}")
-        #app.logger.debug(f"Request URL: {request.url}")
-        #app.logger.debug(f"Session cookie: {request.cookies.get('session')}")
-        #app.logger.debug(f"Session data: {dict(session)}")
-        #app.logger.debug(f"===================")
+        app.logger.debug(f"=== SESSION DEBUG ===")
+        app.logger.debug(f"Request host: {request.host}")
+        app.logger.debug(f"Request URL: {request.url}")
+        app.logger.debug(f"Session cookie: {request.cookies.get('session')}")
+        app.logger.debug(f"Session data: {dict(session)}")
+        app.logger.debug(f"===================")
         if session.get('logged_in') != True:
             flash("You must log in to access this page.", "warning")
             app.logger.warning(f"You must log in to access this page.")
@@ -615,11 +616,11 @@ def login():
     app.logger.debug(f"/login received {request}")
     
     # Debug session before login attempt
-    #app.logger.debug(f"Pre-login session: {dict(session)}")
+    app.logger.debug(f"Pre-login session: {dict(session)}")
     
     if request.method == 'POST':
         password = request.form.get('password')
-        #app.logger.debug(f"Login attempt with password: {'*' * len(password)}")
+        app.logger.debug(f"Login attempt with password: {'*' * len(password)}")
         
         if password == config_class.ADMIN_PASSWORD:
             # Clear any existing session data first
@@ -791,7 +792,7 @@ def clear_logs():
                 f.truncate()
     except (portalocker.LockException, IOError, OSError) as e:
             # If locking fails, try without locking
-            print(f"Warning: Lock failed during log clear: {e}")
+            app.logger.info(f"Warning: Lock failed during log clear: {e}")
             with open(rl_data.LOG_FILE, 'w') as f:
                    f.truncate()
             

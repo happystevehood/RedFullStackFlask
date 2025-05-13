@@ -311,7 +311,7 @@ def competitorDataOutput(df):
 
         runtimeVars['stringPdf'] += '<tr><td><strong>Event           </strong></td><td>' +  runtimeVars['eventDataList'][1] + "</td></tr>"
         runtimeVars['stringPdf'] += '<tr><td><strong>Wave            </strong></td><td>' +  df.loc[compIndex, "Wave"] + "</td></tr>"
-        runtimeVars['stringPdf'] += '<tr><td><strong>Position        </strong></td><td>' +  str(df.loc[compIndex, "Pos"]) + ' of '+ str(df["Gender"].value_counts()[df.loc[compIndex, "Gender"]]) + ' finishers.'+ "</td></tr>"
+        runtimeVars['stringPdf'] += '<tr><td><strong>Position        </strong></td><td>' +  str(df.loc[compIndex, "Pos"]) + ' of '+ str(len(df.index)) + ' finishers.'+ "</td></tr>"
 
         #if category column exist.
         if (('Category' in df.columns) and (compCat != "All Ages")):
@@ -348,7 +348,7 @@ def competitorDataOutput(df):
 
             runtimeVars['stringPdf'] += '<tr><td><strong>Average Event CatRank </strong></td><td>{:.1f}'.format(dfcat.loc[compIndex, "Average Cat Rank"]) + "</td></tr>"
 
-        runtimeVars['stringPdf'] += '</table><br><br>'
+        runtimeVars['stringPdf'] += '</table><br>'
 
         #if category column exist.
         if (('Category' in df.columns) and (compCat != "All Ages")):
@@ -370,21 +370,9 @@ def competitorDataOutput(df):
                 catrank_val = dfcat.loc[compIndex, f"{event} CatRank"]
                 tableDF.loc[event, 'CatRank'] = f"{catrank_val:.1f}" if pd.notnull(catrank_val) else ''
 
-        #style added directly to HTML for security reasons.
-        #styled_table = tableDF.style.set_table_styles()
-        #    [{'selector': 'th',
-        #    'props': [('background-color', '#f2f2f2'), ('padding', '8px'), ('text-align', 'left')]},
-        #    {'selector': 'td',
-        #    'props': [('padding', '8px'), ('border', '1px solid #ddd')]}]
-        #).set_properties(**{
-        #    'border-collapse': 'collapse',
-        #    'font-family': 'sans-serif',
-        #    'font-size': '14px'
-        #})
-
         #forcibly remove the style attribute from string
         runtimeVars['stringPdf'] += re.sub( ' style=\"text-align: right;\"','',tableDF.to_html())
-        runtimeVars['stringPdf'] += '<br><br>'
+        runtimeVars['stringPdf'] += '<br>'
 
     return compIndex
 
@@ -465,51 +453,34 @@ def ShowCorrInfo(df,competitorIndex=-1):
 
     #get corrolation info
     corr_matrix = dfcorr.corr()
-    
-    if( config['showHeat'] ):
 
-        filepath = Path(rl_data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'CorrHeat' + '.png')
+    #if a competitor is selected dont show correlation bar chart    
+    if(competitorIndex == -1):
 
+        filepath = Path(rl_data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'Corr' + '.png')
         #for PDF creation
-        runtimeVars['pngList'].append(str(filepath)) 
+        runtimeVars['pngList'].append(str(filepath))
 
         #check if file exists
         if (os.path.isfile(filepath) == False):
-        
+
             plt.figure(figsize=(10, 10))
-            heatmap = sns.heatmap(corr_matrix, vmin=-0, vmax=1, annot=True, cmap='BrBG')
-            heatmap.set_title('Correlation Heatmap ' + runtimeVars['eventDataList'][1], fontdict={'fontsize':12}, pad=12);
+            
+            # Shows a nice correlation barchar
+            heatmap = sns.barplot( data=corr_matrix['Net Time'])
+            
+            for i in heatmap.containers:
+                heatmap.bar_label(i,fmt='%.2f')
+            
+            plt.xticks(rotation=70)
+            plt.ylabel('Total Time')
+
+            heatmap.set_title('Event Correlation V Total Time ' + runtimeVars['eventDataList'][1], fontdict={'fontsize':12}, pad=10);
 
             # Output/Show depending of global variable setting with pad inches
             if ( config['pltPngOut'] ): plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.5)
             if ( config['pltShow'] ):   plt.show()
             if ( config['pltPngOut'] or  config['pltShow']):   plt.close()
-
-
-    filepath = Path(rl_data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'Corr' + '.png')
-    #for PDF creation
-    runtimeVars['pngList'].append(str(filepath))
-
-    #check if file exists
-    if (os.path.isfile(filepath) == False):
-
-        plt.figure(figsize=(10, 10))
-        
-        # Shows a nice correlation barchar
-        heatmap = sns.barplot( data=corr_matrix['Net Time'])
-        
-        for i in heatmap.containers:
-            heatmap.bar_label(i,fmt='%.2f')
-        
-        plt.xticks(rotation=70)
-        plt.ylabel('Total Time')
-
-        heatmap.set_title('Event Correlation V Total Time ' + runtimeVars['eventDataList'][1], fontdict={'fontsize':12}, pad=10);
-
-        # Output/Show depending of global variable setting with pad inches
-        if ( config['pltPngOut'] ): plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.5)
-        if ( config['pltShow'] ):   plt.show()
-        if ( config['pltPngOut'] or  config['pltShow']):   plt.close()
     
     #get the highest and lowest correlation events
     #Correction works better with Calculated time compared with Net Time compared with 
@@ -528,6 +499,29 @@ def ShowCorrInfo(df,competitorIndex=-1):
             if (event != 'Net Time'):
                 #Show scatter Plot
                 ShowScatterPlot(df, event, corr=corr_matrix.at[event,'Net Time'],competitorIndex=competitorIndex )
+
+    if( config['showHeat'] ):
+
+        #get corrolation info
+        corr_matrix = dfcorr.corr()
+
+        filepath = Path(rl_data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'CorrHeat' + '.png')
+
+        #for PDF creation
+        runtimeVars['pngList'].append(str(filepath)) 
+
+        #check if file exists
+        if (os.path.isfile(filepath) == False):
+        
+            plt.figure(figsize=(10, 10))
+            heatmap = sns.heatmap(corr_matrix, vmin=-0, vmax=1, annot=True, cmap='BrBG')
+            heatmap.set_title('Correlation Heatmap ' + runtimeVars['eventDataList'][1], fontdict={'fontsize':12}, pad=12);
+
+            # Output/Show depending of global variable setting with pad inches
+            if ( config['pltPngOut'] ): plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.5)
+            if ( config['pltShow'] ):   plt.show()
+            if ( config['pltPngOut'] or  config['pltShow']):   plt.close()
+
 
 ############################
 # Histogram Age Categories
@@ -1079,12 +1073,9 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
                         df.to_csv(outdatafile,index=False)
 
                 #show the competitor plots.
-                if(config['showHist']): ShowHistAgeCat(df=df)
-                if(config['showViolin']): ShowViolinChartEvent(df=df,competitorIndex=competitorIndex)
-                if(config['showCutOffBar']): ShowBarChartCutOffEvent(df=df)
-                if(config['showBar']): ShowBarChartEvent(df=df,competitorIndex=competitorIndex)
-                if(config['showPie']): ShowPieChartAverage(df=df)
                 if(config['showPie']): ShowPieChartAverage(df=df,competitorIndex=competitorIndex )
+                if(config['showBar']): ShowBarChartEvent(df=df,competitorIndex=competitorIndex)
+                if(config['showViolin']): ShowViolinChartEvent(df=df,competitorIndex=competitorIndex)
                 if(config['showCorr']): ShowCorrInfo(df=df,competitorIndex=competitorIndex )
 
                 dataOutputThisLoop=True
@@ -1102,11 +1093,12 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
 
             #show the event plots.
             if(config['showHist']): ShowHistAgeCat(df=df)
-            if(config['showViolin']): ShowViolinChartEvent(df=df)
-            if(config['showCutOffBar']): ShowBarChartCutOffEvent(df=df)
-            if(config['showBar']): ShowBarChartEvent(df=df)
             if(config['showPie']): ShowPieChartAverage(df=df)
+            if(config['showBar']): ShowBarChartEvent(df=df)
+            if(config['showViolin']): ShowViolinChartEvent(df=df)
             if(config['showCorr']): ShowCorrInfo(df=df)
+            if(config['showCutOffBar']): ShowBarChartCutOffEvent(df=df)
+
 
             dataOutputThisLoop=True
 
@@ -1163,7 +1155,12 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
                 #update output variable
                 io_stringHtml = runtimeVars['stringPdf']
                 io_pngList = list(runtimeVars['pngList'])
-            
+
+
+    #clean up the session runtime and config
+    session.pop('runtime', None)
+    session.pop('config', None)
+
     #just backup should never be called
     return io_stringHtml, io_pngList       
 
@@ -1200,11 +1197,11 @@ def redline_vis_competitor_html(competitorDetails, io_stringHtml, io_pngList):
         "competitorAnalysis" : True,
         "showBar" : True,
         "showViolin" : True,
-        "showCutOffBar" : True,
-        "showHist" : True,
+        "showCutOffBar" : False,
+        "showHist" : False,
         "showPie" : True,
         "showCorr" : True,
-        "showHeat" : True
+        "showHeat" : False
     }
 
     # Store config in session
@@ -1242,11 +1239,11 @@ def redline_vis_competitor_pdf(competitorDetails, io_stringHtml, io_pngList):
         "competitorAnalysis" : True,
         "showBar" : True,
         "showViolin" : True,
-        "showCutOffBar" : True,
-        "showHist" : True,
+        "showCutOffBar" : False,
+        "showHist" : False,
         "showPie" : True,
         "showCorr" : True,
-        "showHeat" : True
+        "showHeat" : False
     }
 
     # Store config in session
