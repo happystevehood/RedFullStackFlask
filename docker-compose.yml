@@ -5,12 +5,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: redfullstackflask-web
+    container_name: redline-fitness-games-results
     env_file:
-      - ${ENV_FILE:-.env.development}
+      - ${ENV_FILE:-.env.${ENV_MODE}}
     environment:
-      - USE_DOCKER=True
+
       - PORT=${PORT:-5000}
+      - ENV_MODE=${ENV_MODE:-development}
     ports:
       - "${PORT:-5000}:${PORT:-5000}"
     volumes:

@@ -5,10 +5,10 @@ set -e
 ENV_MODE=${ENV_MODE:-development}
 
 # Set default port based on environment
-if [ "$ENV_MODE" = "production" ]; then
-    PORT=${PORT:-8080}
-else
+if [ "$ENV_MODE" = "development" ]; then
     PORT=${PORT:-5000}
+else
+    PORT=${PORT:-8080}
 fi
 
 echo "Starting application in $ENV_MODE mode on port $PORT"

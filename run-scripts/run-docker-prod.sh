@@ -4,7 +4,6 @@
 # Set environment variables
 export ENV_FILE=.env.production
 export ENV_MODE=production
-export USE_DOCKER=True
 export PORT=8080
 
 # Change to the project root directory

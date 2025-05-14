@@ -96,14 +96,14 @@
                 font-size: 0.85rem;
             }
         }
-        
+
    </style>
         {{ htmlString | safe }}
     </div>
 
     {% for png_file in png_files %}
     <div>
-        <!-- <img src="{{ png_file }}" width="800">-->
+        <h6>{{ png_strings[png_files.index(png_file)] }}</h6>
         <img src="{{ png_file }}" class="img-fluid">
     </div>
     {% endfor %}

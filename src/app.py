@@ -1,9 +1,10 @@
 from flask import Flask, request, jsonify, render_template, send_file, abort, session, redirect, url_for,  flash, g
+#from flask_session import Session
 from markupsafe import escape
 from functools import wraps
 from datetime import datetime
 
-import base64
+#import base64
 
 import pandas as pd
 
@@ -32,7 +33,7 @@ def create_app():
     # print(f"Current working directory: {os.getcwd()}")
     
     # Get configuration based on environment
-    config_class, use_docker = get_config()
+    config_class = get_config()
     
     # Create Flask app
     app = Flask(__name__)
@@ -41,10 +42,10 @@ def create_app():
     app.config.from_object(config_class)
     config_class.init_app(app)
 
-    #get secret key from configutration
-    app.secret_key = config_class.SECRET_KEY
-    print(f"Secret key: {config_class.SECRET_KEY}")
+    # Initialize flask-session data
+    #Session(app=app)
 
+    # Set up the logger
     """Initialize Flask app with improved logging"""
     # Set up the logger
     logger = rl_data.setup_logger()
@@ -188,11 +189,8 @@ def teardown_request_logging(exception=None):
 def make_session_permanent():
     session.permanent = True
 
-    # Store the request origin for debugging and potentially for domain restrictions
-    #g.request_origin = request.host
-
-    app.logger.debug(f"Session data at {request.path}: {dict(session)}")
-    app.logger.debug(f"Session cookie: {request.cookies.get('session')}")
+    #app.logger.debug(f"Session data at {request.path}: {dict(session)}")
+    #app.logger.debug(f"Session cookie: {request.cookies.get('session')}")
 
 #####
 ### app.routes
@@ -382,10 +380,11 @@ def postdisplayEvent():
 
         htmlString = ""
         io_pngList = []
+        io_pngStrings=[]
 
-        htmlString, io_pngList = redline_vis_generic_eventhtml(details, htmlString, io_pngList)
+        htmlString, io_pngList, io_pngStrings = redline_vis_generic_eventhtml(details, htmlString, io_pngList, io_pngStrings)
  
-        return render_template('visual.html', description=rl_data.EVENT_DATA_LIST[index][1], png_files=io_pngList)
+        return render_template('visual.html', description=rl_data.EVENT_DATA_LIST[index][1], png_files=io_pngList, png_strings=io_pngStrings)
     
     if selected_view == "table" and selected_format == "html":
 
@@ -432,13 +431,14 @@ def postdisplayEvent():
 
         htmlString = ""
         io_pngList = []
+        io_pngStrings=[]
 
         # get the file path
         filepath = Path(rl_data.PDF_GENERIC_DIR) / Path(rl_data.EVENT_DATA_LIST[index][0] + ".pdf")
 
         # check if file exists
         if (os.path.isfile(filepath) == False):
-            htmlString, io_pngList = redline_vis_generic_eventpdf(details, htmlString, io_pngList)
+            htmlString, io_pngList, io_pngStrings = redline_vis_generic_eventpdf(details, htmlString, io_pngList, io_pngStrings)
 
     if selected_view == "table" and selected_format == "file":
         # get the file path
@@ -513,6 +513,9 @@ def new_search():
 def get_display_vis():
         app.logger.debug(f"/display_vis GET received {request}")
 
+        #clear the search results.
+        session.pop('search_results', None)
+
         competitor = request.args.get('competitor').title()
         race_no = request.args.get('race_no')
         event = request.args.get('event')
@@ -536,6 +539,7 @@ def post_display_vis():
         
         htmlString = " "
         io_pngList = []
+        io_pngStrings = []
 
         app.logger.debug(f"/display_vis POST received {request}")
 
@@ -558,13 +562,13 @@ def post_display_vis():
         }
 
         if selected_format == "html":
-            htmlString, io_pngList = redline_vis_competitor_html(details, htmlString, io_pngList)
+            htmlString, io_pngList, io_pngStrings = redline_vis_competitor_html(details, htmlString, io_pngList, io_pngStrings)
 
             #get the link to the race results page
             link = "/display?eventname=" + event
 
             try:
-                return render_template('display_vis.html', selected_format = selected_format, competitor=competitor.title(),  race_no=race_no, description=description, htmlString=htmlString, png_files=io_pngList, link=link)
+                return render_template('display_vis.html', selected_format = selected_format, competitor=competitor.title(),  race_no=race_no, description=description, htmlString=htmlString, png_files=io_pngList, png_strings=io_pngStrings, link=link)
             except Exception as e:
                 app.logger.error(f"Template render error: {e}")
                 return abort(500)
@@ -576,7 +580,7 @@ def post_display_vis():
 
             # check if file exists
             if (os.path.isfile(filepath) == False):
-                redline_vis_competitor_pdf(details, htmlString, io_pngList)
+                redline_vis_competitor_pdf(details, htmlString, io_pngList, io_pngStrings)
             
             # dowload the file
             response = send_file(filepath, as_attachment=True)
@@ -595,18 +599,18 @@ def post_display_vis():
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        session_cookie = request.cookies.get("session")
-        app.logger.debug(f"=== SESSION DEBUG ===")
-        app.logger.debug(f"Request host: {request.host}")
-        app.logger.debug(f"Request URL: {request.url}")
-        app.logger.debug(f"Session cookie: {request.cookies.get('session')}")
-        app.logger.debug(f"Session data: {dict(session)}")
-        app.logger.debug(f"===================")
+#        session_cookie = request.cookies.get("session")
+#        app.logger.debug(f"=== SESSION DEBUG ===")
+#        app.logger.debug(f"Request host: {request.host}")
+#        app.logger.debug(f"Request URL: {request.url}")
+#        app.logger.debug(f"Session cookie: {request.cookies.get('session')}")
+#        app.logger.debug(f"Session data: {dict(session)}")
+#        app.logger.debug(f"===================")
         if session.get('logged_in') != True:
             flash("You must log in to access this page.", "warning")
             app.logger.warning(f"You must log in to access this page.")
 
-            return redirect(url_for('login'))
+            return redirect(url_for('login', _external=True, _scheme=request.scheme))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -616,11 +620,11 @@ def login():
     app.logger.debug(f"/login received {request}")
     
     # Debug session before login attempt
-    app.logger.debug(f"Pre-login session: {dict(session)}")
+    #app.logger.debug(f"Pre-login session: {dict(session)}")
     
     if request.method == 'POST':
         password = request.form.get('password')
-        app.logger.debug(f"Login attempt with password: {'*' * len(password)}")
+        #app.logger.debug(f"Login attempt with password: {'*' * len(password)}")
         
         if password == config_class.ADMIN_PASSWORD:
             # Clear any existing session data first
@@ -645,13 +649,13 @@ def login():
 @login_required
 def logout():
 
-    app.logger.debug(f"/logout received {request}")
+    #app.logger.debug(f"/logout received {request}")
     session.pop('logged_in', None)
 
     flash("You have been logged out.", "info")
     app.logger.warning(f"You have been logged out!")  
     
-    return redirect(url_for('login'))
+    return redirect(url_for('login', _external=True, _scheme=request.scheme))
 
 
 @app.route('/admin', methods=["GET"])
@@ -701,10 +705,8 @@ def postadmin():
 
     elif regenerate:
         app.logger.debug(f"Regenerate output")
-        htmlString = " "
-        pngList = []
  
-        redline_vis_generic(htmlString, pngList)
+        redline_vis_generic()
 
     level1 = rl_data.get_log_levels()
     level2 = session.get('log_levels')
@@ -767,7 +769,7 @@ def clear_feedback():
 
     flash("All feedback has been cleared.", "success")
     app.logger.info(f"All feedback has been cleared.")   
-    return redirect(url_for('admin_feedback'))
+    return redirect(url_for('admin_feedback', _external=True, _scheme=request.scheme))
 
 # Admin routes for log management
 @app.route('/admin/logs/download')
@@ -797,7 +799,7 @@ def clear_logs():
                    f.truncate()
             
     app.logger.info(f"All logs have been cleared.")
-    return app.redirect(app.url_for('view_logs'))
+    return app.redirect(app.url_for('view_logs', _external=True, _scheme=request.scheme))
 
 @app.route('/admin/logs')
 @login_required
@@ -835,7 +837,7 @@ def set_log_level():
     )
     
     app.logger.info(f"Log levels updated, global: {global_level}, file: {file_level}, console: {console_level}")
-    return app.redirect(app.url_for('admin'))
+    return app.redirect(app.url_for('admin', _external=True, _scheme=request.scheme))
 
 ##############################
 
@@ -843,20 +845,19 @@ def set_log_level():
 
 ##############################
 
-
 #One line of code cut our Flask page load times by 60%
 #https://medium.com/building-socratic/the-one-weird-trick-that-cut-our-flask-page-load-time-by-70-87145335f679
 #https://www.reddit.com/r/programming/comments/2er5nj/one_line_of_code_cut_our_flask_page_load_times_by/
-#app.jinja_env.cache = {}
+app.jinja_env.cache = {}
 
 # Run the app if executed directly
 if __name__ == "__main__":
     # Only run the app directly if not using Docker
-    if os.environ.get('USE_DOCKER', 'False').lower() not in ('true', '1', 'yes'):
-        debug_mode = app.config.get('DEBUG', False)
-        port = app.config.get('PORT', 5000)
+    if config_class.USE_DOCKER == 'False':
+        port = int(config_class.PORT)
+        debug_mode = config_class.DEBUG
         
         print(f"Starting Flask app on port {port} with debug={debug_mode}")
         app.run('0.0.0.0', port, debug=debug_mode)
     else:
-        print("Not starting Flask server directly as USE_DOCKER=True")
+        print(f"Not starting Flask server directly as USE_DOCKER={config_class.USE_DOCKER}")

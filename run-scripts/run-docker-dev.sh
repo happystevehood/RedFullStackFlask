@@ -4,7 +4,6 @@
 # Set environment variables
 export ENV_FILE=.env.development
 export ENV_MODE=development
-export USE_DOCKER=True
 export PORT=5000
 
 # Change to the project root directory

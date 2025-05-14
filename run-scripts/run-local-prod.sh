@@ -3,7 +3,6 @@
 
 # Set environment variables
 export ENV_MODE=production
-export USE_DOCKER=False
 
 # Change to the src directory
 cd "$(dirname "$0")/../src"

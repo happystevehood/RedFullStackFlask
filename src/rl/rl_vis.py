@@ -373,6 +373,10 @@ def competitorDataOutput(df):
         #forcibly remove the style attribute from string
         runtimeVars['stringPdf'] += re.sub( ' style=\"text-align: right;\"','',tableDF.to_html())
         runtimeVars['stringPdf'] += '<br>'
+    else:
+
+        logger = rl_data.get_logger()
+        logger.warning(f"No data for the selected competitor {runtimeVars['competitorName']} in the selected event {runtimeVars['eventDataList'][0]}")
 
     return compIndex
 
@@ -460,6 +464,7 @@ def ShowCorrInfo(df,competitorIndex=-1):
         filepath = Path(rl_data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'Corr' + '.png')
         #for PDF creation
         runtimeVars['pngList'].append(str(filepath))
+        runtimeVars['pngStrings'].append(rl_data.pngStringEventBarCorr)
 
         #check if file exists
         if (os.path.isfile(filepath) == False):
@@ -486,12 +491,20 @@ def ShowCorrInfo(df,competitorIndex=-1):
     #Correction works better with Calculated time compared with Net Time compared with 
     corr_matrix = corr_matrix[['Net Time']].sort_values(by='Net Time', ascending=False)
 
+    #depending if a competitor is selected
+    if (competitorIndex == -1):
+        runtimeVars['pngStrings'].append(rl_data.pngStringEventScatterPlot)
+    else:
+        runtimeVars['pngStrings'].append(rl_data.pngStringEventScatterPlotCompetitor)
+
     if (config['allScatter'] == False):
+
         #Show scatter chart with higest correlation.
         ShowScatterPlot(df, corr_matrix.index[1], corr=corr_matrix.at[corr_matrix.index[1],'Net Time'],competitorIndex=competitorIndex)
 
         #Show scatter chart with lowest correlation.
         ShowScatterPlot(df, corr_matrix.index[-1], corr=corr_matrix.at[corr_matrix.index[-1],'Net Time'],competitorIndex=competitorIndex)
+        runtimeVars['pngStrings'].append("")
 
     else:
         for event in corr_matrix.index:
@@ -499,6 +512,10 @@ def ShowCorrInfo(df,competitorIndex=-1):
             if (event != 'Net Time'):
                 #Show scatter Plot
                 ShowScatterPlot(df, event, corr=corr_matrix.at[event,'Net Time'],competitorIndex=competitorIndex )
+
+                #add empty line EXCEPT FOR ONE STATION
+                if (event != 'Run'): #this could be any
+                    runtimeVars['pngStrings'].append("")
 
     if( config['showHeat'] ):
 
@@ -509,6 +526,7 @@ def ShowCorrInfo(df,competitorIndex=-1):
 
         #for PDF creation
         runtimeVars['pngList'].append(str(filepath)) 
+        runtimeVars['pngStrings'].append(rl_data.pngStringEventHeatCorr)
 
         #check if file exists
         if (os.path.isfile(filepath) == False):
@@ -534,6 +552,7 @@ def ShowHistAgeCat(df):
     filepath = Path(rl_data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'Hist' + '.png')
     #for PDF creation
     runtimeVars['pngList'].append(str(filepath))
+    runtimeVars['pngStrings'].append(rl_data.pngStringEventHistogram)
 
     # check if file exists
     if (os.path.isfile(filepath) == False): 
@@ -650,8 +669,10 @@ def ShowBarChartEvent(df,competitorIndex=-1):
 
     if (competitorIndex == -1):
         filepath = Path(rl_data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'Bar' + '.png')
+        runtimeVars['pngStrings'].append(rl_data.pngStringEventBarChart)
     else:
         filepath = Path(rl_data.PNG_COMP_DIR) / Path(runtimeVars['eventDataList'][0] + runtimeVars['competitorName'] + 'Bar' + '.png')
+        runtimeVars['pngStrings'].append(rl_data.pngStringEventBarChartCompetitor)
     
     #for PDF creation
     runtimeVars['pngList'].append(str(filepath))
@@ -722,8 +743,10 @@ def ShowViolinChartEvent(df,competitorIndex=-1):
 
     if (competitorIndex == -1):
         filepath = Path(rl_data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'Violin' + '.png')
+        runtimeVars['pngStrings'].append(rl_data.pngStringEventViolinChart)
     else:
         filepath = Path(rl_data.PNG_COMP_DIR) / Path(runtimeVars['eventDataList'][0] + runtimeVars['competitorName'] + 'Violin' + '.png')
+        runtimeVars['pngStrings'].append(rl_data.pngStringEventViolinChartCompetitor)
 
     #for PDF creation
     runtimeVars['pngList'].append(str(filepath))
@@ -777,6 +800,7 @@ def ShowBarChartCutOffEvent(df):
     filepath = Path(rl_data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'CutOffBar' + '.png')
     #for PDF creation
     runtimeVars['pngList'].append(str(filepath))
+    runtimeVars['pngStrings'].append(rl_data.pngStringEventBarChartCutoff)
 
     # check if file exists  
     if (os.path.isfile(filepath) == False):
@@ -823,11 +847,10 @@ def ShowPieChartAverage(df,competitorIndex=-1):
         filepath = Path(rl_data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'Pie' + '.png')
         #for PDF creation
         runtimeVars['pngList'].append(str(filepath))
+        runtimeVars['pngStrings'].append(rl_data.pngStringEventPieChart)
 
         # check if file exists
         if (os.path.isfile(filepath) == False):
-
-            
 
             plt.figure(figsize=(10, 10))
 
@@ -861,6 +884,7 @@ def ShowPieChartAverage(df,competitorIndex=-1):
 
         #for PDF creation
         runtimeVars['pngList'].append(str(filepath))
+        runtimeVars['pngStrings'].append(rl_data.pngStringEventPieChartCompetitor)
 
         # check if file exists  
         if (os.path.isfile(filepath) == False):
@@ -981,7 +1005,7 @@ def ShowScatterPlot(df, eventName, corr, competitorIndex=-1):
 # competitorDetails will be search details of one competitor
 
 #############################
-def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
+def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList, io_pngStrings):
 
     logger = rl_data.get_logger()
 
@@ -992,7 +1016,6 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
     # Reading the file
     #############################
 
- 
     # if competitor Analysis true.
     if(config['competitorAnalysis'] == True):
         #then a single competitor in a single file has already been selected
@@ -1039,13 +1062,14 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
 
         #reset PNG list
         del (runtimeVars['pngList'])[:]
+        del (runtimeVars['pngStrings'])[:]
 
         dataOutputThisLoop=False
         runtimeVars['stringPdf'] = ""
 
         indatafile = Path(rl_data.CSV_INPUT_DIR) / Path(runtimeVars['eventDataList'][0] + '.csv')
 
-        print("eventDataList[0]",runtimeVars['eventDataList'][0])
+        #print("eventDataList[0]",runtimeVars['eventDataList'][0])
 
         #read in the data.
         df = pd.read_csv(indatafile)
@@ -1057,6 +1081,8 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
 
             runtimeVars['competitorName']=competitorDetails.get('competitor')
             runtimeVars['competitorRaceNo']=competitorDetails.get('race_no')
+
+            #print(f"redline_vis_generate {runtimeVars['competitorName']} {runtimeVars['competitorRaceNo']}")
 
             competitorIndex = competitorDataOutput(df=df)
 
@@ -1098,7 +1124,6 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
             if(config['showViolin']): ShowViolinChartEvent(df=df)
             if(config['showCorr']): ShowCorrInfo(df=df)
             if(config['showCutOffBar']): ShowBarChartCutOffEvent(df=df)
-
 
             dataOutputThisLoop=True
 
@@ -1155,6 +1180,7 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
                 #update output variable
                 io_stringHtml = runtimeVars['stringPdf']
                 io_pngList = list(runtimeVars['pngList'])
+                io_pngStrings = runtimeVars['pngStrings']
 
 
     #clean up the session runtime and config
@@ -1162,12 +1188,12 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList):
     session.pop('config', None)
 
     #just backup should never be called
-    return io_stringHtml, io_pngList       
+    return io_stringHtml, io_pngList, io_pngStrings       
 
 #
 # functions below this line are called by external files.
 
-def redline_vis_competitor_html(competitorDetails, io_stringHtml, io_pngList):
+def redline_vis_competitor_html(competitorDetails, io_stringHtml, io_pngList, io_pngStrings):
     
     logger = rl_data.get_logger()
     logger.info(f"redline_vis_competitor_html {competitorDetails}")
@@ -1176,6 +1202,7 @@ def redline_vis_competitor_html(competitorDetails, io_stringHtml, io_pngList):
     runtime = {
         "EventCutOffCount": [0,0,0,0,0,0,0,0,0,0, 0,0],  #Count number of partipants who reach 7 minutes per event. Corresponds to EventList Entries
         "pngList": [],
+        "pngStrings": [],
         "stringPdf": " ",
         "EventList": [],
         "EventListStart": [],
@@ -1207,9 +1234,9 @@ def redline_vis_competitor_html(competitorDetails, io_stringHtml, io_pngList):
     # Store config in session
     session['config'] = config
 
-    return redline_vis_generate(competitorDetails, io_stringHtml, io_pngList)
+    return redline_vis_generate(competitorDetails, io_stringHtml, io_pngList, io_pngStrings)
 
-def redline_vis_competitor_pdf(competitorDetails, io_stringHtml, io_pngList):
+def redline_vis_competitor_pdf(competitorDetails, io_stringHtml, io_pngList, io_pngStrings):
     
     logger = rl_data.get_logger()
     logger.info(f"redline_vis_competitor_pdf {competitorDetails}")
@@ -1218,6 +1245,7 @@ def redline_vis_competitor_pdf(competitorDetails, io_stringHtml, io_pngList):
     runtime = {
         "EventCutOffCount": [0,0,0,0,0,0,0,0,0,0, 0,0],  #Count number of partipants who reach 7 minutes per event. Corresponds to EventList Entries
         "pngList": [],
+        "pngStrings": [],
         "stringPdf": " ",
         "EventList": [],
         "EventListStart": [],
@@ -1249,10 +1277,10 @@ def redline_vis_competitor_pdf(competitorDetails, io_stringHtml, io_pngList):
     # Store config in session
     session['config'] = config
 
-    return redline_vis_generate(competitorDetails, io_stringHtml, io_pngList)
+    return redline_vis_generate(competitorDetails, io_stringHtml, io_pngList, io_pngStrings)
 
 # used when regenerating all generic output for all events.
-def redline_vis_generic(io_stringHtml, io_pngList):
+def redline_vis_generic():
 
     logger = rl_data.get_logger()
     logger.info(f"redline_vis_generic")
@@ -1261,6 +1289,7 @@ def redline_vis_generic(io_stringHtml, io_pngList):
     runtime = {
         "EventCutOffCount": [0,0,0,0,0,0,0,0,0,0, 0,0],  #Count number of partipants who reach 7 minutes per event. Corresponds to EventList Entries
         "pngList": [],
+        "pngStrings": [],
         "stringPdf": " ",
         "EventList": [],
         "EventListStart": [],
@@ -1295,13 +1324,14 @@ def redline_vis_generic(io_stringHtml, io_pngList):
     #local variables
     local_htmlString = " "
     local_pngList = []
+    local_pngStrings = []
 
     #competitor details set to False
-    return redline_vis_generate(None, local_htmlString, local_pngList)
+    return redline_vis_generate(None, local_htmlString, local_pngList,  local_pngStrings)
 
 
 # used when generating generic pdf (if not already generated)
-def redline_vis_generic_eventpdf(details, io_stringHtml, io_pngList):
+def redline_vis_generic_eventpdf(details, io_stringHtml, io_pngList, io_pngStrings):
  
     logger = rl_data.get_logger()
     logger.info(f"redline_vis_generic_eventpdf {details}")
@@ -1310,6 +1340,7 @@ def redline_vis_generic_eventpdf(details, io_stringHtml, io_pngList):
     runtime = {
         "EventCutOffCount": [0,0,0,0,0,0,0,0,0,0, 0,0],  #Count number of partipants who reach 7 minutes per event. Corresponds to EventList Entries
         "pngList": [],
+        "pngStrings": [],
         "stringPdf": " ",
         "EventList": [],
         "EventListStart": [],
@@ -1342,10 +1373,10 @@ def redline_vis_generic_eventpdf(details, io_stringHtml, io_pngList):
     session['config'] = config
 
     #competitor details set to False
-    return redline_vis_generate(details, io_stringHtml, io_pngList)
+    return redline_vis_generate(details, io_stringHtml, io_pngList, io_pngStrings)
 
 # used when generating generic event html (and generating string pdf and displaying pngs)
-def redline_vis_generic_eventhtml(details, io_stringHtml, io_pngList):
+def redline_vis_generic_eventhtml(details, io_stringHtml, io_pngList, io_pngStrings):
 
     logger = rl_data.get_logger()
     logger.info(f"redline_vis_generic_eventhtml {details}")
@@ -1354,6 +1385,7 @@ def redline_vis_generic_eventhtml(details, io_stringHtml, io_pngList):
     runtime = {
         "EventCutOffCount": [0,0,0,0,0,0,0,0,0,0,0,0],  #Count number of partipants who reach 7 minutes per event. Corresponds to EventList Entries
         "pngList": [],
+        "pngStrings": [],
         "stringPdf": " ",
         "EventList": [],
         "EventListStart": [],
@@ -1386,4 +1418,4 @@ def redline_vis_generic_eventhtml(details, io_stringHtml, io_pngList):
     session['config'] = config
 
     #competitor details set to False
-    return redline_vis_generate(details, io_stringHtml, io_pngList)
+    return redline_vis_generate(details, io_stringHtml, io_pngList, io_pngStrings)
