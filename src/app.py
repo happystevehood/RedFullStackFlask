@@ -4,6 +4,9 @@ from markupsafe import escape
 from functools import wraps
 from datetime import datetime
 
+from google.cloud import storage
+import tempfile
+
 #import base64
 
 import pandas as pd
@@ -261,11 +264,21 @@ def feedback():
             flash('Please provide some feedback before submitting.', "warning")
             return redirect('/feedback')
 
-        filename = rl_data.CSV_FEEDBACK_DIR / Path('feedback.csv')
+        env_mode = os.environ.get('ENV_MODE', 'development').lower()
 
-        with open(filename, 'a', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-            writer.writerow([datetime.now().isoformat(), name, email, comments, category, rating])
+        #only use google cloud storage if in deploy mode
+        if env_mode == 'deploy':
+
+            rl_data.save_feedback_to_gcs(name, email, comments, category, rating)
+
+        #else use local file
+        else:
+
+            filename = rl_data.CSV_FEEDBACK_DIR / Path('feedback.csv')
+
+            with open(filename, 'a', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow([datetime.now().isoformat(), name, email, comments, category, rating])
 
         flash('Thanks for your feedback!', "success")
         return redirect('/feedback')
@@ -725,19 +738,31 @@ def admin_feedback():
     page = int(request.args.get('page', 1))
     per_page = 10
 
-    feedback_list = []
-    filename = rl_data.CSV_FEEDBACK_DIR / Path('feedback.csv')
+    env_mode = os.environ.get('ENV_MODE', 'development').lower()
+    
+    #only use google cloud storage if in deploy mode
+    if env_mode == 'deploy':
 
-    if os.path.exists(filename):
-        with open(filename, newline='', encoding='utf-8') as f:
-            reader = csv.reader(f)
-            feedback_list = list(reader)
+        paginated_feedback, total_pages = rl_data.get_paginated_feedback(page, per_page)
 
-    total = len(feedback_list)
-    start = (page - 1) * per_page
-    end = start + per_page
-    paginated_feedback = feedback_list[start:end]
-    total_pages = math.ceil(total / per_page)
+    else:
+
+        page = int(request.args.get('page', 1))
+        per_page = 10
+
+        feedback_list = []
+        filename = rl_data.CSV_FEEDBACK_DIR / Path('feedback.csv')
+
+        if os.path.exists(filename):
+            with open(filename, newline='', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                feedback_list = list(reader)
+
+        total = len(feedback_list)
+        start = (page - 1) * per_page
+        end = start + per_page
+        paginated_feedback = feedback_list[start:end]
+        total_pages = math.ceil(total / per_page)
 
     return render_template('admin_feedback.html',
                            feedback_list=paginated_feedback,
@@ -750,9 +775,46 @@ def export_feedback():
 
     app.logger.debug(f"/admin/feedback/export received {request}")
 
-    filename = rl_data.CSV_FEEDBACK_DIR / Path('feedback.csv')
+    env_mode = os.environ.get('ENV_MODE', 'development').lower()
+    
+    #only use google cloud storage if in deploy mode
+    if env_mode == 'deploy':
 
-    return send_file(filename, as_attachment=True, download_name='feedback.csv')
+        # Set up Google Cloud Storage client
+        BUCKET_NAME = 'redline-fitness-results-feedback'
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(BUCKET_NAME)
+        
+        # Define the GCS object path
+        blob_name = 'feedback.csv'
+        blob = bucket.blob(blob_name)
+        
+        if blob.exists():
+            # Option 1: For smaller files - use a temporary file
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as temp_file:
+                blob.download_to_filename(temp_file.name)
+                temp_file_path = temp_file.name
+            
+            # Send the temporary file and then clean up
+            response = send_file(temp_file_path, 
+                                as_attachment=True, 
+                                download_name='feedback.csv')
+                             
+            # Setup callback to remove the temp file after the response is sent
+            @response.call_on_close
+            def cleanup():
+                if os.path.exists(temp_file_path):
+                    os.remove(temp_file_path)
+                    
+            return response
+
+    else:
+
+        filename = rl_data.CSV_FEEDBACK_DIR / Path('feedback.csv')
+
+        return send_file(filename, as_attachment=True, download_name='feedback.csv')
+
+
 
 @app.route('/admin/clear_feedback', methods=['POST'])
 @login_required
@@ -760,12 +822,33 @@ def clear_feedback():
 
     app.logger.debug(f"/admin/clear_feedback POST received {request}")
 
-    filename = rl_data.CSV_FEEDBACK_DIR / Path('feedback.csv')
+    env_mode = os.environ.get('ENV_MODE', 'development').lower()
+    
+    #only use google cloud storage if in deploy mode
+    if env_mode == 'deploy':
+        
+        # Set up Google Cloud Storage client
+        BUCKET_NAME = 'redline-fitness-results-feedback'
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(BUCKET_NAME)
+        
+        # Define the GCS object path
+        blob_name = 'feedback.csv'
+        blob = bucket.blob(blob_name)
+        
+        if blob.exists():
+            # Option 1: Delete the file completely
+            blob.delete()
+            
+            # Option 2: Or replace with an empty file if you prefer
+            # blob.upload_from_string('', content_type='text/csv')
+    else:  
+        filename = rl_data.CSV_FEEDBACK_DIR / Path('feedback.csv')
 
-    # Overwrite the file with headers only, if exists
-    if os.path.exists(filename):
-        with open(filename, 'w', newline='') as f:
-            writer = csv.writer(f)
+        # Overwrite the file with headers only, if exists
+        if os.path.exists(filename):
+            with open(filename, 'w', newline='') as f:
+                writer = csv.writer(f)
 
     flash("All feedback has been cleared.", "success")
     app.logger.info(f"All feedback has been cleared.")   

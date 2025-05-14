@@ -20,5 +20,5 @@ exec gunicorn \
     --preload \
     --timeout 90 \
     -b "0.0.0.0:$PORT" \
-    --worker-class gevent \
+    --worker-class gthread \
     app:app

@@ -1,17 +1,19 @@
 import os
 from pathlib import Path
 import logging
-
-import os
 import uuid
-import logging
 import json
 from logging.handlers import RotatingFileHandler
-from pathlib import Path
 import threading
 import portalocker  # Cross-platform file locking
 
 from flask import g, render_template as flask_render_template
+
+from google.cloud import storage
+import csv
+import io
+import math
+from datetime import datetime
 
 import rl.rl_data as rl_data 
 
@@ -389,6 +391,64 @@ def get_log_levels():
 #############################
 # Non log based helper functions
 #############################
+
+def save_feedback_to_gcs(name, email, comments, category, rating):
+    # Set up Google Cloud Storage client
+    BUCKET_NAME = 'redline-fitness-results-feedback'
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(BUCKET_NAME)
+    
+    # Define the GCS object path - equivalent to your local file path
+    blob_name = 'feedback.csv'
+    blob = bucket.blob(blob_name)
+    
+    # Check if file exists to handle appending properly
+    if blob.exists():
+        # Download existing content
+        existing_content = blob.download_as_string().decode('utf-8')
+        buffer = io.StringIO(existing_content)
+        buffer.write('\n')  # Ensure we start on a new line
+    else:
+        # Start with empty buffer if file doesn't exist
+        buffer = io.StringIO()
+    
+    # Use csv writer to append new row
+    writer = csv.writer(buffer)
+    writer.writerow([datetime.now().astimezone().isoformat(), name, email, comments, category, rating])
+    
+    # Upload the updated content back to GCS
+    blob.upload_from_string(buffer.getvalue(), content_type='text/csv')
+
+def get_paginated_feedback(page=1, per_page=10):
+    # Set up Google Cloud Storage client
+    BUCKET_NAME = 'redline-fitness-results-feedback'
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(BUCKET_NAME)
+    
+    # Define the GCS object path
+    blob_name = 'feedback.csv'
+    blob = bucket.blob(blob_name)
+    
+    feedback_list = []
+    
+    # Check if file exists in the bucket
+    if blob.exists():
+        # Download content from GCS
+        content = blob.download_as_string().decode('utf-8')
+        
+        # Parse CSV content
+        csv_buffer = io.StringIO(content)
+        reader = csv.reader(csv_buffer)
+        feedback_list = list(reader)
+    
+    # Handle pagination
+    total = len(feedback_list)
+    start = (page - 1) * per_page
+    end = start + per_page
+    paginated_feedback = feedback_list[start:end]
+    total_pages = math.ceil(total / per_page)
+    
+    return paginated_feedback, total_pages
 
 def remove_files_from_directory(directory):
     """Removes all files within the specified directory, but leaves the directory untouched."""
