@@ -254,11 +254,11 @@ def feedback():
 
     if request.method == 'POST':
 
-        name = request.form.get('name', '').strip()
-        email = request.form.get('email', '').strip()
-        comments = request.form.get('comments', '').strip()
-        category = request.form.get('category', '').strip()
-        rating = request.form.get('rating', '').strip()
+        name = request.form.get('name', '-').strip()
+        email = request.form.get('email', '-').strip()
+        comments = request.form.get('comments', '-').strip()
+        category = request.form.get('category', '-').strip()
+        rating = request.form.get('rating', '-').strip()
 
         if not comments:
             flash('Please provide some feedback before submitting.', "warning")

@@ -398,26 +398,43 @@ def save_feedback_to_gcs(name, email, comments, category, rating):
     storage_client = storage.Client()
     bucket = storage_client.bucket(BUCKET_NAME)
     
-    # Define the GCS object path - equivalent to your local file path
+    # Define the GCS object path
     blob_name = 'feedback.csv'
     blob = bucket.blob(blob_name)
     
-    # Check if file exists to handle appending properly
+    # Prepare the new row (UTC Time.)
+    new_row = [datetime.now().astimezone().isoformat(), name, email, comments, category, rating]
+    
+    logger = get_logger()
+    logger.debug(f"save_feedback_to_gcs> {', '.join(str(item) for item in new_row)} !")
+    
+    # We'll handle the data differently based on whether the file exists
     if blob.exists():
         # Download existing content
         existing_content = blob.download_as_string().decode('utf-8')
-        buffer = io.StringIO(existing_content)
-        buffer.write('\n')  # Ensure we start on a new line
+        
+        # Read existing content into a list of rows
+        reader = csv.reader(io.StringIO(existing_content))
+        rows = list(reader)
+        
+        # Append our new row
+        rows.append(new_row)
+        
+        # Write all rows back to a new buffer
+        output_buffer = io.StringIO()
+        writer = csv.writer(output_buffer)
+        writer.writerows(rows)
+        
+        # Upload the complete content
+        blob.upload_from_string(output_buffer.getvalue(), content_type='text/csv')
     else:
-        # Start with empty buffer if file doesn't exist
-        buffer = io.StringIO()
-    
-    # Use csv writer to append new row
-    writer = csv.writer(buffer)
-    writer.writerow([datetime.now().astimezone().isoformat(), name, email, comments, category, rating])
-    
-    # Upload the updated content back to GCS
-    blob.upload_from_string(buffer.getvalue(), content_type='text/csv')
+        # If file doesn't exist, create a new one with just our row
+        output_buffer = io.StringIO()
+        writer = csv.writer(output_buffer)
+        writer.writerow(new_row)
+        
+        # Upload the new content
+        blob.upload_from_string(output_buffer.getvalue(), content_type='text/csv')
 
 def get_paginated_feedback(page=1, per_page=10):
     # Set up Google Cloud Storage client

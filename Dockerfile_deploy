@@ -22,7 +22,7 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 # (Optional) If you don't have a requirements.txt, install google-cloud-storage directly:
 # putting here as I dont current have a google cloud specific requirements file.
 # google-cloud-storage==2.7.0
-RUN pip install --no-cache-dir google-cloud-storage
+# RUN pip install --no-cache-dir google-cloud-storage
 
 # Copy the application code
 COPY ./src /app/src
