@@ -20,7 +20,7 @@ Other useful links are here.
 - 📱 Responsive layout, optimized for desktop and mobile
 - 💾 Clean UI using Bootstrap and custom styling
 - 🎯 Built for scalability, performance, and easy navigation
-- 
+ 
 ![results_sample](https://github.com/user-attachments/assets/70778bbb-4375-482d-9bf8-8b6d6ff00064)
 ![results_table](https://github.com/user-attachments/assets/d3c7c005-df77-4267-87ef-14c77c9de930)
 ![searchlist](https://github.com/user-attachments/assets/4a44683c-569f-40e3-9c73-83fe0a37fe6c)
@@ -45,11 +45,14 @@ Raw results were manually copied to Excel and exported as CSV for backend ingest
 ## ⚙️ Tech Stack
 
 - Python 3.11+
-- Flask
+- mathplotlib, pandas, seaborn
+- Flask, Jinja
 - HTML, CSS, JS
-- jQuery & Bootstrap 4
+- jQuery & Bootstrap
 - DataTables (with scroll and fixed header support)
-- Gcloud++
+- Google Google Cloud Run 
+- Cybersecurity
+- Dockers, multi-threading, multi-containers
 - And much more.
 
 ---
