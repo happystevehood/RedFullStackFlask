@@ -1,4 +1,4 @@
-# 🏋️ Redline Fitness Games Results Visualizer
+# 🏋️ Redline Fitness Games Results Explorer
 
 This project is a web-based application to search, filter, and visualize results from the **Redline Fitness Games** events (2023 and 2024). It provides an intuitive UI for athletes and enthusiasts to explore competitor performances across years, categories, and locations.
 
