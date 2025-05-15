@@ -69,6 +69,7 @@
         const viewSelected = form.querySelector('input[name="view_option"]:checked');
         const formatSelected = form.querySelector('input[name="output_format"]:checked');
         submitBtn.disabled = !(viewSelected && formatSelected);
+        submitBtn.value = 'Generate';
     }
 
     // Check initial state in case some radios are pre-selected

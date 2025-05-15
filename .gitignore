@@ -6,9 +6,5 @@
 *feedback.csv
 *duration*.csv
 *df*.csv
-.env.production
-store/logs/log_config.json
 *.log.*
-src/static/csv/generic/duration*.csv
-/src/static/csv/generic
-/src/static/csv/generic
+

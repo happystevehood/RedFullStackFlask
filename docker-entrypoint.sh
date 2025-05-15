@@ -16,7 +16,7 @@ echo "Starting application in $ENV_MODE mode on port $PORT"
 # Run the application with Gunicorn
 cd /app/src
 exec gunicorn \
-    -w 4 \
+    -w 6 \
     --preload \
     --timeout 90 \
     -b "0.0.0.0:$PORT" \

@@ -1304,7 +1304,7 @@ def redline_vis_generic():
     config = {
         "pltShow" : False,
         "allScatter" : True,
-        "csvDfOut" : True, #False,
+        "csvDfOut" : False,
         "csvDurationOut" : True,
         "pltPngOut" : True,
         "createPdf" : True,

@@ -27,7 +27,7 @@ from flask_limiter.util import get_remote_address
 # local inclusion.
 from rl.rl_search import find_competitor
 import rl.rl_data as rl_data 
-from rl.config import get_config 
+from rl.rl_config import get_config 
 from rl.rl_vis import redline_vis_competitor_html, redline_vis_competitor_pdf, redline_vis_generic, redline_vis_generic_eventpdf, redline_vis_generic_eventhtml
 
 def create_app():

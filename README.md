@@ -3,6 +3,7 @@
 This project is a web-based application to search, filter, and visualize results from the **Redline Fitness Games** events (2023 and 2024). It provides an intuitive UI for athletes and enthusiasts to explore competitor performances across years, categories, and locations.
 
 > 🔗 This project is independently developed and not affiliated with [redlinefitnessgames.com](https://redlinefitnessgames.com/).
+> 🔗 This development was based on my original repository [redline-fitness-results-visualisation](https://github.com/happystevehood/redline-fitness-results-visualisation)
 
 ---
 
@@ -34,11 +35,14 @@ Raw results were manually copied to Excel and exported as CSV for backend ingest
 
 ## ⚙️ Tech Stack
 
-- Python 3.10+
+- Python 3.11+
 - Flask
 - HTML, CSS, JS
 - jQuery & Bootstrap 4
 - DataTables (with scroll and fixed header support)
+- Gcloud++
+- And much more.
+
 
 ---
 
@@ -52,12 +56,12 @@ Raw results were manually copied to Excel and exported as CSV for backend ingest
 
 ---
 
-## 📦 Setup
+## 📦 Setup - TBC if this works as below
 
 ```bash
-git clone https://github.com/yourusername/redline-results.git
-cd redline-results
+git https://github.com/happystevehood/RedFullStackFlask.git
+cd RedFullStackFlask
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-flask run
+./run-scripts/run-local-dev.sh

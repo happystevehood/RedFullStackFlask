@@ -9,8 +9,8 @@ from datetime import timedelta
 
 class Config:
     """Base configuration class with common settings."""
-    # Default settings
-    SECRET_KEY = os.environ.get('SECRET_KEY',b' q/\x8ax"\xe9\xfc\x8a0v\x1a\x18\r\x8f\xc1\xb7\xf4\x14\xd0\xb8j:\xb1') #or secrets.token_bytes(24)
+    # Default settings, these values are overridden by environment variables for deployment
+    SECRET_KEY = os.environ.get('SECRET_KEY',b' q/\x8ax"\xe9\xfc\x8a0v\x1a\x18\r\x8f\xc1\xb7\xf4\x14\xd0\xb8j:\xb1') 
     ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'Admin')
     
     # Security settings (common to all configurations)

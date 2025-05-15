@@ -1,6 +1,8 @@
 #!/bin/bash
 # Run the application in Docker in development mode
 
+#docker desktop needs to be open to run this script.
+
 # Set environment variables
 export ENV_FILE=.env.development
 export ENV_MODE=development

@@ -1,4 +1,3 @@
-version: '3'
 
 services:
   web:
@@ -9,7 +8,6 @@ services:
     env_file:
       - ${ENV_FILE:-.env.${ENV_MODE}}
     environment:
-
       - PORT=${PORT:-5000}
       - ENV_MODE=${ENV_MODE:-development}
     ports:
