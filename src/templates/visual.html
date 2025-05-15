@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Visual | Redline Fitness Games{% endblock %}
+
+{% block content %}
+<style nonce="{{ csp_nonce() }}">
+    .img-fluid
+    {
+        max-width: 100%; 
+        height: auto;
+     }   
+</style>
+
+<div class="container my-5">
+    <h2 class="mb-4">You have selected the following to visualise: </h2> 
+    <h5>   Event: {{ description | default("No description passed", true) }} </h5>
+    {% for png_file in png_files %}
+     <div>
+        <h6>{{ png_strings[png_files.index(png_file)] }}</h6>
+        <img src="{{ png_file }}" class="img-fluid"/>
+    </div>
+    {% endfor %}
+</div>
+
+{% endblock %}

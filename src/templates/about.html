@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}About | Redline Fitness Games{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>About This Personal Project</h2>
+
+    <p>
+    The Redline Fitness Games is a high-intensity fitness competition featuring athletes from around the world. This unofficial 
+    archive provides searchable, filterable access to Redline results, athlete stats, and event categories from 2023 and 2024.
+    </p>
+    <p>
+        This tool was built to help competitors and fans of the Redline Fitness Games explore past event results more efficiently.
+        All data was originally published on Racetec Results and was extracted for visualization and personal analysis.
+    </p>
+
+    <p>
+        The original race result pages are available from <a href="https://runnersunite.racetecresults.com/" target="_blank">Racetec Results</a>, 
+        and the official Redline Fitness Games website can be found at 
+        <a href="https://redlinefitnessgames.com/" target="_blank">redlinefitnessgames.com</a>.
+    </p>
+
+    <h4>Data Sources</h4>
+    <ul>
+        <li><strong>2023 Day 1:</strong> <a href="https://runnersunite.racetecresults.com/results.aspx?CId=16634&RId=1216" target="_blank">View Results</a></li>
+        <li><strong>2023 Day 2:</strong> <a href="https://runnersunite.racetecresults.com/results.aspx?CId=16634&RId=1217" target="_blank">View Results</a></li>
+        <li><strong>2024 Day 1:</strong> <a href="https://runnersunite.racetecresults.com/results.aspx?CId=16634&RId=1251" target="_blank">View Results</a></li>
+        <li><strong>2024 Day 2:</strong> <a href="https://runnersunite.racetecresults.com/results.aspx?CId=16634&RId=1252" target="_blank">View Results</a></li>
+    </ul>
+
+    <h4>Disclaimer</h4>
+    <p>
+        This site was created by a 2024 participant who’s already signed up for the 2025 competition. 
+        The author of this site has no official connection to Redline Fitness Games and developed this tool as a personal project, 
+        so if there are any mistakes or issues its all my fault. Please don't complain to the Redline Fitness Games Organisers. It's all my fault.
+    </p>
+    
+    <p>
+        Unfortunately not all events are available on this website such at the 2024 Day 1 Beginners Race, as the timing chip results were not so consistent. 
+        Also I have not included all competitors as some of the chip timings were missing or incorrect. I've done the best I could to estimate results. If 
+        your name is specifically missing please request in the feedback form and I'll see what I can do to add it.
+    </p>
+
+    <h4>Technical Notes</h4> 
+    <p>
+        Results were manually copied into Excel from the public race timing site and then converted to CSV files per event.
+        This site uses Flask, jQuery, Bootstrap, and DataTables to provide a fast and responsive experience.
+        It was initially modelled on the 2023 result format and later updated for 2024.
+    </p>
+    <p>
+        All of the source code for this site is available <a href="https://github.com/happystevehood/RedFullStackFlask" target="_blank">https://github.com/happystevehood/RedFullStackFlask</a>
+        If you need more details on the code please refer to github as starting point, any questions can be directed via the <a href="/feedback">Feedback</a> page.
+    </p>
+
+    {% for png_file in png_files %}
+        <img src="{{ png_file }}" width="50%" border="1">
+    {% endfor %}
+</div>
+{% endblock %}

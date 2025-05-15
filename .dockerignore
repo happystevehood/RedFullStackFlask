@@ -1,0 +1,40 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+venv/
+ENV/
+
+# Environment files
+.env
+.env.*  # Catch all variants like .env.dev, .env.prod
+
+# Logs and temporary files
+*.log
+*.tmp
+
+# Test and coverage
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# System and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Git
+.git/
+.gitignore
+
+# Notebooks (if any)
+*.ipynb

@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block content %}
+<style nonce="{{ csp_nonce() }}">
+    .feedback-container {
+        max-width: 650px;
+        margin: 2rem auto;
+    }
+    .rating-group {
+        display: flex;
+        gap: 5px;
+        font-size: 1.5rem;
+    }
+    .rating-group input {
+        display: none;
+    }
+    .rating-group label {
+        cursor: pointer;
+        color: lightgray;
+    }
+    .rating-group input:checked ~ label,
+    .rating-group label:hover,
+    .rating-group label:hover ~ label {
+        color: gold;
+    }
+</style>
+
+<div class="container feedback-container">
+    <h2>We’d Love Your Feedback</h2>
+    <p>Your thoughts help us improve. Tell us what works well and what needs attention.</p>
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <div class="alert alert-info mt-3">
+                {{ messages[0] }}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="form-group mb-3">
+            <label><strong>Overall Experience (optional):</strong></label>
+            <div class="rating-group">
+                {% for i in range(5, 0, -1) %}
+                <input type="radio" name="rating" id="rate-{{ i }}" value="{{ i }}">
+                <label for="rate-{{ i }}">★</label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="form-group mb-3">
+            <label for="category"><strong>Feedback Topic (optional):</strong></label>
+            <select class="form-select" id="category" name="category">
+                <option value="">-- Select --</option>
+                <option>UI/Design</option>
+                <option>Performance</option>
+                <option>Bug Report</option>
+                <option>Feature Suggestion</option>
+                <option>Other</option>
+            </select>
+        </div>
+
+        <div class="form-group mb-3">
+            <label for="comments"><strong>Your Feedback *</strong></label>
+            <textarea class="form-control" name="comments" id="comments" rows="5"
+                placeholder="Describe what you liked or what could be improved..." required></textarea>
+        </div>
+
+        <div class="form-group mb-3">
+            <label for="name">Your Name (optional):</label>
+            <input type="text" class="form-control" name="name" id="name" placeholder="Anonymous">
+        </div>
+
+        <div class="form-group mb-3">
+            <label for="email">Your Email (optional):</label>
+            <input type="email" class="form-control" name="email" id="email" placeholder="you@example.com">
+            <small class="form-text text-muted">Only if you'd like a reply.</small>
+        </div>
+
+        <!-- Optional upload field (optional to implement in backend) -->
+        <!--
+        <div class="form-group mb-3">
+            <label for="screenshot">Upload Screenshot (optional):</label>
+            <input type="file" class="form-control" name="screenshot" id="screenshot" accept="image/*">
+        </div>
+        -->
+
+        <button type="submit" class="btn btn-primary mt-3">Send Feedback</button>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block title %}Table | Redline Fitness Games
+
+{% endblock %}
+
+{% block head %}
+<!-- Bootstrap & DataTables CSS -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap4.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.bootstrap4.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/fixedcolumns/4.3.0/css/fixedColumns.dataTables.min.css">
+
+{% endblock %}
+
+{% block content %}
+
+<style nonce="{{ csp_nonce() }}">
+    .full-width-wrapper {
+        width: 100%;
+    }
+    .overflow {
+        overflow-x: auto;
+    }     
+    .dtfc-fixed-left {
+        background-color: white;
+        z-index: 2;
+    }
+
+   .dataTable td {
+        white-space: nowrap;
+    }
+    /* Adjust navbar items on mobile */
+    @media (max-width: 768px) {
+        .dataTable td:first-child {
+            white-space: wrap;
+            max-width: 180px; /* Adjust this value based on your needs */
+        }   
+    
+    }
+
+</style>
+
+<div class="full-width-wrapper my-4">
+    <h2 class="mb-4">{{ title }}</h2>
+    <div class="table-responsive ">
+        <table id="dataTable" class="table table-striped table-bordered ">
+            <thead>
+                <tr>
+                    {% for header in headers %}
+                        <th>{{ header }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in data %}
+                    <tr>
+                        {% for header in headers %}
+                            {% if 'Name' in header %}
+                                <td>
+                                    {% set value = row[header] %}
+                                    <strong>{{ value }}</strong>
+                                </td>                           
+                            {% else %}
+                                <td>
+                             {% set value = row[header] %}
+                            {% if value is defined and value is not none %}
+                                {% if value is number %}
+                                    {{ "%.1f"|format(value) }}
+                                {% else %}
+                                    {% set val_str = value|string|trim %}
+                                    {% if val_str != '' %}
+                                        {% set converted = val_str|float(none) %}
+                                        {% if converted is not none %}
+                                            {{ "%.1f"|format(converted) }}
+                                        {% else %}
+                                            {{ value }}
+                                        {% endif %}
+                                    {% else %}
+                                        {{ value }}
+                                    {% endif %}
+                                {% endif %}
+                            {% else %}
+                                {{ '' }}
+                            {% endif %}
+
+                                </td>
+                            {% endif %}
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<!-- jQuery and DataTables JS -->
+<script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap4.min.js"></script>
+<script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
+<script src="https://cdn.datatables.net/fixedcolumns/4.3.0/js/dataTables.fixedColumns.min.js"></script>
+
+<script  nonce="{{ csp_nonce() }}">
+$(document).ready(function() {
+
+    // Function to detect mobile devices
+    function isMobileDevice() {
+        return (window.innerWidth <= 768);
+    }
+    
+    // Add custom sorting method for numbers with empty values at bottom
+    $.fn.dataTable.ext.type.order['numbers-empty-last-pre'] = function(data) {
+        // Check if the data can be converted to a number
+        if ($.isNumeric(data)) {
+            // Return number for sorting
+            return parseFloat(data);
+        }
+        // Return a very large number to push non-numeric values to the end
+        return Number.MAX_SAFE_INTEGER;
+    };
+
+    var table = $('#dataTable').DataTable({
+        scrollX: true,
+        scrollCollapse: true,
+        pageLength: 25,
+        // Default ordering: column 1 (index starts at 0) in ascending order
+        order: [[1, 'asc']],
+        ordering: true,  // Ensures users can click column headers to sort
+        orderCellsTop: true,  // For header cells to be orderable
+ 
+        fixedHeader: {
+            header: true,
+            headerOffset: 56
+        },
+        fixedColumns: {
+            left: 1, // Fix leftmost columns
+            right: 0
+        },
+        // Define column-specific sorting
+        columnDefs: [
+            {
+                // Apply to column index 1
+                targets: 1,
+                // Use our custom sorting type
+                type: 'numbers-empty-last'
+            }
+        ]
+    });
+
+    // Mobile-specific enhancements
+    if (isMobileDevice()) {
+        // Add meta viewport tag to allow zooming on mobile (both in and out)
+        $('meta[name=viewport]').attr('content', 'width=device-width, initial-scale=0.8, user-scalable=yes, minimum-scale=0.5, maximum-scale=5.0');
+
+    }
+});
+</script>
+{% endblock %}
