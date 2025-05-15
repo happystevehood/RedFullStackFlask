@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}{{ post.headline }}{% endblock %}
+
+{% block head %}
+{{ super() }}
+<meta name="description" content="{{ post.text | striptags | truncate(160) }}">
+<meta property="og:title" content="{{ post.headline }}">
+<meta property="og:description" content="{{ post.text | striptags | truncate(160) }}">
+{% if post.image_filenames and post.image_filenames[0] %} {# Use first image for OG tag #}
+<meta property="og:image" content="{{ url_for('blog_post_image', slug=post.slug, filename=post.image_filenames[0], _external=True) }}">
+{% endif %}
+<meta property="og:url" content="{{ url_for('blog_post_detail', slug=post.slug, _external=True) }}">
+<meta property="og:type" content="article">
+<style nonce="{{ csp_nonce() }}">
+    .blog-image-thumbnail-link {
+        display: inline-block; /* Allows figure to behave better with margin */
+        text-decoration: none;
+    }
+    .blog-image-thumbnail {
+        cursor: pointer;
+        transition: opacity .2s ease-in-out;
+        max-width: 100%;
+        height: auto;
+        border: 1px solid #ddd;
+        padding: 4px;
+    }
+    .blog-image-thumbnail:hover {
+        opacity: 0.8;
+    }
+    .figure-caption {
+        font-size: 0.9em;
+        color: #6c757d;
+    }
+    #imageModal .modal-lg { max-width: 85%; }
+    #imageModal .modal-body img {
+        max-height: 80vh; /* Limit image height in modal */
+        width: auto;      /* Maintain aspect ratio */
+        max-width: 100%;  /* Ensure it doesn't overflow modal width */
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <article class="blog-post">
+        <h1 class="display-5 fw-bold">{{ post.headline }}</h1>
+        <p class="blog-post-meta text-muted">
+            Posted on {{ post.created_at | format_datetime('%B %d, %Y at %H:%M') }}
+            {% if post.created_at != post.updated_at %}
+                (Last updated: {{ post.updated_at | format_datetime('%B %d, %Y at %H:%M') }})
+            {% endif %}
+        </p>
+        <hr>
+
+        {% if post.image_filenames %}
+        <div class="row mb-4">
+            {% for image_filename in post.image_filenames %}
+            <div class="col-md-4 col-sm-6 mb-3 d-flex align-items-stretch"> {# Use flex for equal height figures if desired #}
+                <figure class="figure text-center w-100">
+                    <a href="#" class="blog-image-thumbnail-link"
+                       data-bs-toggle="modal" 
+                       data-bs-target="#imageModal"
+                       data-fullsize-src="{{ url_for('blog_post_image', slug=post.slug, filename=image_filename) }}"
+                       data-caption="{{ post.headline }} - Figure {{ loop.index }}">
+                        <img src="{{ url_for('blog_post_image', slug=post.slug, filename=thumbnail_prefix ~ image_filename) }}"
+                             class="figure-img img-fluid rounded shadow-sm blog-image-thumbnail"
+                             alt="Figure {{ loop.index }} - Thumbnail of {{ image_filename }}">
+                    </a>
+                    <figcaption class="figure-caption">Figure {{ loop.index }}</figcaption>
+                </figure>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="blog-content lead">
+            {{ post.text | safe }} {# Assuming admin content can be trusted HTML #}
+        </div>
+        <hr>
+        <a href="{{ url_for('blog_index') }}" class="btn btn-outline-secondary">« Back to Blog Index</a>
+    </article>
+</div>
+
+<!-- Bootstrap Modal for Image Lightbox -->
+<div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="imageModalLabel">Image Preview</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body text-center">
+        <img src="" id="fullImageInModal" class="img-fluid" alt="Full-size image">
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block script %}
+{{ super() }}
+<script nonce="{{ csp_nonce() }}">
+document.addEventListener('DOMContentLoaded', function () {
+    var imageModal = document.getElementById('imageModal');
+    if (imageModal) {
+        imageModal.addEventListener('show.bs.modal', function (event) {
+            var triggerElement = event.relatedTarget; // Anchor tag that triggered the modal
+            var fullsizeSrc = triggerElement.getAttribute('data-fullsize-src');
+            var caption = triggerElement.getAttribute('data-caption');
+
+            var modalTitle = imageModal.querySelector('.modal-title');
+            var modalImage = imageModal.querySelector('#fullImageInModal');
+
+            modalTitle.textContent = caption;
+            modalImage.src = fullsizeSrc;
+            modalImage.alt = caption;
+        });
+        // Optional: Clear image src when modal is hidden to free memory/stop loading
+        imageModal.addEventListener('hidden.bs.modal', function() {
+            var modalImage = imageModal.querySelector('#fullImageInModal');
+            modalImage.src = ''; 
+        });
+    }
+});
+</script>
+{% endblock %}

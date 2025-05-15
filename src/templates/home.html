@@ -20,6 +20,40 @@
         If you have any feedback, suggestions, comments or questions of any kind, please use the <a href="/feedback">Feedback</a> page.
     </p>    
 
+    <!-- Featured Blog Posts Section -->
+    {% if featured_posts %}
+    <div class="mt-5">
+        <h3>Latest from the Blog</h3>
+        <hr>
+        <div class="row">
+            {% for post in featured_posts %}
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 shadow-sm">
+                        <a href="{{ url_for('blog_post_detail', slug=post.slug) }}">
+                            {% if post.image_filenames and post.image_filenames[0] %} {# Check if list exists and is not empty #}
+                            <img src="{{ url_for('blog_post_image', slug=post.slug, filename=thumbnail_prefix ~ post.image_filenames[0]) }}"
+                                class="card-img-top" alt="{{ post.headline }} preview" 
+                                style="height: 200px; object-fit: cover;">
+                            {% else %}
+                            <img src="{{ url_for('static', filename='images/placeholder.png') }}" {# Have a placeholder image #}
+                                class="card-img-top" alt="No image available" 
+                                style="height: 200px; object-fit: cover; background-color: #eee;">
+                            {% endif %}
+                        </a>
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title"><a href="{{ url_for('blog_post_detail', slug=post.slug) }}" class="text-decoration-none text-dark stretched-link">{{ post.headline }}</a></h5>
+                        <p class="card-text text-muted small">{{ post.created_at | format_datetime('%B %d, %Y') }}</p>
+                        <p class="card-text">{{ post.text | striptags | truncate(100, True, '...') }}</p>
+                        {# Stretched link on title makes the whole card clickable to the post, so no separate "Read More" button needed if card-body is mostly text #}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    <!-- End Featured Blog Posts Section -->
+
     <h3>Samples of what you can expect from this site, Sorry its all very nerdy!</h3>
 
     {%for i in range(0, pngListLen)%} 

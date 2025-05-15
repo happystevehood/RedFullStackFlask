@@ -6,7 +6,7 @@ import json
 from logging.handlers import RotatingFileHandler
 import threading
 import portalocker  # Cross-platform file locking
-
+from werkzeug.utils import secure_filename
 from flask import g, render_template as flask_render_template
 
 from google.cloud import storage
@@ -15,7 +15,7 @@ import io
 import math
 from datetime import datetime
 
-import rl.rl_data as rl_data 
+from PIL import Image # Import Pillow
 
 # file sturcture 'constants'
 # static - csv 	- input
@@ -45,6 +45,11 @@ ENV_PROD_FILE = Path('.') / ENV_PROD_FILENAME
 ENV_DEVEL_FILENAME = '.env.development'
 ENV_DEVEL_FILE = Path('.') / ENV_DEVEL_FILENAME
 
+BLOG_DATA_DIR =  Path('blog_data')
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+MAX_IMAGES_PER_POST = 6
+THUMBNAIL_SIZE = (400, 400) # Max width, max height for thumbnails
+THUMBNAIL_PREFIX = "thumb_" # Prepended to original filename for thumbnail
 
 #Here are the different logging levels 
 # DEBUG 
@@ -592,12 +597,109 @@ def convert_to_standard_time(time_str):
         return ""
 
 
-# Example usage
-#print(convert_to_standard_time("30:15.5"))      # Minutes:Seconds.Microseconds format -> "00:30:15.5"
-#print(convert_to_standard_time("30:15.567"))    # Minutes:Seconds.Microseconds format -> "00:30:15.5"
-#print(convert_to_standard_time("2:45:30"))      # Hours:Minutes:Seconds format -> "02:45:30.0"
-#print(convert_to_standard_time("2:45:30.5"))    # Hours:Minutes:Seconds.Microseconds format -> "02:45:30.5"
-#print(convert_to_standard_time("2:45:30.567"))  # Hours:Minutes:Seconds.Microseconds format -> "02:45:30.5"
-#print(convert_to_standard_time("nan"))          # NaN value -> "00:00:00.0"
-#print(convert_to_standard_time(None))           # None value -> "00:00:00.0"
-#print(convert_to_standard_time(""))             # Empty string -> "00:00:00.0"
+# --- BLOG Helper Functions ---
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def create_thumbnail(original_path, thumbnail_path, size=THUMBNAIL_SIZE):
+    logger = get_logger()
+    try:
+        img = Image.open(original_path)
+        img.thumbnail(size) # Preserves aspect ratio
+
+        # Handle specific modes before saving to avoid errors with some formats (e.g. GIF to JPEG)
+        if img.mode in ('P', '1'): # Palette or bilevel
+            img = img.convert("RGB")
+        elif img.mode in ('LA', 'PA'): # Luminance Alpha or Palette Alpha
+             # Convert to RGBA if transparency is needed for PNG thumbs, else RGB
+            if thumbnail_path.lower().endswith('.png'):
+                img = img.convert("RGBA")
+            else:
+                img = img.convert("RGB")
+        
+        # For JPEGs, ensure no alpha channel
+        if thumbnail_path.lower().endswith(('.jpg', '.jpeg')) and img.mode == 'RGBA':
+            img = img.convert('RGB')
+        
+        img.save(thumbnail_path)
+        return True
+    except IOError as e:
+        logger.error(f"Cannot create thumbnail for {original_path}: {e}")
+        return False
+
+def save_uploaded_image_and_thumbnail(post_slug, image_file, unique_base_filename):
+    logger = get_logger()
+    if image_file and allowed_file(image_file.filename):
+        original_extension = os.path.splitext(image_file.filename)[1].lower()
+        # Use the provided unique_base_filename and append original extension
+        original_filename = f"{secure_filename(unique_base_filename)}{original_extension}"
+        
+        post_image_dir = os.path.join(BLOG_DATA_DIR, post_slug)
+        os.makedirs(post_image_dir, exist_ok=True)
+        
+        original_image_path = os.path.join(post_image_dir, original_filename)
+        
+        try:
+            image_file.save(original_image_path)
+            thumbnail_filename = f"{THUMBNAIL_PREFIX}{original_filename}"
+            thumbnail_image_path = os.path.join(post_image_dir, thumbnail_filename)
+            if not create_thumbnail(original_image_path, thumbnail_image_path):
+                logger.warning(f"Thumbnail creation failed for {original_filename} but original was saved.")
+            return original_filename
+        except Exception as e:
+            logger.error(f"Error saving image {original_filename} or its thumbnail: {e}")
+            if os.path.exists(original_image_path): os.remove(original_image_path) # Clean up
+            return None
+    return None
+
+def delete_blog_image_and_thumbnail(post_slug, image_filename):
+    logger = get_logger()
+    if not image_filename: return
+    post_image_dir = os.path.join(BLOG_DATA_DIR, post_slug)
+    original_image_path = os.path.join(post_image_dir, image_filename)
+    thumbnail_image_path = os.path.join(post_image_dir, f"{THUMBNAIL_PREFIX}{image_filename}")
+    try:
+        if os.path.exists(original_image_path): os.remove(original_image_path)
+        if os.path.exists(thumbnail_image_path): os.remove(thumbnail_image_path)
+    except OSError as e:
+        logger.error(f"Error deleting image files for {image_filename} in {post_slug}: {e}")
+
+def get_all_posts(sort_by_date=True, reverse=True):
+    logger = get_logger()
+    posts = []
+    if not os.path.exists(BLOG_DATA_DIR): return posts
+    for slug_dir_name in os.listdir(BLOG_DATA_DIR):
+        post_dir = os.path.join(BLOG_DATA_DIR, slug_dir_name)
+        if os.path.isdir(post_dir):
+            content_file = os.path.join(post_dir, 'content.json')
+            if os.path.exists(content_file):
+                try:
+                    with open(content_file, 'r') as f:
+                        data = json.load(f)
+                        # Ensure slug is the directory name, not potentially from content.json
+                        data['slug'] = slug_dir_name 
+                        data['created_at_dt'] = datetime.fromisoformat(data.get('created_at', datetime.min.isoformat()))
+                        # Ensure image_filenames exists
+                        if 'image_filenames' not in data: data['image_filenames'] = []
+                        posts.append(data)
+                except (json.JSONDecodeError, IOError, ValueError) as e:
+                    logger.error(f"Error reading or parsing post {slug_dir_name}: {e}")
+    if sort_by_date:
+        posts.sort(key=lambda p: p['created_at_dt'], reverse=reverse)
+    return posts
+
+def get_post(slug):
+    logger = get_logger()
+    post_dir = os.path.join(BLOG_DATA_DIR, slug)
+    content_file = os.path.join(post_dir, 'content.json')
+    if os.path.exists(content_file) and os.path.isdir(post_dir) :
+        try:
+            with open(content_file, 'r') as f:
+                data = json.load(f)
+                data['slug'] = slug # Ensure slug is correct
+                if 'image_filenames' not in data: data['image_filenames'] = []
+                return data
+        except (json.JSONDecodeError, IOError) as e:
+            logger.error(f"Error reading post {slug}: {e}")
+    return None

@@ -96,10 +96,12 @@
               <li class="nav-item"><a class="nav-link fw-bold text-dark" href="/results">Results</a></li>
               <li class="nav-item"><a class="nav-link fw-bold text-dark" href="/search">Search</a></li>
               <li class="nav-item"><a class="nav-link fw-bold text-dark" href="/feedback">Feedback</a></li>
+              <li class="nav-item"><a class="nav-link fw-bold text-dark" href="{{ url_for('blog_index') }}">Blog</a></li>
               <li class="nav-item"><a class="nav-link fw-bold text-dark" href="/about">About</a></li>
       
               {% if session.logged_in %}
                 <li class="nav-item"><a class="nav-link fw-bold text-dark" href="/admin">Admin</a></li>
+                <li class="nav-item"><a class="nav-link fw-bold text-dark" href="{{ url_for('manage_blog_posts') }}">Manage Blog</a></li>
                 <li class="nav-item"><a class="nav-link fw-bold text-dark" href="/admin/feedback">Feedback View</a></li>
                 <li class="nav-item"><a class="nav-link fw-bold text-dark" href="/admin/logs">Logs</a></li>
                 <li class="nav-item"><a class="nav-link fw-bold text-dark" href="/logout">Logout</a></li>
