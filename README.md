@@ -2,10 +2,15 @@
 
 This project is a web-based application to search, filter, and visualize results from the **Redline Fitness Games** events (2023 and 2024). It provides an intuitive UI for athletes and enthusiasts to explore competitor performances across years, categories, and locations.
 
+At the time of writing this app is deployed on gcloud at the follwwoing link.
+> 🔗 https://app-py-951032250531.asia-southeast1.run.app/
+
+Other useful links are here.
 > 🔗 This project is independently developed and not affiliated with [redlinefitnessgames.com](https://redlinefitnessgames.com/).
 > 🔗 This development was based on my original repository [redline-fitness-results-visualisation](https://github.com/happystevehood/redline-fitness-results-visualisation)
 
 ---
+![visualisation_samples](https://github.com/user-attachments/assets/3824e2f7-9f6e-488c-80ff-6412f0889c50)
 
 ## 🚀 Features
 
@@ -15,6 +20,10 @@ This project is a web-based application to search, filter, and visualize results
 - 📱 Responsive layout, optimized for desktop and mobile
 - 💾 Clean UI using Bootstrap and custom styling
 - 🎯 Built for scalability, performance, and easy navigation
+- 
+![results_sample](https://github.com/user-attachments/assets/70778bbb-4375-482d-9bf8-8b6d6ff00064)
+![results_table](https://github.com/user-attachments/assets/d3c7c005-df77-4267-87ef-14c77c9de930)
+![searchlist](https://github.com/user-attachments/assets/4a44683c-569f-40e3-9c73-83fe0a37fe6c)
 
 ---
 
@@ -42,7 +51,6 @@ Raw results were manually copied to Excel and exported as CSV for backend ingest
 - DataTables (with scroll and fixed header support)
 - Gcloud++
 - And much more.
-
 
 ---
 
