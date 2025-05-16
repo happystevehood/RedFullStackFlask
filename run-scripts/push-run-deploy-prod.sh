@@ -10,7 +10,8 @@ cd "$(dirname "$0")/.."
 docker push  $IMAGE
 
 #Deploy to Cloud Run
-gcloud run deploy redline-results --image $IMAGE --platform managed --region asia-southeast1 --allow-unauthenticated --memory 2048M --service-account=$SERVICE_ACCOUNT
+#currently deploying manually via site
+#gcloud run deploy redline-results --image $IMAGE --platform managed --region asia-southeast1 --allow-unauthenticated --memory 1024M --service-account=$SERVICE_ACCOUNT
 
 #Set environment variables in the app gcloud run service itself
 #   --set-env-vars "ADMIN_PASSWORD=VALUE1" \

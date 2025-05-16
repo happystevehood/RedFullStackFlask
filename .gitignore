@@ -7,4 +7,6 @@
 *duration*.csv
 *df*.csv
 *.log.*
-
+src/blog_data/*
+src/blog_data/*.*
+run-scripts/gcloud-env.sh

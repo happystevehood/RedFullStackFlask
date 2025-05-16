@@ -1,5 +1,4 @@
-from flask import Flask, request, jsonify, render_template, send_file, abort, session, redirect, url_for,  flash, g
-#from flask_session import Session
+from flask import Flask, request, jsonify, render_template, send_file, send_from_directory, abort, session, redirect, url_for,  flash, g
 from markupsafe import escape
 from functools import wraps
 from datetime import datetime
@@ -23,6 +22,19 @@ from flask_wtf.csrf import CSRFProtect, generate_csrf, CSRFError
 from flask_talisman import Talisman
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+
+#for blog purposes
+import os
+from flask_wtf import FlaskForm
+from wtforms import StringField, TextAreaField, FileField, SubmitField, BooleanField
+from wtforms.validators import DataRequired, Length
+from flask_wtf.file import FileAllowed
+from werkzeug.utils import secure_filename
+from werkzeug.security import check_password_hash, generate_password_hash # If you have user auth
+from slugify import slugify # For URL-friendly slugs
+from functools import wraps
+import shutil
+import json
 
 # local inclusion.
 from rl.rl_search import find_competitor
@@ -95,6 +107,10 @@ def create_app():
         force_https=False
     )
 
+    # Ensure blog_data directory exists
+    if not os.path.exists(rl_data.BLOG_DATA_DIR):
+        os.makedirs(rl_data.BLOG_DATA_DIR)
+
     '''
     #Error handling
     app.config['TRAP_HTTP_EXCEPTIONS']=True
@@ -160,6 +176,13 @@ def inject_csrf_token():
     from flask_wtf.csrf import generate_csrf
     return dict(csrf_token=generate_csrf)
 
+@app.context_processor
+def inject_global_vars():
+    return dict(
+        get_all_posts_for_template=rl_data.get_all_posts, # For sidebar recent posts
+        thumbnail_prefix=rl_data.THUMBNAIL_PREFIX,
+        max_images_per_post_const=rl_data.MAX_IMAGES_PER_POST
+    )
 
 # Register before/after request handlers
 @app.before_request
@@ -195,6 +218,20 @@ def make_session_permanent():
     #app.logger.debug(f"Session data at {request.path}: {dict(session)}")
     #app.logger.debug(f"Session cookie: {request.cookies.get('session')}")
 
+@app.template_filter('format_datetime')
+def format_datetime_filter(value, format='%Y-%m-%d %H:%M'):
+    if value is None:
+        return ""
+    try:
+        # If it's already a datetime object
+        if isinstance(value, datetime):
+            return value.strftime(format)
+        # If it's an ISO string
+        dt = datetime.fromisoformat(value)
+        return dt.strftime(format)
+    except (ValueError, TypeError):
+        return value # Return original if parsing fails
+
 #####
 ### app.routes
 ####
@@ -207,25 +244,12 @@ def gethome():
     #clear the search results.
     session.pop('search_results', None)
 
-    #list of pngs to be displayed on home page
-    pnglistHome = [ str(rl_data.PNG_HTML_DIR / Path('visualisation_samples.png')),  
-                    str(rl_data.PNG_HTML_DIR / Path('results_sample.png')),
-                    str(rl_data.PNG_HTML_DIR / Path('results_table.png')),
-                    str(rl_data.PNG_HTML_DIR / Path('searchlist.png')),
-                    str(rl_data.PNG_HTML_DIR / Path('individual_visualisation.png'))
-                    ]
-    
-    strlistHome = [ "A Sample of Visualisations you can expect",  
-                    "A Selction of Results avaialable",
-                    "Filtered Results under your control",
-                    "Search for yourself and your friends",
-                    "Example of competitor visualisation"
-                    ]
-    
-    pngListLen = len(pnglistHome)
+    all_posts_list = rl_data.get_all_posts()
+    featured_posts = [p for p in all_posts_list if p.get('is_featured', False)][:3]
+    if not featured_posts and all_posts_list:
+        featured_posts = all_posts_list[:3]
 
-    return render_template('home.html', png_files=pnglistHome, str_list=strlistHome, pngListLen=pngListLen)
-
+    return render_template('home.html', featured_posts=featured_posts)
 
 
 @app.route('/about')
@@ -601,7 +625,77 @@ def post_display_vis():
 
             app.logger.info(f"File downloaded: {response}")
             return response
+
+
+# 3. User: View blog index (list of posts, searchable)
+@app.route('/blog')
+def blog_index():
+    all_posts_list = rl_data.get_all_posts() # Renamed to avoid conflict if get_all_posts is also a context processor name
+    query = request.args.get('q', '').lower()
+    
+    if query:
+        filtered_posts = [
+            post for post in all_posts_list
+            if query in post['headline'].lower() or query in post.get('text','').lower()
+        ]
+    else:
+        filtered_posts = all_posts_list
+    
+    page = request.args.get('page', 1, type=int)
+    per_page = 5 
+    start = (page - 1) * per_page
+    end = start + per_page
+    paginated_posts = filtered_posts[start:end]
+    total_pages = (len(filtered_posts) + per_page - 1) // per_page
+
+    return render_template('blog_index.html',
+                           posts=paginated_posts,
+                           title='Blog',
+                           query=query,
+                           current_page=page,
+                           total_pages=total_pages) # recent_posts_for_sidebar uses get_all_posts_for_template from context
+
+# Route to serve blog post images
+@app.route('/blog_data/<path:slug>/<filename>')
+def blog_post_image(slug, filename):
+    # Basic security: ensure slug and filename are somewhat sane
+    # For production, more robust validation of slug/filename patterns would be good
+    safe_slug = secure_filename(slug)
+    safe_filename = secure_filename(filename)
+    
+    # A simple check; this might be too restrictive if your slugs/filenames are complex
+    if slug != safe_slug or filename != safe_filename:
+        app.logger.warning(f"Potentially unsafe path access attempted: slug='{slug}', filename='{filename}'")
+        abort(403) # Forbidden, or 404
+    
+    directory = os.path.join(rl_data.BLOG_DATA_DIR, slug)
+    # Check if the normalized path of the directory starts with the normalized BLOG_DATA_DIR
+    # This is a common way to try and prevent path traversal.
+    if not os.path.normpath(directory).startswith(os.path.normpath(rl_data.BLOG_DATA_DIR)):
+        app.logger.error(f"Path traversal attempt detected for directory: {directory}")
+        abort(403) # Forbidden
+
+    # Further check for filename traversal (e.g. filename containing '../')
+    if '..' in filename or filename.startswith('/'):
+        app.logger.error(f"Path traversal attempt detected for filename: {filename}")
+        abort(403)
+
+    # Check if file exists
+    if not os.path.exists(os.path.join(directory, filename)):
+        app.logger.warning(f"Image not found: {os.path.join(directory, filename)}")
+        abort(404)
         
+    return send_from_directory(directory, filename)
+
+
+# 3a. User: View individual blog post
+@app.route('/blog/<slug>')
+def blog_post_detail(slug):
+    post = rl_data.get_post(slug)
+    if not post:
+        abort(404)
+    return render_template('blog_post_detail.html', post=post, title=post['headline'])
+
 ##############################
 
 # Admin routes Below this line
@@ -921,6 +1015,181 @@ def set_log_level():
     
     app.logger.info(f"Log levels updated, global: {global_level}, file: {file_level}, console: {console_level}")
     return app.redirect(app.url_for('admin', _external=True, _scheme=request.scheme))
+
+#
+# Create new blog post (GET form, POST submit)
+#
+@app.route('/admin/blog/new', methods=['GET', 'POST'])
+@login_required
+def new_blog_post():
+    if request.method == 'POST':
+        headline = request.form.get('headline')
+        text_content = request.form.get('content')
+        is_featured = 'is_featured' in request.form
+
+        if not headline or not text_content:
+            flash('Headline and content are required.', 'danger')
+            return render_template('admin_post_blog.html', legend='New Blog Post', form_data=request.form)
+
+        # --- Slug generation (must happen before image saving) ---
+        post_slug_base = slugify(headline)
+        post_slug = post_slug_base
+        counter = 1
+        # Ensure the directory for this slug doesn't exist yet
+        while os.path.exists(os.path.join(rl_data.BLOG_DATA_DIR, post_slug)):
+            post_slug = f"{post_slug_base}-{counter}"
+            counter += 1
+        # Create post directory now
+        post_dir_path = os.path.join(rl_data.BLOG_DATA_DIR, post_slug)
+        try:
+            os.makedirs(post_dir_path, exist_ok=True)
+        except OSError as e:
+            flash(f"Could not create directory for the post: {e}", "danger")
+            app.logger.error(f"Error creating post directory {post_dir_path}: {e}")
+            return render_template('admin_post_blog.html', legend='New Blog Post', form_data=request.form)
+
+        # --- Image processing ---
+        uploaded_image_filenames = []
+        for i in range(rl_data.MAX_IMAGES_PER_POST):
+            image_file = request.files.get(f'image_{i}')
+            if image_file and image_file.filename:
+                if not rl_data.allowed_file(image_file.filename):
+                    flash(f'Image {i+1} has an invalid file type. Not saved.', 'warning')
+                    continue
+                
+                unique_base_name = f"img_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{i}"
+                saved_filename = rl_data.save_uploaded_image_and_thumbnail(post_slug, image_file, unique_base_name)
+                if saved_filename:
+                    uploaded_image_filenames.append(saved_filename)
+                else:
+                    flash(f'Error saving Image {i+1}.', 'danger')
+                    # If an image fails, consider cleaning up already saved images for this post and the directory
+                    for fn in uploaded_image_filenames: # Delete successfully uploaded ones for this post
+                        rl_data.delete_blog_image_and_thumbnail(post_slug, fn)
+                    if os.path.exists(post_dir_path): shutil.rmtree(post_dir_path)
+                    return render_template('admin_post_blog.html', legend='New Blog Post', form_data=request.form)
+        
+        if not uploaded_image_filenames:
+            flash('At least one image is required for a new post.', 'danger')
+            if os.path.exists(post_dir_path): shutil.rmtree(post_dir_path) # Clean up created dir
+            return render_template('admin_post_blog.html', legend='New Blog Post', form_data=request.form)
+
+        # --- Save content.json ---
+        now = datetime.now().isoformat()
+        post_data = {
+            'headline': headline,
+            'text': text_content,
+            'image_filenames': uploaded_image_filenames,
+            'created_at': now,
+            'updated_at': now,
+            'is_featured': is_featured,
+            'slug': post_slug # Storing slug in content.json for consistency, though dir name is canonical
+        }
+        with open(os.path.join(post_dir_path, 'content.json'), 'w') as f:
+            json.dump(post_data, f, indent=4)
+
+        flash('Blog post created successfully!', 'success')
+        return redirect(url_for('manage_blog_posts'))
+
+    return render_template('admin_post_blog.html', legend='New Blog Post')
+
+
+# 1b & 2. Admin: Manage (list, edit, delete links)
+@app.route('/admin/blog/manage', methods=['GET', 'POST'])
+@login_required
+def manage_blog_posts():
+    posts = rl_data.get_all_posts() # Sorted by date descending by default
+    return render_template('admin_manage_posts.html', posts=posts)
+
+# 2a. Admin: Edit existing post
+@app.route('/admin/blog/edit/<slug>', methods=['GET', 'POST'])
+@login_required
+def edit_blog_post(slug):
+    post = rl_data.get_post(slug)
+    if not post: abort(404)
+    
+    current_image_filenames = list(post.get('image_filenames', [])) # Make a mutable copy
+
+    if request.method == 'POST':
+        post['headline'] = request.form.get('headline', post['headline'])
+        post['text'] = request.form.get('content', post['text'])
+        post['is_featured'] = 'is_featured' in request.form
+
+        # --- Handle Image Deletions ---
+        indices_to_delete_from_current = []
+        for i, existing_filename in enumerate(current_image_filenames):
+            if request.form.get(f'delete_image_{i}'):
+                indices_to_delete_from_current.append(i)
+        
+        # Iterate backwards to avoid index shifting issues when removing
+        for index in sorted(indices_to_delete_from_current, reverse=True):
+            filename_to_delete = current_image_filenames.pop(index)
+            rl_data.delete_blog_image_and_thumbnail(slug, filename_to_delete)
+        
+        # --- Handle New Image Uploads ---
+        newly_added_filenames = []
+        for i in range(rl_data.MAX_IMAGES_PER_POST): # Iterate through potential new upload slots
+            if len(current_image_filenames) + len(newly_added_filenames) >= rl_data.MAX_IMAGES_PER_POST:
+                if request.files.get(f'new_image_{i}') and request.files.get(f'new_image_{i}').filename:
+                    flash(f'Maximum of {rl_data.MAX_IMAGES_PER_POST} images reached. Additional uploads ignored.', 'warning')
+                break # Max images reached
+            
+            image_file = request.files.get(f'new_image_{i}')
+            if image_file and image_file.filename:
+                if not rl_data.allowed_file(image_file.filename):
+                    flash(f'New Image (slot {i+1}) has an invalid file type. Not saved.', 'warning')
+                    continue
+                
+                unique_base_name = f"img_edit_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{i}"
+                saved_filename = rl_data.save_uploaded_image_and_thumbnail(slug, image_file, unique_base_name)
+                if saved_filename:
+                    newly_added_filenames.append(saved_filename)
+                else:
+                    flash(f'Error saving new Image (slot {i+1}).', 'warning')
+        
+        post['image_filenames'] = current_image_filenames + newly_added_filenames
+
+        if not post['image_filenames']:
+            flash('A post must have at least one image. Please add an image.', 'danger')
+            # To prevent saving without images, you could return here:
+            # return render_template('admin_post_blog.html', legend=f'Edit Post: "{post["headline"]}"', post=post, form_data=request.form, current_images_for_form=post.get('image_filenames', []))
+
+        post['updated_at'] = datetime.now().isoformat()
+        
+        post_dir_path = os.path.join(rl_data.BLOG_DATA_DIR, slug)
+        with open(os.path.join(post_dir_path, 'content.json'), 'w') as f:
+            json.dump(post, f, indent=4)
+
+        flash('Blog post updated successfully!', 'success')
+        return redirect(url_for('manage_blog_posts'))
+
+    # GET request
+    form_data = {
+        'headline': post['headline'],
+        'content': post['text'],
+        'is_featured': post.get('is_featured', False)
+    }
+    return render_template('admin_post_blog.html', 
+                           legend=f'Edit Post: "{post["headline"]}"', 
+                           post=post, 
+                           form_data=form_data, 
+                           current_images_for_form=current_image_filenames) # Pass current images for display
+# 2b. Admin: Delete post
+@app.route('/admin/blog/delete/<slug>', methods=['POST']) # Use POST for destructive actions
+@login_required
+def delete_blog_post(slug):
+    post_dir = os.path.join(rl_data.BLOG_DATA_DIR, slug)
+    if os.path.exists(post_dir) and os.path.isdir(post_dir):
+        try:
+            shutil.rmtree(post_dir) # This deletes content.json and all images/thumbnails
+            flash(f'Post "{slug}" and all its images deleted successfully.', 'success')
+        except OSError as e:
+            flash(f'Error deleting post (TODO Content delete, but dir remains) "{slug}": {e}', 'danger')
+            app.logger.error(f"Error deleting directory {post_dir}: {e}")
+    else:
+        flash(f'Post "{slug}" not found for deletion.', 'warning')
+    return redirect(url_for('manage_blog_posts'))
+
 
 ##############################
 

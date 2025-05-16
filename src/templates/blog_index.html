@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block head %}
+{{ super() }}
+<style nonce="{{ csp_nonce() }}">
+    .blog-index-preview-image-container {
+        max-width: 300px; /* Adjust this to your desired max width */
+        margin-bottom: 1rem; /* Add some space below the image */
+        /* You could also use float: left; margin-right: 1rem; if you want text to wrap */
+    }
+    .blog-index-preview-image {
+        /* img-fluid already does max-width: 100%; height: auto; */
+        border-radius: 0.25rem; /* Optional: if you want rounded corners */
+        border: 1px solid #eee; /* Optional: subtle border */
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8">
+            <h2>Redline Blog</h2>
+            <hr>
+
+            <form method="GET" action="{{ url_for('blog_index') }}" class="mb-4">
+                <div class="input-group">
+                    <input type="text" name="q" class="form-control" placeholder="Search blog posts..." value="{{ query or '' }}">
+                    <button class="btn btn-outline-secondary" type="submit">Search</button>
+                    {% if query %}
+                    <a href="{{ url_for('blog_index') }}" class="btn btn-outline-danger" title="Clear Search">×</a>
+                    {% endif %}
+                </div>
+            </form>
+
+            {% if posts %}
+                {% for post in posts %}
+                <article class="blog-post mb-4 pb-4 border-bottom">
+                    <h3><a href="{{ url_for('blog_post_detail', slug=post.slug) }}">{{ post.headline }}</a></h3>
+                    <p class="blog-post-meta text-muted">
+                        Posted on {{ post.created_at | format_datetime('%B %d, %Y') }}
+                    </p>
+
+                    {# --- IMAGE PREVIEW SECTION --- #}
+                    {% if post.image_filenames and post.image_filenames[0] %}
+                    <div class="blog-index-preview-image-container">
+                        <a href="{{ url_for('blog_post_detail', slug=post.slug) }}">
+                            <img src="{{ url_for('blog_post_image', slug=post.slug, filename=thumbnail_prefix ~ post.image_filenames[0]) }}"
+                                 class="img-fluid blog-index-preview-image" {# img-fluid is key here #}
+                                 alt="{{ post.headline }} preview">
+                        </a>
+                    </div>
+                    {% elif not query %} {# Optional: Show placeholder only if not a search result page #}
+                    <div class="blog-index-preview-image-container">
+                         <a href="{{ url_for('blog_post_detail', slug=post.slug) }}">
+                            <img src="{{ url_for('static', filename='images/placeholder.png') }}"
+                                 class="img-fluid blog-index-preview-image"
+                                 alt="No image available">
+                         </a>
+                    </div>
+                    {% endif %}
+                    {# --- END IMAGE PREVIEW SECTION --- #}
+                    
+                    <p>
+                        {{ post.text | striptags | truncate(250, True, '...') }}
+                    </p>
+                    <a href="{{ url_for('blog_post_detail', slug=post.slug) }}" class="btn btn-sm btn-outline-primary">Read More »</a>
+                </article>
+                {% endfor %}
+
+                <!-- Pagination (your existing pagination code) -->
+                {% if total_pages > 1 %}
+                <nav aria-label="Page navigation">
+                    <ul class="pagination justify-content-center">
+                        <li class="page-item {% if current_page == 1 %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('blog_index', page=current_page-1, q=query if query else None) }}">Previous</a>
+                        </li>
+                        {% for page_num in range(1, total_pages + 1) %}
+                        <li class="page-item {% if page_num == current_page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('blog_index', page=page_num, q=query if query else None) }}">{{ page_num }}</a>
+                        </li>
+                        {% endfor %}
+                        <li class="page-item {% if current_page == total_pages %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('blog_index', page=current_page+1, q=query if query else None) }}">Next</a>
+                        </li>
+                    </ul>
+                </nav>
+                {% endif %}
+
+            {% else %}
+                {% if query %}
+                <p>No posts found matching your search criteria: "<strong>{{ query }}</strong>".</p>
+                {% else %}
+                <p>No blog posts yet. Check back soon!</p>
+                {% endif %}
+            {% endif %}
+        </div>
+        <div class="col-md-4">
+            {# Sidebar content #}
+            <h4>Recent Posts</h4>
+            <ul class="list-unstyled">
+                {% set recent_posts_list = get_all_posts_for_template(sort_by_date=True, reverse=True)[:5] %}
+                {% for r_post in recent_posts_list %}
+                <li><a href="{{ url_for('blog_post_detail', slug=r_post.slug) }}">{{ r_post.headline }}</a></li>
+                {% else %}
+                <li>No recent posts.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
