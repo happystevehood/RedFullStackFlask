@@ -54,18 +54,5 @@
     {% endif %}
     <!-- End Featured Blog Posts Section -->
 
-    <h3>Samples of what you can expect from this site, Sorry its all very nerdy!</h3>
-
-    {%for i in range(0, pngListLen)%} 
-  
-    <div>
-        <br>
-        <h5>{{str_list[i]}}</h5>
-        <img src="{{ png_files[i] }}" width="80%" border="1">
-        </br>
-    </div>
-
-    {%endfor%} 
-
 </div>
 {% endblock %}

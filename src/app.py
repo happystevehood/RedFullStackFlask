@@ -244,32 +244,12 @@ def gethome():
     #clear the search results.
     session.pop('search_results', None)
 
-    #list of pngs to be displayed on home page
-    pnglistHome = [ str(rl_data.PNG_HTML_DIR / Path('visualisation_samples.png')),  
-                    str(rl_data.PNG_HTML_DIR / Path('results_sample.png')),
-                    str(rl_data.PNG_HTML_DIR / Path('results_table.png')),
-                    str(rl_data.PNG_HTML_DIR / Path('searchlist.png')),
-                    str(rl_data.PNG_HTML_DIR / Path('individual_visualisation.png'))
-                    ]
-    
-    strlistHome = [ "A Sample of Visualisations you can expect",  
-                    "A Selction of Results avaialable",
-                    "Filtered Results under your control",
-                    "Search for yourself and your friends",
-                    "Example of competitor visualisation"
-                    ]
-    
-
     all_posts_list = rl_data.get_all_posts()
     featured_posts = [p for p in all_posts_list if p.get('is_featured', False)][:3]
     if not featured_posts and all_posts_list:
         featured_posts = all_posts_list[:3]
 
-    pngListLen = len(pnglistHome)
-
-    return render_template('home.html', png_files=pnglistHome, str_list=strlistHome, pngListLen=pngListLen,
-                           featured_posts=featured_posts)
-
+    return render_template('home.html', featured_posts=featured_posts)
 
 
 @app.route('/about')
@@ -1204,7 +1184,7 @@ def delete_blog_post(slug):
             shutil.rmtree(post_dir) # This deletes content.json and all images/thumbnails
             flash(f'Post "{slug}" and all its images deleted successfully.', 'success')
         except OSError as e:
-            flash(f'Error deleting post "{slug}": {e}', 'danger')
+            flash(f'Error deleting post (TODO Content delete, but dir remains) "{slug}": {e}', 'danger')
             app.logger.error(f"Error deleting directory {post_dir}: {e}")
     else:
         flash(f'Post "{slug}" not found for deletion.', 'warning')

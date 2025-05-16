@@ -55,7 +55,9 @@
             {% endif %}
         </p>
         <hr>
-
+        <div class="blog-content lead">
+            {{ post.text | safe }} {# Assuming admin content can be trusted HTML #}
+        </div>
         {% if post.image_filenames %}
         <div class="row mb-4">
             {% for image_filename in post.image_filenames %}
@@ -76,10 +78,6 @@
             {% endfor %}
         </div>
         {% endif %}
-
-        <div class="blog-content lead">
-            {{ post.text | safe }} {# Assuming admin content can be trusted HTML #}
-        </div>
         <hr>
         <a href="{{ url_for('blog_index') }}" class="btn btn-outline-secondary">« Back to Blog Index</a>
     </article>
