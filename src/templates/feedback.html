@@ -1,4 +1,7 @@
 {% extends "base.html" %}
+
+{% block title %}Feedback | Redline Results{% endblock %}
+
 {% block content %}
 <style nonce="{{ csp_nonce() }}">
     .feedback-container {
@@ -25,7 +28,7 @@
 </style>
 
 <div class="container feedback-container">
-    <h2>We’d Love Your Feedback</h2>
+    <h2>We’d Love Your Feedback on The Redline Fitness Games Results Explorer</h2>
     <p>Your thoughts help us improve the Redline Fitness Games Results Explorer. Tell us what works well and what needs attention.</p>
 
     {% with messages = get_flashed_messages() %}
@@ -85,7 +88,7 @@
             <input type="file" class="form-control" name="screenshot" id="screenshot" accept="image/*">
         </div>
         -->
-
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-primary mt-3">Send Feedback</button>
     </form>
 </div>

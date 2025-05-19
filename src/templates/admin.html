@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Admin | Redline Fitness Games{% endblock %}
+{% block title %}Admin | Redline Results{% endblock %}
 
 {% block content %}
 
@@ -55,7 +55,7 @@
             {% endfor %}
         </select>
 
-    
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-sm btn-primary">Update</button>
     </form>
 

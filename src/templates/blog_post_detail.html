@@ -55,40 +55,50 @@
             {% endif %}
         </p>
         <hr>
-        <div class="blog-content lead">
-            {{ post.text | safe }} {# Assuming admin content can be trusted HTML #}
-        </div>
+
         {% if post.image_filenames %}
         <div class="row mb-4">
             {% for image_filename in post.image_filenames %}
-            <div class="col-md-4 col-sm-6 mb-3 d-flex align-items-stretch"> {# Use flex for equal height figures if desired #}
+            <div class="col-md-4 col-sm-6 mb-3 d-flex align-items-stretch">
                 <figure class="figure text-center w-100">
+                    {# --- Get caption for this image, default to "Figure X" if blank --- #}
+                    {% set current_caption = post.image_captions[loop.index0] if post.image_captions and loop.index0 < post.image_captions|length else "" %}
+                    {% set display_caption = current_caption|trim if current_caption|trim else "Figure " ~ loop.index %}
+                    
                     <a href="#" class="blog-image-thumbnail-link"
                        data-bs-toggle="modal" 
                        data-bs-target="#imageModal"
                        data-fullsize-src="{{ url_for('blog_post_image', slug=post.slug, filename=image_filename) }}"
-                       data-caption="{{ post.headline }} - Figure {{ loop.index }}">
+                       data-caption="{{ display_caption }}"> {# Use display_caption for modal #}
                         <img src="{{ url_for('blog_post_image', slug=post.slug, filename=thumbnail_prefix ~ image_filename) }}"
                              class="figure-img img-fluid rounded shadow-sm blog-image-thumbnail"
-                             alt="Figure {{ loop.index }} - Thumbnail of {{ image_filename }}">
+                             alt="{{ display_caption }} - Thumbnail"> {# Use display_caption for alt text #}
                     </a>
-                    <figcaption class="figure-caption">Figure {{ loop.index }}</figcaption>
+                    <figcaption class="figure-caption">{{ display_caption }}</figcaption> {# Display final caption #}
                 </figure>
             </div>
             {% endfor %}
         </div>
         {% endif %}
+
+        <div class="blog-content lead">
+            {{ post.text | safe }}
+        </div>
+        
+        <div class="text-muted mt-4 pt-2 border-top">
+            <small>Viewed {{ post.view_count | default(0) }} times.</small>
+        </div>
         <hr>
         <a href="{{ url_for('blog_index') }}" class="btn btn-outline-secondary">« Back to Blog Index</a>
     </article>
 </div>
 
-<!-- Bootstrap Modal for Image Lightbox -->
+<!-- Bootstrap Modal for Image Lightbox (modal title will now use the display_caption) -->
 <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="imageModalLabel">Image Preview</h5>
+        <h5 class="modal-title" id="imageModalLabel">Image Preview</h5> {# This will be updated by JS #}
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body text-center">
@@ -106,18 +116,17 @@ document.addEventListener('DOMContentLoaded', function () {
     var imageModal = document.getElementById('imageModal');
     if (imageModal) {
         imageModal.addEventListener('show.bs.modal', function (event) {
-            var triggerElement = event.relatedTarget; // Anchor tag that triggered the modal
+            var triggerElement = event.relatedTarget;
             var fullsizeSrc = triggerElement.getAttribute('data-fullsize-src');
-            var caption = triggerElement.getAttribute('data-caption');
+            var captionFromData = triggerElement.getAttribute('data-caption'); // This now gets the potentially "Figure X" caption
 
             var modalTitle = imageModal.querySelector('.modal-title');
             var modalImage = imageModal.querySelector('#fullImageInModal');
 
-            modalTitle.textContent = caption;
+            modalTitle.textContent = captionFromData; // Use the caption from data-caption
             modalImage.src = fullsizeSrc;
-            modalImage.alt = caption;
+            modalImage.alt = captionFromData; // Also set alt text for modal image
         });
-        // Optional: Clear image src when modal is hidden to free memory/stop loading
         imageModal.addEventListener('hidden.bs.modal', function() {
             var modalImage = imageModal.querySelector('#fullImageInModal');
             modalImage.src = ''; 

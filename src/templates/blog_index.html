@@ -23,10 +23,11 @@
 <div class="container mt-4">
     <div class="row">
         <div class="col-md-8">
-            <h2>Redline Blog</h2>
+            <h2>The Redline Fitness Games Results Explorer Blog</h2>
             <hr>
 
             <form method="GET" action="{{ url_for('blog_index') }}" class="mb-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="input-group">
                     <input type="text" name="q" class="form-control" placeholder="Search blog posts..." value="{{ query or '' }}">
                     <button class="btn btn-outline-secondary" type="submit">Search</button>

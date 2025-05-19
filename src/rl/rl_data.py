@@ -13,7 +13,7 @@ from google.cloud import storage
 import csv
 import io
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 
 from PIL import Image # Import Pillow
 
@@ -33,6 +33,7 @@ PNG_COMP_DIR     = Path('static') / 'png' / 'comp'
 PNG_GENERIC_DIR  = Path('static') / 'png' / 'generic' 
 PNG_HTML_DIR     = Path('static') / 'png' / 'html' 
 
+
 # This data should not be served to the user
 LOG_FILE_DIR      = Path('store') / 'logs'
 LOG_FILE          = LOG_FILE_DIR / 'activity.log'
@@ -46,10 +47,15 @@ ENV_DEVEL_FILENAME = '.env.development'
 ENV_DEVEL_FILE = Path('.') / ENV_DEVEL_FILENAME
 
 BLOG_DATA_DIR =  Path('blog_data')
+BLOG_CONFIG_FILE_PATH = BLOG_DATA_DIR / 'blog_config.json' # Path to your config file
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 MAX_IMAGES_PER_POST = 6
 THUMBNAIL_SIZE = (400, 400) # Max width, max height for thumbnails
 THUMBNAIL_PREFIX = "thumb_" # Prepended to original filename for thumbnail
+
+BASE_URL = "https://redline-results-951032250531.asia-southeast1.run.app"
+ROBOTS_DIR       = Path('static') 
+
 
 #Here are the different logging levels 
 # DEBUG 
@@ -598,6 +604,22 @@ def convert_to_standard_time(time_str):
 
 
 # --- BLOG Helper Functions ---
+def load_global_blog_config():
+    try:
+        with open(BLOG_CONFIG_FILE_PATH, 'r') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        # Return default config if file not found or invalid
+        return {"max_featured_posts_on_home": 3}
+
+def save_global_blog_config(config_data):
+    try:
+        with open(BLOG_CONFIG_FILE_PATH, 'w') as f:
+            json.dump(config_data, f, indent=4)
+        return True
+    except IOError:
+        return False
+
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -665,10 +687,10 @@ def delete_blog_image_and_thumbnail(post_slug, image_filename):
     except OSError as e:
         logger.error(f"Error deleting image files for {image_filename} in {post_slug}: {e}")
 
-def get_all_posts(sort_by_date=True, reverse=True):
+def get_all_posts(sort_by_date=True, reverse=True, include_unpublished=False):
     logger = get_logger()
     posts = []
-    if not os.path.exists(BLOG_DATA_DIR): return posts
+    # ... (existing code to iterate through blog_data directories) ...
     for slug_dir_name in os.listdir(BLOG_DATA_DIR):
         post_dir = os.path.join(BLOG_DATA_DIR, slug_dir_name)
         if os.path.isdir(post_dir):
@@ -677,29 +699,88 @@ def get_all_posts(sort_by_date=True, reverse=True):
                 try:
                     with open(content_file, 'r') as f:
                         data = json.load(f)
-                        # Ensure slug is the directory name, not potentially from content.json
-                        data['slug'] = slug_dir_name 
-                        data['created_at_dt'] = datetime.fromisoformat(data.get('created_at', datetime.min.isoformat()))
-                        # Ensure image_filenames exists
-                        if 'image_filenames' not in data: data['image_filenames'] = []
+                    data['slug'] = slug_dir_name
+                    data['created_at_dt'] = datetime.fromisoformat(data.get('created_at', datetime.min.isoformat()))
+                    
+                    # Ensure new fields exist with defaults
+                    if 'image_filenames' not in data: data['image_filenames'] = []
+                    if 'image_captions' not in data: data['image_captions'] = [""] * len(data['image_filenames']) # Default empty captions
+                    if 'is_published' not in data: data['is_published'] = True # Default to published for old posts
+                    if 'view_count' not in data: data['view_count'] = 0
+
+                    # Pad image_captions if image_filenames is longer (e.g., after adding images without updating captions)
+                    if len(data['image_captions']) < len(data['image_filenames']):
+                        data['image_captions'].extend([""] * (len(data['image_filenames']) - len(data['image_captions'])))
+                    
+                    if include_unpublished or data.get('is_published', True): # Check if published
                         posts.append(data)
                 except (json.JSONDecodeError, IOError, ValueError) as e:
                     logger.error(f"Error reading or parsing post {slug_dir_name}: {e}")
+
     if sort_by_date:
         posts.sort(key=lambda p: p['created_at_dt'], reverse=reverse)
     return posts
 
-def get_post(slug):
+
+def get_post(slug, increment_view_count=False):
     logger = get_logger()
+    
     post_dir = os.path.join(BLOG_DATA_DIR, slug)
     content_file = os.path.join(post_dir, 'content.json')
     if os.path.exists(content_file) and os.path.isdir(post_dir) :
         try:
             with open(content_file, 'r') as f:
                 data = json.load(f)
-                data['slug'] = slug # Ensure slug is correct
-                if 'image_filenames' not in data: data['image_filenames'] = []
-                return data
+            data['slug'] = slug
+            if 'image_filenames' not in data: data['image_filenames'] = []
+            if 'image_captions' not in data: data['image_captions'] = [""] * len(data['image_filenames'])
+            if 'is_published' not in data: data['is_published'] = True
+            if 'view_count' not in data: data['view_count'] = 0
+
+            if len(data['image_captions']) < len(data['image_filenames']):
+                data['image_captions'].extend([""] * (len(data['image_filenames']) - len(data['image_captions'])))
+
+            if increment_view_count and data.get('is_published', True):
+                data['view_count'] = data.get('view_count', 0) + 1
+                # Save the updated view count immediately
+                with open(content_file, 'w') as f_write:
+                    json.dump(data, f_write, indent=4)
+            return data
         except (json.JSONDecodeError, IOError) as e:
             logger.error(f"Error reading post {slug}: {e}")
     return None
+
+def get_static_page_lastmod(template_name):
+    logger = get_logger()
+    try:
+        filepath = os.path.join(TEMPLATE_FOLDER, template_name)
+        if os.path.exists(filepath):
+            mod_time = os.path.getmtime(filepath)
+            return datetime.fromtimestamp(mod_time, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+    except Exception as e:
+        logger.error(f"Error getting lastmod for {template_name}: {e}")
+    return None
+
+def format_iso_datetime_for_sitemap(iso_string):
+    """Converts ISO string (potentially with microseconds) to sitemap's lastmod format."""
+    logger = get_logger()
+    if not iso_string:
+        return None
+    try:
+        # Try parsing with microseconds first
+        dt_obj = datetime.fromisoformat(iso_string.replace("Z", "+00:00"))
+    except ValueError:
+        try:
+            # Try parsing without microseconds if the first attempt fails
+            dt_obj = datetime.strptime(iso_string.replace("Z", "+00:00"), "%Y-%m-%dT%H:%M:%S+00:00")
+        except ValueError:
+            logger.warning(f"Could not parse datetime string for sitemap: {iso_string}")
+            return None
+
+    # Ensure it's timezone-aware (UTC)
+    if dt_obj.tzinfo is None:
+        dt_obj = dt_obj.replace(tzinfo=timezone.utc)
+    else:
+        dt_obj = dt_obj.astimezone(timezone.utc)
+
+    return dt_obj.strftime("%Y-%m-%dT%H:%M:%S+00:00")

@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, send_file, send_from_directory, abort, session, redirect, url_for,  flash, g
+from flask import Flask, request, jsonify, render_template, send_file, send_from_directory, abort, session, redirect, url_for,  flash, g, make_response
 from markupsafe import escape
 from functools import wraps
 from datetime import datetime
@@ -51,8 +51,8 @@ def create_app():
     config_class = get_config()
     
     # Create Flask app
-    app = Flask(__name__)
-    
+    app = Flask(__name__) #, static_url_path='/src/static') #, static_folder='src/static'
+
     # Apply configuration
     app.config.from_object(config_class)
     config_class.init_app(app)
@@ -178,6 +178,7 @@ def inject_csrf_token():
 
 @app.context_processor
 def inject_global_vars():
+    global_config = rl_data.load_global_blog_config()
     return dict(
         get_all_posts_for_template=rl_data.get_all_posts, # For sidebar recent posts
         thumbnail_prefix=rl_data.THUMBNAIL_PREFIX,
@@ -244,12 +245,103 @@ def gethome():
     #clear the search results.
     session.pop('search_results', None)
 
-    all_posts_list = rl_data.get_all_posts()
-    featured_posts = [p for p in all_posts_list if p.get('is_featured', False)][:3]
-    if not featured_posts and all_posts_list:
-        featured_posts = all_posts_list[:3]
+    global_config = rl_data.load_global_blog_config()
+    max_home_featured = global_config.get('max_featured_posts_on_home', 3)
+    
+    all_published_posts = rl_data.get_all_posts() # Published only
+    featured_posts = [p for p in all_published_posts if p.get('is_featured', False)][:max_home_featured]
+    
+    # If not enough "featured", fill with most recent published (up to max_home_featured)
+    if len(featured_posts) < max_home_featured:
+        # Get recent posts that are not already in featured_posts
+        recent_additional = [
+            p for p in all_published_posts 
+            if p not in featured_posts
+        ][:max_home_featured - len(featured_posts)]
+        featured_posts.extend(recent_additional)
 
     return render_template('home.html', featured_posts=featured_posts)
+
+@app.route("/sitemap.xml")
+def sitemap():
+    app.logger.info("Sitemap.xml route handler was called (dynamic).")
+    pages = []
+
+    # Static pages
+    # For 'loc', use url_for with _external=True or construct with BASE_URL.
+    # For sitemaps, explicit BASE_URL + path is often safer.
+    static_routes_info = [
+        {'path': '/', 'priority': '1.0', 'changefreq': 'daily', 'template': 'home.html'}, # Assuming you have an index.html template
+        {'path': '/blog', 'priority': '0.9', 'changefreq': 'weekly', 'template': 'blog_index.html'}, # Or however your main blog page is served
+        {'path': '/about', 'priority': '0.9', 'changefreq': 'monthly', 'template': 'about.html'},
+        {'path': '/search', 'priority': '0.7', 'changefreq': 'monthly', 'template': 'search.html'},
+        {'path': '/results', 'priority': '0.7', 'changefreq': 'yearly', 'template': 'results.html'},
+        {'path': '/feedback', 'priority': '0.7', 'changefreq': 'yearly', 'template': 'feedback.html'},
+    ]
+
+    for route_info in static_routes_info:
+        # Ensure a template is specified for lastmod calculation
+        lastmod_val = rl_data.get_static_page_lastmod(route_info['template']) if route_info.get('template') else None
+        pages.append({
+            'loc': f"{rl_data.BASE_URL.rstrip('/')}{route_info['path']}",
+            'priority': route_info['priority'],
+            'changefreq': route_info['changefreq'],
+            'lastmod': lastmod_val
+        })    
+
+
+    # Dynamic Blog Posts from rl_data.BLOG_DATA_DIR
+    # Ensure rl_data.BLOG_DATA_DIR is the correct path to the directory containing post subfolders
+    # e.g., /app/my_blog_data/posts/ (if posts are in /app/my_blog_data/posts/post-slug-folder/)
+    blog_data_path = rl_data.BLOG_DATA_DIR # Use the actual path from your rl_data module
+    app.logger.info(f"Scanning for blog posts in: {blog_data_path}")
+
+    if not os.path.exists(blog_data_path) or not os.path.isdir(blog_data_path):
+        app.logger.error(f"Blog data directory not found or not a directory: {blog_data_path}")
+    else:
+        for post_folder_name in os.listdir(blog_data_path):
+            post_folder_path = os.path.join(blog_data_path, post_folder_name)
+            if os.path.isdir(post_folder_path):
+                content_file_path = os.path.join(post_folder_path, 'content.json')
+                if os.path.exists(content_file_path):
+                    try:
+                        with open(content_file_path, 'r', encoding='utf-8') as f:
+                            post_content = json.load(f)
+
+                        if post_content.get('is_published', False) and 'slug' in post_content and 'updated_at' in post_content:
+                            pages.append({
+                                'loc': f"{rl_data.BASE_URL}/blog/{post_content['slug']}",
+                                'lastmod': rl_data.format_iso_datetime_for_sitemap(post_content['updated_at']),
+                                'changefreq': 'weekly', # Or 'monthly' if posts rarely update after publishing
+                                'priority': '0.8'      # Individual blog posts are usually important
+                            })
+                        elif not post_content.get('is_published', False):
+                            app.logger.debug(f"Skipping unpublished post: {post_content.get('slug', post_folder_name)}")
+                        else:
+                            app.logger.warning(f"Skipping post in {post_folder_name} due to missing slug or updated_at in content.json")
+
+                    except json.JSONDecodeError:
+                        app.logger.error(f"Error decoding JSON for post in {post_folder_name}/content.json")
+                    except Exception as e:
+                        app.logger.error(f"Error processing post {post_folder_name}: {e}")
+                else:
+                    app.logger.warning(f"No content.json found in blog post folder: {post_folder_path}")
+
+    try:
+        sitemap_xml_content = render_template("sitemap.xml", pages=pages)
+        response = make_response(sitemap_xml_content)
+        response.headers["Content-Type"] = "application/xml"
+        app.logger.info(f"Successfully rendered sitemap.xml with {len(pages)} URLs.")
+        return response
+    except Exception as e:
+        app.logger.error(f"Error rendering sitemap.xml: {e}", exc_info=True)
+        return "Error generating sitemap", 500
+
+@app.route('/robots.txt')
+def robots_txt():
+    app.logger.info("robots.txt route handler was called.")
+    # Serves 'robots.txt' from your 'static_folder' (which is 'static/')
+    return send_from_directory(rl_data.ROBOTS_DIR, 'robots.txt')
 
 
 @app.route('/about')
@@ -629,31 +721,23 @@ def post_display_vis():
 
 # 3. User: View blog index (list of posts, searchable)
 @app.route('/blog')
+@app.route('/blog')
 def blog_index():
-    all_posts_list = rl_data.get_all_posts() # Renamed to avoid conflict if get_all_posts is also a context processor name
+    all_published_posts = rl_data.get_all_posts() # Default: published only
+    # ... (rest of your existing blog_index logic for search, pagination) ...
     query = request.args.get('q', '').lower()
-    
     if query:
-        filtered_posts = [
-            post for post in all_posts_list
-            if query in post['headline'].lower() or query in post.get('text','').lower()
-        ]
+        filtered_posts = [p for p in all_published_posts if query in p['headline'].lower() or query in p.get('text','').lower()]
     else:
-        filtered_posts = all_posts_list
+        filtered_posts = all_published_posts
     
-    page = request.args.get('page', 1, type=int)
-    per_page = 5 
-    start = (page - 1) * per_page
-    end = start + per_page
+    page = request.args.get('page', 1, type=int); per_page = 5
+    start = (page - 1) * per_page; end = start + per_page
     paginated_posts = filtered_posts[start:end]
     total_pages = (len(filtered_posts) + per_page - 1) // per_page
 
-    return render_template('blog_index.html',
-                           posts=paginated_posts,
-                           title='Blog',
-                           query=query,
-                           current_page=page,
-                           total_pages=total_pages) # recent_posts_for_sidebar uses get_all_posts_for_template from context
+    return render_template('blog_index.html', posts=paginated_posts, title='Blog', query=query, current_page=page, total_pages=total_pages)
+
 
 # Route to serve blog post images
 @app.route('/blog_data/<path:slug>/<filename>')
@@ -688,11 +772,15 @@ def blog_post_image(slug, filename):
     return send_from_directory(directory, filename)
 
 
-# 3a. User: View individual blog post
+# User: View individual blog post@app.route('/blog/<slug>')
 @app.route('/blog/<slug>')
 def blog_post_detail(slug):
-    post = rl_data.get_post(slug)
-    if not post:
+    # Increment view count only for published posts
+    post = rl_data.get_post(slug, increment_view_count=True) 
+    if not post or not post.get('is_published', True): # Also check if published before showing
+        # If admin is logged in, you *could* allow them to see unpublished posts.
+        # For simplicity, we'll just 404 for everyone if not published.
+        # if not (session.get('logged_in') and post): # Example admin bypass
         abort(404)
     return render_template('blog_post_detail.html', post=post, title=post['headline'])
 
@@ -1026,64 +1114,63 @@ def new_blog_post():
         headline = request.form.get('headline')
         text_content = request.form.get('content')
         is_featured = 'is_featured' in request.form
+        is_published = 'is_published' in request.form # New field
 
-        if not headline or not text_content:
-            flash('Headline and content are required.', 'danger')
-            return render_template('admin_post_blog.html', legend='New Blog Post', form_data=request.form)
-
-        # --- Slug generation (must happen before image saving) ---
+        # ... (slug generation, post directory creation - as before) ...
+        # Ensure slug generation and directory creation logic is here
         post_slug_base = slugify(headline)
         post_slug = post_slug_base
         counter = 1
-        # Ensure the directory for this slug doesn't exist yet
         while os.path.exists(os.path.join(rl_data.BLOG_DATA_DIR, post_slug)):
             post_slug = f"{post_slug_base}-{counter}"
             counter += 1
-        # Create post directory now
         post_dir_path = os.path.join(rl_data.BLOG_DATA_DIR, post_slug)
         try:
             os.makedirs(post_dir_path, exist_ok=True)
         except OSError as e:
-            flash(f"Could not create directory for the post: {e}", "danger")
-            app.logger.error(f"Error creating post directory {post_dir_path}: {e}")
-            return render_template('admin_post_blog.html', legend='New Blog Post', form_data=request.form)
+            flash(f"Could not create directory: {e}", "danger")
+            return render_template('admin/post_blog.html', legend='New Blog Post', form_data=request.form)
 
-        # --- Image processing ---
+
         uploaded_image_filenames = []
+        uploaded_image_captions = [] # New list for captions
         for i in range(rl_data.MAX_IMAGES_PER_POST):
             image_file = request.files.get(f'image_{i}')
+            caption_text = request.form.get(f'caption_{i}', '').strip() # Get caption
             if image_file and image_file.filename:
+                # ... (image saving logic - as before, using save_uploaded_image_and_thumbnail) ...
                 if not rl_data.allowed_file(image_file.filename):
-                    flash(f'Image {i+1} has an invalid file type. Not saved.', 'warning')
-                    continue
-                
+                    flash(f'Image {i+1} invalid. Not saved.', 'warning'); continue
                 unique_base_name = f"img_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{i}"
                 saved_filename = rl_data.save_uploaded_image_and_thumbnail(post_slug, image_file, unique_base_name)
+
                 if saved_filename:
                     uploaded_image_filenames.append(saved_filename)
+                    uploaded_image_captions.append(caption_text) # Add caption
                 else:
+                    # ... (error handling and cleanup - as before) ...
                     flash(f'Error saving Image {i+1}.', 'danger')
-                    # If an image fails, consider cleaning up already saved images for this post and the directory
-                    for fn in uploaded_image_filenames: # Delete successfully uploaded ones for this post
-                        rl_data.delete_blog_image_and_thumbnail(post_slug, fn)
+                    for fn in uploaded_image_filenames: rl_data.delete_blog_image_and_thumbnail(post_slug, fn)
                     if os.path.exists(post_dir_path): shutil.rmtree(post_dir_path)
-                    return render_template('admin_post_blog.html', legend='New Blog Post', form_data=request.form)
-        
-        if not uploaded_image_filenames:
-            flash('At least one image is required for a new post.', 'danger')
-            if os.path.exists(post_dir_path): shutil.rmtree(post_dir_path) # Clean up created dir
-            return render_template('admin_post_blog.html', legend='New Blog Post', form_data=request.form)
+                    return render_template('admin/post_blog.html', legend='New Blog Post', form_data=request.form)
 
-        # --- Save content.json ---
+        if not uploaded_image_filenames: # At least one image
+            flash('At least one image is required.', 'danger')
+            if os.path.exists(post_dir_path): shutil.rmtree(post_dir_path)
+            return render_template('admin/post_blog.html', legend='New Blog Post', form_data=request.form)
+
         now = datetime.now().isoformat()
         post_data = {
             'headline': headline,
             'text': text_content,
             'image_filenames': uploaded_image_filenames,
+            'image_captions': uploaded_image_captions, # Save captions
             'created_at': now,
             'updated_at': now,
             'is_featured': is_featured,
-            'slug': post_slug # Storing slug in content.json for consistency, though dir name is canonical
+            'is_published': is_published, # Save published state
+            'view_count': 0, # Initial view count
+            'slug': post_slug
         }
         with open(os.path.join(post_dir_path, 'content.json'), 'w') as f:
             json.dump(post_data, f, indent=4)
@@ -1093,48 +1180,97 @@ def new_blog_post():
 
     return render_template('admin_post_blog.html', legend='New Blog Post')
 
-
 # 1b & 2. Admin: Manage (list, edit, delete links)
 @app.route('/admin/blog/manage', methods=['GET', 'POST'])
 @login_required
 def manage_blog_posts():
-    posts = rl_data.get_all_posts() # Sorted by date descending by default
-    return render_template('admin_manage_posts.html', posts=posts)
+    global_config = rl_data.load_global_blog_config()
+    if request.method == 'POST':
+        try:
+            max_featured = int(request.form.get('max_featured_posts_on_home'))
+            if max_featured >= 0:
+                global_config['max_featured_posts_on_home'] = max_featured
+                if rl_data.save_global_blog_config(global_config):
+                    flash('Settings updated successfully.', 'success')
+                else:
+                    flash('Error saving settings.', 'danger')
+            else:
+                flash('Max featured posts must be a non-negative number.', 'warning')
+        except ValueError:
+            flash('Invalid number for max featured posts.', 'danger')
+        return redirect(url_for('manage_blog_posts')) # Redirect to refresh with GET
+
+    # GET request
+    posts = rl_data.get_all_posts(include_unpublished=True) # Show all for admin management
+    return render_template('admin_manage_posts.html', 
+                           posts=posts, 
+                           title='Manage Blog Posts',
+                           current_max_featured=global_config.get('max_featured_posts_on_home', 3))
 
 # 2a. Admin: Edit existing post
+# ... (all other imports and functions remain the same) ...
+
 @app.route('/admin/blog/edit/<slug>', methods=['GET', 'POST'])
 @login_required
 def edit_blog_post(slug):
-    post = rl_data.get_post(slug)
-    if not post: abort(404)
-    
-    current_image_filenames = list(post.get('image_filenames', [])) # Make a mutable copy
+    post_data_from_file = rl_data.get_post(slug) # Fetch raw data first
+    if not post_data_from_file: abort(404)
+
+    # Create working copies for modification during POST, or for passing to template on GET
+    post_for_processing = dict(post_data_from_file) # Use a copy for modifications
+
+    # Ensure captions list matches filenames list length for consistency before form processing
+    # This is important if images were added/removed manually or by an older version of the code
+    if len(post_for_processing.get('image_captions', [])) < len(post_for_processing.get('image_filenames', [])):
+        post_for_processing['image_captions'] = post_for_processing.get('image_captions', []) + \
+                                             [""] * (len(post_for_processing.get('image_filenames', [])) - len(post_for_processing.get('image_captions', [])))
+    elif len(post_for_processing.get('image_captions', [])) > len(post_for_processing.get('image_filenames', [])):
+        # Truncate captions if there are more captions than images (less likely but good to handle)
+        post_for_processing['image_captions'] = post_for_processing.get('image_captions', [])[:len(post_for_processing.get('image_filenames', []))]
+
 
     if request.method == 'POST':
-        post['headline'] = request.form.get('headline', post['headline'])
-        post['text'] = request.form.get('content', post['text'])
-        post['is_featured'] = 'is_featured' in request.form
+        post_for_processing['headline'] = request.form.get('headline', post_for_processing['headline'])
+        post_for_processing['text'] = request.form.get('content', post_for_processing['text'])
+        post_for_processing['is_featured'] = 'is_featured' in request.form
+        post_for_processing['is_published'] = 'is_published' in request.form
 
-        # --- Handle Image Deletions ---
-        indices_to_delete_from_current = []
-        for i, existing_filename in enumerate(current_image_filenames):
+        # --- Prepare lists for processing image and caption updates ---
+        # Start with copies of what was loaded from the file (before any POST modifications)
+        original_filenames = list(post_data_from_file.get('image_filenames', []))
+        original_captions = list(post_data_from_file.get('image_captions', []))
+        # Sync original_captions length with original_filenames before processing deletions
+        if len(original_captions) < len(original_filenames):
+            original_captions.extend([""] * (len(original_filenames) - len(original_captions)))
+        elif len(original_captions) > len(original_filenames):
+            original_captions = original_captions[:len(original_filenames)]
+
+        # These will be the final lists after processing
+        final_filenames = []
+        final_captions = []
+
+        # --- Process Existing Images: Keep or Delete, and Update Captions ---
+        for i, existing_filename in enumerate(original_filenames):
             if request.form.get(f'delete_image_{i}'):
-                indices_to_delete_from_current.append(i)
-        
-        # Iterate backwards to avoid index shifting issues when removing
-        for index in sorted(indices_to_delete_from_current, reverse=True):
-            filename_to_delete = current_image_filenames.pop(index)
-            rl_data.delete_blog_image_and_thumbnail(slug, filename_to_delete)
+                # Image marked for deletion
+                rl_data.delete_blog_image_and_thumbnail(slug, existing_filename)
+            else:
+                # Image is kept
+                final_filenames.append(existing_filename)
+                # Update its caption from the form
+                updated_caption = request.form.get(f'current_caption_{i}', '').strip()
+                final_captions.append(updated_caption)
         
         # --- Handle New Image Uploads ---
-        newly_added_filenames = []
-        for i in range(rl_data.MAX_IMAGES_PER_POST): # Iterate through potential new upload slots
-            if len(current_image_filenames) + len(newly_added_filenames) >= rl_data.MAX_IMAGES_PER_POST:
+        for i in range(rl_data.MAX_IMAGES_PER_POST):
+            if len(final_filenames) >= rl_data.MAX_IMAGES_PER_POST:
                 if request.files.get(f'new_image_{i}') and request.files.get(f'new_image_{i}').filename:
                     flash(f'Maximum of {rl_data.MAX_IMAGES_PER_POST} images reached. Additional uploads ignored.', 'warning')
-                break # Max images reached
+                break 
             
             image_file = request.files.get(f'new_image_{i}')
+            new_caption_text = request.form.get(f'new_caption_{i}', '').strip() 
+            
             if image_file and image_file.filename:
                 if not rl_data.allowed_file(image_file.filename):
                     flash(f'New Image (slot {i+1}) has an invalid file type. Not saved.', 'warning')
@@ -1143,37 +1279,57 @@ def edit_blog_post(slug):
                 unique_base_name = f"img_edit_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{i}"
                 saved_filename = rl_data.save_uploaded_image_and_thumbnail(slug, image_file, unique_base_name)
                 if saved_filename:
-                    newly_added_filenames.append(saved_filename)
+                    final_filenames.append(saved_filename)
+                    final_captions.append(new_caption_text) # Add caption for the new image
                 else:
                     flash(f'Error saving new Image (slot {i+1}).', 'warning')
         
-        post['image_filenames'] = current_image_filenames + newly_added_filenames
+        post_for_processing['image_filenames'] = final_filenames
+        post_for_processing['image_captions'] = final_captions
 
-        if not post['image_filenames']:
+        if not post_for_processing['image_filenames']:
             flash('A post must have at least one image. Please add an image.', 'danger')
-            # To prevent saving without images, you could return here:
-            # return render_template('admin_post_blog.html', legend=f'Edit Post: "{post["headline"]}"', post=post, form_data=request.form, current_images_for_form=post.get('image_filenames', []))
+            # To prevent saving without images, you could return here, re-populating the form:
+            # form_data_on_error = { 'headline': request.form.get('headline'), ... }
+            # return render_template('admin/post_blog.html', legend=f'Edit Post: "{post_data_from_file["headline"]}"', 
+            #                        post=post_data_from_file, # Pass original post data for context
+            #                        form_data=form_data_on_error, 
+            #                        current_images_for_form=post_data_from_file.get('image_filenames',[]), # Show what was there
+            #                        current_captions_for_form=post_data_from_file.get('image_captions',[]))
 
-        post['updated_at'] = datetime.now().isoformat()
+        post_for_processing['updated_at'] = datetime.now().isoformat()
+        
+        # 'view_count' is preserved from what was loaded unless explicitly changed
+        # 'slug' is preserved
         
         post_dir_path = os.path.join(rl_data.BLOG_DATA_DIR, slug)
-        with open(os.path.join(post_dir_path, 'content.json'), 'w') as f:
-            json.dump(post, f, indent=4)
+        try:
+            with open(os.path.join(post_dir_path, 'content.json'), 'w') as f:
+                json.dump(post_for_processing, f, indent=4)
+            flash('Blog post updated successfully!', 'success')
+            return redirect(url_for('manage_blog_posts'))
+        except IOError as e:
+            flash(f'Error saving post data: {e}', 'danger')
+            app.logger.error(f"Error writing content.json for {slug}: {e}")
+            # Fall through to render form again, ideally with submitted data
+            # This part can be complex to get exactly right for repopulating the form after a save error
 
-        flash('Blog post updated successfully!', 'success')
-        return redirect(url_for('manage_blog_posts'))
-
-    # GET request
-    form_data = {
-        'headline': post['headline'],
-        'content': post['text'],
-        'is_featured': post.get('is_featured', False)
+    # --- GET request or if POST had issues and fell through (needs more robust form repopulation for that case) ---
+    # For GET, we use the synced `post_for_processing` which has captions aligned with images
+    form_data_for_template = {
+        'headline': post_for_processing['headline'],
+        'content': post_for_processing['text'],
+        'is_featured': post_for_processing.get('is_featured', False),
+        'is_published': post_for_processing.get('is_published', True)
     }
     return render_template('admin_post_blog.html', 
-                           legend=f'Edit Post: "{post["headline"]}"', 
-                           post=post, 
-                           form_data=form_data, 
-                           current_images_for_form=current_image_filenames) # Pass current images for display
+                           legend=f'Edit Post: "{post_for_processing["headline"]}"', 
+                           post=post_for_processing, # Pass the (potentially pre-processed for GET) post data
+                           form_data=form_data_for_template, 
+                           current_images_for_form=post_for_processing.get('image_filenames', []),
+                           current_captions_for_form=post_for_processing.get('image_captions', []))
+
+# ... (rest of your app.py) ...
 # 2b. Admin: Delete post
 @app.route('/admin/blog/delete/<slug>', methods=['POST']) # Use POST for destructive actions
 @login_required

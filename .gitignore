@@ -10,3 +10,4 @@
 src/blog_data/*
 src/blog_data/*.*
 run-scripts/gcloud-env.sh
+run-scripts/gcloud-env.sh

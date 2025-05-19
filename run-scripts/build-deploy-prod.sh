@@ -1,7 +1,8 @@
 #!/bin/bash
 # Deploy the application to a production server 
 
-export IMAGE=gcr.io/redline-fitness-results/app.py:latest
+export NAME_VERSION=blog_v2.2
+export IMAGE=gcr.io/redline-fitness-results/app.py:$NAME_VERSION
 
 # Set environment variables
 export ENV_FILE=.env.deploy
