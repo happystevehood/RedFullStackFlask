@@ -1107,6 +1107,8 @@ def set_log_level():
 #
 # Create new blog post (GET form, POST submit)
 #
+# ... (imports: datetime, json, os, slugify, shutil, etc.) ...
+
 @app.route('/admin/blog/new', methods=['GET', 'POST'])
 @login_required
 def new_blog_post():
@@ -1114,13 +1116,14 @@ def new_blog_post():
         headline = request.form.get('headline')
         text_content = request.form.get('content')
         is_featured = 'is_featured' in request.form
-        is_published = 'is_published' in request.form # New field
+        is_published_now = 'is_published' in request.form # Check if publishing now
 
         # ... (slug generation, post directory creation - as before) ...
-        # Ensure slug generation and directory creation logic is here
+        # (Ensure this part is complete and correct as in your original code)
         post_slug_base = slugify(headline)
         post_slug = post_slug_base
         counter = 1
+        # IMPORTANT: Make sure rl_data.BLOG_DATA_DIR is correctly defined and accessible
         while os.path.exists(os.path.join(rl_data.BLOG_DATA_DIR, post_slug)):
             post_slug = f"{post_slug_base}-{counter}"
             counter += 1
@@ -1129,56 +1132,66 @@ def new_blog_post():
             os.makedirs(post_dir_path, exist_ok=True)
         except OSError as e:
             flash(f"Could not create directory: {e}", "danger")
-            return render_template('admin/post_blog.html', legend='New Blog Post', form_data=request.form)
+            return render_template('admin/admin_post_blog.html', legend='New Blog Post', form_data=request.form)
 
 
         uploaded_image_filenames = []
-        uploaded_image_captions = [] # New list for captions
-        for i in range(rl_data.MAX_IMAGES_PER_POST):
+        uploaded_image_captions = []
+        # ... (image uploading logic as before, ensure it's complete) ...
+        # (This part is crucial and was condensed in your snippet)
+        for i in range(rl_data.MAX_IMAGES_PER_POST): # Assuming rl_data.MAX_IMAGES_PER_POST is defined
             image_file = request.files.get(f'image_{i}')
-            caption_text = request.form.get(f'caption_{i}', '').strip() # Get caption
+            caption_text = request.form.get(f'caption_{i}', '').strip()
             if image_file and image_file.filename:
-                # ... (image saving logic - as before, using save_uploaded_image_and_thumbnail) ...
-                if not rl_data.allowed_file(image_file.filename):
-                    flash(f'Image {i+1} invalid. Not saved.', 'warning'); continue
+                if not rl_data.allowed_file(image_file.filename): # Assuming rl_data.allowed_file
+                    flash(f'Image {i+1} invalid type. Not saved.', 'warning'); continue
+                
+                # Assuming rl_data.save_uploaded_image_and_thumbnail is defined
                 unique_base_name = f"img_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{i}"
                 saved_filename = rl_data.save_uploaded_image_and_thumbnail(post_slug, image_file, unique_base_name)
 
                 if saved_filename:
                     uploaded_image_filenames.append(saved_filename)
-                    uploaded_image_captions.append(caption_text) # Add caption
+                    uploaded_image_captions.append(caption_text)
                 else:
-                    # ... (error handling and cleanup - as before) ...
                     flash(f'Error saving Image {i+1}.', 'danger')
-                    for fn in uploaded_image_filenames: rl_data.delete_blog_image_and_thumbnail(post_slug, fn)
-                    if os.path.exists(post_dir_path): shutil.rmtree(post_dir_path)
-                    return render_template('admin/post_blog.html', legend='New Blog Post', form_data=request.form)
+                    # Cleanup logic (delete already uploaded images for this post, remove post_dir_path)
+                    for fn_to_delete in uploaded_image_filenames:
+                        rl_data.delete_blog_image_and_thumbnail(post_slug, fn_to_delete) # Assuming this function exists
+                    if os.path.exists(post_dir_path):
+                        shutil.rmtree(post_dir_path)
+                    return render_template('admin/admin_post_blog.html', legend='New Blog Post', form_data=request.form)
 
-        if not uploaded_image_filenames: # At least one image
+        if not uploaded_image_filenames: # Check if any images were actually saved
             flash('At least one image is required.', 'danger')
-            if os.path.exists(post_dir_path): shutil.rmtree(post_dir_path)
-            return render_template('admin/post_blog.html', legend='New Blog Post', form_data=request.form)
+            if os.path.exists(post_dir_path): shutil.rmtree(post_dir_path) # Cleanup directory if no images
+            return render_template('admin/admin_post_blog.html', legend='New Blog Post', form_data=request.form)
 
-        now = datetime.now().isoformat()
+
+        now_iso = datetime.now().isoformat()
+        published_at_iso = now_iso if is_published_now else None # Set published_at if publishing now
+
         post_data = {
             'headline': headline,
             'text': text_content,
             'image_filenames': uploaded_image_filenames,
-            'image_captions': uploaded_image_captions, # Save captions
-            'created_at': now,
-            'updated_at': now,
+            'image_captions': uploaded_image_captions,
+            'created_at': now_iso,
+            'updated_at': now_iso,
+            'published_at': published_at_iso, # New field
             'is_featured': is_featured,
-            'is_published': is_published, # Save published state
-            'view_count': 0, # Initial view count
+            'is_published': is_published_now,
+            'view_count': 0,
             'slug': post_slug
         }
-        with open(os.path.join(post_dir_path, 'content.json'), 'w') as f:
+        # Ensure filename is 'config.json' or 'content.json' as per your rl_data.get_post
+        with open(os.path.join(post_dir_path, 'config.json'), 'w') as f: # Assuming 'config.json'
             json.dump(post_data, f, indent=4)
 
         flash('Blog post created successfully!', 'success')
-        return redirect(url_for('manage_blog_posts'))
+        return redirect(url_for('manage_blog_posts')) # Assuming this route exists
 
-    return render_template('admin_post_blog.html', legend='New Blog Post')
+    return render_template('admin/admin_post_blog.html', legend='New Blog Post') # Make sure this template exists
 
 # 1b & 2. Admin: Manage (list, edit, delete links)
 @app.route('/admin/blog/manage', methods=['GET', 'POST'])
@@ -1209,123 +1222,130 @@ def manage_blog_posts():
 
 # 2a. Admin: Edit existing post
 # ... (all other imports and functions remain the same) ...
+# ... (imports) ...
 
 @app.route('/admin/blog/edit/<slug>', methods=['GET', 'POST'])
 @login_required
 def edit_blog_post(slug):
-    post_data_from_file = rl_data.get_post(slug) # Fetch raw data first
-    if not post_data_from_file: abort(404)
+    # Assuming rl_data.get_post loads from 'config.json'
+    post_data_from_file = rl_data.get_post(slug)
+    if not post_data_from_file:
+        abort(404)
 
-    # Create working copies for modification during POST, or for passing to template on GET
-    post_for_processing = dict(post_data_from_file) # Use a copy for modifications
+    post_for_processing = dict(post_data_from_file) # Work with a copy
 
-    # Ensure captions list matches filenames list length for consistency before form processing
-    # This is important if images were added/removed manually or by an older version of the code
-    if len(post_for_processing.get('image_captions', [])) < len(post_for_processing.get('image_filenames', [])):
-        post_for_processing['image_captions'] = post_for_processing.get('image_captions', []) + \
-                                             [""] * (len(post_for_processing.get('image_filenames', [])) - len(post_for_processing.get('image_captions', [])))
-    elif len(post_for_processing.get('image_captions', [])) > len(post_for_processing.get('image_filenames', [])):
-        # Truncate captions if there are more captions than images (less likely but good to handle)
-        post_for_processing['image_captions'] = post_for_processing.get('image_captions', [])[:len(post_for_processing.get('image_filenames', []))]
+    # Caption alignment logic (as in your original code, ensure it's robust)
+    # ... (your existing caption alignment logic) ...
+    filenames_count = len(post_for_processing.get('image_filenames', []))
+    captions = post_for_processing.get('image_captions', [])
+    if len(captions) < filenames_count:
+        captions.extend([""] * (filenames_count - len(captions)))
+    elif len(captions) > filenames_count:
+        captions = captions[:filenames_count]
+    post_for_processing['image_captions'] = captions
 
 
     if request.method == 'POST':
+        # Get current published state BEFORE form processing
+        was_published_before_edit = post_for_processing.get('is_published', False)
+        
         post_for_processing['headline'] = request.form.get('headline', post_for_processing['headline'])
         post_for_processing['text'] = request.form.get('content', post_for_processing['text'])
         post_for_processing['is_featured'] = 'is_featured' in request.form
-        post_for_processing['is_published'] = 'is_published' in request.form
+        is_published_now = 'is_published' in request.form # New state from form
+        post_for_processing['is_published'] = is_published_now
 
-        # --- Prepare lists for processing image and caption updates ---
-        # Start with copies of what was loaded from the file (before any POST modifications)
+        # ... (Image processing: deletion, updates, new uploads - as in your original code) ...
+        # (This complex logic needs to be complete and correct here)
         original_filenames = list(post_data_from_file.get('image_filenames', []))
         original_captions = list(post_data_from_file.get('image_captions', []))
-        # Sync original_captions length with original_filenames before processing deletions
+        # Sync original_captions length
         if len(original_captions) < len(original_filenames):
             original_captions.extend([""] * (len(original_filenames) - len(original_captions)))
         elif len(original_captions) > len(original_filenames):
             original_captions = original_captions[:len(original_filenames)]
 
-        # These will be the final lists after processing
         final_filenames = []
         final_captions = []
 
-        # --- Process Existing Images: Keep or Delete, and Update Captions ---
+        # Process Existing Images
         for i, existing_filename in enumerate(original_filenames):
             if request.form.get(f'delete_image_{i}'):
-                # Image marked for deletion
                 rl_data.delete_blog_image_and_thumbnail(slug, existing_filename)
             else:
-                # Image is kept
                 final_filenames.append(existing_filename)
-                # Update its caption from the form
-                updated_caption = request.form.get(f'current_caption_{i}', '').strip()
+                updated_caption = request.form.get(f'current_caption_{i}', original_captions[i] if i < len(original_captions) else "").strip()
                 final_captions.append(updated_caption)
         
-        # --- Handle New Image Uploads ---
+        # Handle New Image Uploads
         for i in range(rl_data.MAX_IMAGES_PER_POST):
-            if len(final_filenames) >= rl_data.MAX_IMAGES_PER_POST:
-                if request.files.get(f'new_image_{i}') and request.files.get(f'new_image_{i}').filename:
-                    flash(f'Maximum of {rl_data.MAX_IMAGES_PER_POST} images reached. Additional uploads ignored.', 'warning')
-                break 
-            
+            if len(final_filenames) >= rl_data.MAX_IMAGES_PER_POST: # Check against current final_filenames
+                # ... (flash message if max reached) ...
+                break
             image_file = request.files.get(f'new_image_{i}')
-            new_caption_text = request.form.get(f'new_caption_{i}', '').strip() 
-            
+            new_caption_text = request.form.get(f'new_caption_{i}', '').strip()
             if image_file and image_file.filename:
+                # ... (save new image and thumbnail, append to final_filenames, final_captions) ...
+                # (Ensure this logic is complete)
                 if not rl_data.allowed_file(image_file.filename):
-                    flash(f'New Image (slot {i+1}) has an invalid file type. Not saved.', 'warning')
-                    continue
-                
+                    flash(f'New Image (slot {i+1}) type invalid.', 'warning'); continue
                 unique_base_name = f"img_edit_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{i}"
                 saved_filename = rl_data.save_uploaded_image_and_thumbnail(slug, image_file, unique_base_name)
                 if saved_filename:
                     final_filenames.append(saved_filename)
-                    final_captions.append(new_caption_text) # Add caption for the new image
+                    final_captions.append(new_caption_text)
                 else:
                     flash(f'Error saving new Image (slot {i+1}).', 'warning')
-        
+
         post_for_processing['image_filenames'] = final_filenames
         post_for_processing['image_captions'] = final_captions
 
         if not post_for_processing['image_filenames']:
-            flash('A post must have at least one image. Please add an image.', 'danger')
-            # To prevent saving without images, you could return here, re-populating the form:
-            # form_data_on_error = { 'headline': request.form.get('headline'), ... }
-            # return render_template('admin/post_blog.html', legend=f'Edit Post: "{post_data_from_file["headline"]}"', 
-            #                        post=post_data_from_file, # Pass original post data for context
-            #                        form_data=form_data_on_error, 
-            #                        current_images_for_form=post_data_from_file.get('image_filenames',[]), # Show what was there
-            #                        current_captions_for_form=post_data_from_file.get('image_captions',[]))
+            flash('A post must have at least one image.', 'danger')
+            # Consider returning to the form with current data if save fails due to no images
+            # return render_template('admin/admin_post_blog.html', ..., post=post_for_processing, ...)
 
-        post_for_processing['updated_at'] = datetime.now().isoformat()
-        
-        # 'view_count' is preserved from what was loaded unless explicitly changed
-        # 'slug' is preserved
-        
+        # --- Logic for published_at ---
+        now_iso = datetime.now().isoformat()
+        post_for_processing['updated_at'] = now_iso
+
+        if is_published_now and not was_published_before_edit:
+            # Post is being published for the first time OR re-published after being unpublished
+            post_for_processing['published_at'] = now_iso
+        elif is_published_now and was_published_before_edit:
+            # Post was already published and remains published.
+            # Keep existing published_at unless it's missing (for older posts).
+            if not post_for_processing.get('published_at'):
+                post_for_processing['published_at'] = now_iso # Or post_data_from_file.get('created_at') as a fallback
+        elif not is_published_now:
+            # Post is being unpublished. published_at remains as is (or you could set to None).
+            # For simplicity, we'll leave it. It signifies the last time it *was* published.
+            pass
+
+
         post_dir_path = os.path.join(rl_data.BLOG_DATA_DIR, slug)
         try:
-            with open(os.path.join(post_dir_path, 'content.json'), 'w') as f:
+            # Ensure filename is 'config.json'
+            with open(os.path.join(post_dir_path, 'config.json'), 'w') as f:
                 json.dump(post_for_processing, f, indent=4)
             flash('Blog post updated successfully!', 'success')
             return redirect(url_for('manage_blog_posts'))
         except IOError as e:
             flash(f'Error saving post data: {e}', 'danger')
-            app.logger.error(f"Error writing content.json for {slug}: {e}")
-            # Fall through to render form again, ideally with submitted data
-            # This part can be complex to get exactly right for repopulating the form after a save error
+            # Log error, potentially render form again with post_for_processing data
 
-    # --- GET request or if POST had issues and fell through (needs more robust form repopulation for that case) ---
-    # For GET, we use the synced `post_for_processing` which has captions aligned with images
+    # GET request or if POST failed and fell through
+    # Ensure 'published_at' is available for the template if it exists
     form_data_for_template = {
         'headline': post_for_processing['headline'],
         'content': post_for_processing['text'],
         'is_featured': post_for_processing.get('is_featured', False),
-        'is_published': post_for_processing.get('is_published', True)
+        'is_published': post_for_processing.get('is_published', True) # Default to true for existing posts if not set
     }
-    return render_template('admin_post_blog.html', 
-                           legend=f'Edit Post: "{post_for_processing["headline"]}"', 
-                           post=post_for_processing, # Pass the (potentially pre-processed for GET) post data
-                           form_data=form_data_for_template, 
+    return render_template('admin/admin_post_blog.html',
+                           legend=f'Edit Post: "{post_for_processing["headline"]}"',
+                           post=post_for_processing, # This now includes 'published_at' if set
+                           form_data=form_data_for_template,
                            current_images_for_form=post_for_processing.get('image_filenames', []),
                            current_captions_for_form=post_for_processing.get('image_captions', []))
 

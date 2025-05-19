@@ -14,4 +14,4 @@ export PORT=8080
 cd "$(dirname "$0")/.."
 
 #Build your Docker image
-docker build -f Dockerfile_deploy -t $IMAGE .
+docker build --no-cache -f Dockerfile_deploy -t $IMAGE .

@@ -48,12 +48,15 @@
 <div class="container mt-4">
     <article class="blog-post">
         <h1 class="display-5 fw-bold">{{ post.headline }}</h1>
-        <p class="blog-post-meta text-muted">
-            Posted on {{ post.created_at | format_datetime('%B %d, %Y at %H:%M') }}
-            {% if post.created_at != post.updated_at %}
-                (Last updated: {{ post.updated_at | format_datetime('%B %d, %Y at %H:%M') }})
-            {% endif %}
-        </p>
+            {# In your blog_post_detail.html #}
+            <p class="blog-post-meta text-muted">
+                {% if post.is_published and post.published_at %}
+                    Published on {{ post.published_at | format_datetime('%B %d, %Y at %H:%M') }}
+                {% elif post.created_at %}
+                    {# Fallback for posts that might not have published_at yet or are drafts #}
+                    Created on {{ post.created_at | format_datetime('%B %d, %Y at %H:%M') }}
+                {% endif %}
+            </p>
         <hr>
 
         {% if post.image_filenames %}

@@ -42,7 +42,12 @@
                 <article class="blog-post mb-4 pb-4 border-bottom">
                     <h3><a href="{{ url_for('blog_post_detail', slug=post.slug) }}">{{ post.headline }}</a></h3>
                     <p class="blog-post-meta text-muted">
-                        Posted on {{ post.created_at | format_datetime('%B %d, %Y') }}
+                        {% if post.is_published and post.published_at %}
+                            Published on {{ post.published_at | format_datetime('%B %d, %Y at %H:%M') }}
+                        {% elif post.created_at %}
+                            {# Fallback for posts that might not have published_at yet or are drafts #}
+                            Created on {{ post.created_at | format_datetime('%B %d, %Y at %H:%M') }}
+                        {% endif %}
                     </p>
 
                     {# --- IMAGE PREVIEW SECTION --- #}
