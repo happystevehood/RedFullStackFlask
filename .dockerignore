@@ -9,7 +9,7 @@ ENV/
 
 # Environment files
 #.env
-#.env.*  # Catch all variants like .env.dev, .env.prod
+.env.deploy
 
 # Logs and temporary files
 *.log

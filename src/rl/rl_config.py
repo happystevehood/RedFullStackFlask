@@ -3,7 +3,6 @@ Configuration management for the Flask application.
 Handles different environments and deployment scenarios.
 """
 import os
-import secrets
 from dotenv import load_dotenv
 from datetime import timedelta
 

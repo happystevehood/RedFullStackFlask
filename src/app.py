@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, render_template, send_file, send_from_directory, abort, session, redirect, url_for,  flash, g, make_response
 from markupsafe import escape
 from functools import wraps
-from datetime import datetime
+from datetime import datetime, timedelta, tzinfo
 
 from google.cloud import storage
 import tempfile
@@ -41,6 +41,8 @@ from rl.rl_search import find_competitor
 import rl.rl_data as rl_data 
 from rl.rl_config import get_config 
 from rl.rl_vis import redline_vis_competitor_html, redline_vis_competitor_pdf, redline_vis_generic, redline_vis_generic_eventpdf, redline_vis_generic_eventhtml
+
+
 
 def create_app():
     """Create and configure the Flask application."""
@@ -95,7 +97,11 @@ def create_app():
             'https://cdn.datatables.net'
         ],
         'font-src': "'self' data:",
-        'img-src': "'self' data:",
+    'img-src': [
+            '\'self\'',
+            'data:',  # Keep if you use data URIs for images
+            'https://storage.googleapis.com'  # <-- ADD THIS
+        ],
         'connect-src': "'self'",
         'frame-ancestors': "'self'"
     }
@@ -107,9 +113,18 @@ def create_app():
         force_https=False
     )
 
-    # Ensure blog_data directory exists
-    if not os.path.exists(rl_data.BLOG_DATA_DIR):
-        os.makedirs(rl_data.BLOG_DATA_DIR)
+    env_mode = os.environ.get('ENV_MODE', 'development').lower()
+
+    #only use google cloud storage if in deploy mode
+    if env_mode == 'deploy':
+
+        #copy from local to gcs
+        rl_data.sync_local_blogs_to_gcs()
+    else:
+        # Ensure blog_data directory exists
+        if not os.path.exists(rl_data.BLOG_DATA_DIR):
+            os.makedirs(rl_data.BLOG_DATA_DIR)
+
 
     '''
     #Error handling
@@ -144,7 +159,7 @@ def create_app():
             return  render_template('error.html', string1="Error", string2="Something went wrong")
     '''
 
-    OutputInfo = True
+    OutputInfo = False
 
     # printout to confirm pkg versions.
     if(OutputInfo == True): 
@@ -731,7 +746,7 @@ def blog_index():
     else:
         filtered_posts = all_published_posts
     
-    page = request.args.get('page', 1, type=int); per_page = 5
+    page = request.args.get('page', 1, type=int); per_page = 10
     start = (page - 1) * per_page; end = start + per_page
     paginated_posts = filtered_posts[start:end]
     total_pages = (len(filtered_posts) + per_page - 1) // per_page
@@ -740,48 +755,47 @@ def blog_index():
 
 
 # Route to serve blog post images
-@app.route('/blog_data/<path:slug>/<filename>')
+@app.route('/blog/image/<slug>/<path:filename>')
 def blog_post_image(slug, filename):
-    # Basic security: ensure slug and filename are somewhat sane
-    # For production, more robust validation of slug/filename patterns would be good
-    safe_slug = secure_filename(slug)
-    safe_filename = secure_filename(filename)
-    
-    # A simple check; this might be too restrictive if your slugs/filenames are complex
-    if slug != safe_slug or filename != safe_filename:
-        app.logger.warning(f"Potentially unsafe path access attempted: slug='{slug}', filename='{filename}'")
-        abort(403) # Forbidden, or 404
-    
-    directory = os.path.join(rl_data.BLOG_DATA_DIR, slug)
-    # Check if the normalized path of the directory starts with the normalized BLOG_DATA_DIR
-    # This is a common way to try and prevent path traversal.
-    if not os.path.normpath(directory).startswith(os.path.normpath(rl_data.BLOG_DATA_DIR)):
-        app.logger.error(f"Path traversal attempt detected for directory: {directory}")
-        abort(403) # Forbidden
+    env_mode = os.environ.get('ENV_MODE', 'development').lower()
+    if env_mode == 'deploy':
 
-    # Further check for filename traversal (e.g. filename containing '../')
-    if '..' in filename or filename.startswith('/'):
-        app.logger.error(f"Path traversal attempt detected for filename: {filename}")
-        abort(403)
-
-    # Check if file exists
-    if not os.path.exists(os.path.join(directory, filename)):
-        app.logger.warning(f"Image not found: {os.path.join(directory, filename)}")
-        abort(404)
-        
-    return send_from_directory(directory, filename)
+        # Option 2: Redirect to Signed URL (more secure, handles private images)
+        signed_url = rl_data.get_blog_image_url_from_gcs(slug, filename)
+        if signed_url:
+            return redirect(signed_url)
+        else:
+            app.logger.warning(f"Could not get signed URL for GCS image: {slug}/images/{filename}")
+            abort(404)
+    else:
+        # Your existing local image serving logic
+        # return send_from_directory(os.path.join(rl_data.BLOG_DATA_DIR, slug, 'images'), filename)
+        # Ensure your local rl_data.BLOG_DATA_DIR is correctly constructed
+        full_image_path_dir = os.path.join(rl_data.LOCAL_BLOG_DATA_DIR, slug, 'images') # Use LOCAL_BLOG_DATA_DIR
+        return send_from_directory(full_image_path_dir, filename)
 
 
 # User: View individual blog post@app.route('/blog/<slug>')
 @app.route('/blog/<slug>')
 def blog_post_detail(slug):
-    # Increment view count only for published posts
-    post = rl_data.get_post(slug, increment_view_count=True) 
-    if not post or not post.get('is_published', True): # Also check if published before showing
-        # If admin is logged in, you *could* allow them to see unpublished posts.
-        # For simplicity, we'll just 404 for everyone if not published.
-        # if not (session.get('logged_in') and post): # Example admin bypass
+    env_mode = os.environ.get('ENV_MODE', 'development').lower()
+    post = None
+    if env_mode == 'deploy':
+        post = rl_data.get_post_from_gcs(slug)
+        # Increment view count if needed:
+        # 1. Get post
+        # 2. Increment view_count in post dict
+        # 3. Save post back to GCS (rl_data_gcs.save_post_to_gcs)
+        # This read-modify-write can have contention if high traffic. Consider alternatives for view counts.
+    else:
+        post = rl_data.get_post(slug, increment_view_count=True) # Your existing local logic
+
+    if not post or not post.get('is_published', True):
         abort(404)
+    
+    # For image URLs, they need to point to GCS in deploy mode
+    # The template will use url_for('blog_post_image', ...)
+    # So, blog_post_image route needs to handle GCS.
     return render_template('blog_post_detail.html', post=post, title=post['headline'])
 
 ##############################
@@ -963,13 +977,11 @@ def export_feedback():
     if env_mode == 'deploy':
 
         # Set up Google Cloud Storage client
-        BUCKET_NAME = 'redline-fitness-results-feedback'
         storage_client = storage.Client()
-        bucket = storage_client.bucket(BUCKET_NAME)
+        bucket = storage_client.bucket(rl_data.BLOG_BUCKET_NAME)
         
         # Define the GCS object path
-        blob_name = 'feedback.csv'
-        blob = bucket.blob(blob_name)
+        blob = bucket.blob(rl_data.FEEDBACK_BLOB_FILEPATH)
         
         if blob.exists():
             # Option 1: For smaller files - use a temporary file
@@ -1010,13 +1022,11 @@ def clear_feedback():
     if env_mode == 'deploy':
         
         # Set up Google Cloud Storage client
-        BUCKET_NAME = 'redline-fitness-results-feedback'
         storage_client = storage.Client()
-        bucket = storage_client.bucket(BUCKET_NAME)
+        bucket = storage_client.bucket(rl_data.BLOG_BUCKET_NAME)
         
         # Define the GCS object path
-        blob_name = 'feedback.csv'
-        blob = bucket.blob(blob_name)
+        blob = bucket.blob(rl_data.FEEDBACK_BLOB_FILEPATH)
         
         if blob.exists():
             # Option 1: Delete the file completely
@@ -1132,7 +1142,7 @@ def new_blog_post():
             os.makedirs(post_dir_path, exist_ok=True)
         except OSError as e:
             flash(f"Could not create directory: {e}", "danger")
-            return render_template('admin/admin_post_blog.html', legend='New Blog Post', form_data=request.form)
+            return render_template('admin_post_blog.html', legend='New Blog Post', form_data=request.form)
 
 
         uploaded_image_filenames = []
@@ -1160,12 +1170,12 @@ def new_blog_post():
                         rl_data.delete_blog_image_and_thumbnail(post_slug, fn_to_delete) # Assuming this function exists
                     if os.path.exists(post_dir_path):
                         shutil.rmtree(post_dir_path)
-                    return render_template('admin/admin_post_blog.html', legend='New Blog Post', form_data=request.form)
+                    return render_template('admin_post_blog.html', legend='New Blog Post', form_data=request.form)
 
         if not uploaded_image_filenames: # Check if any images were actually saved
             flash('At least one image is required.', 'danger')
             if os.path.exists(post_dir_path): shutil.rmtree(post_dir_path) # Cleanup directory if no images
-            return render_template('admin/admin_post_blog.html', legend='New Blog Post', form_data=request.form)
+            return render_template('admin_post_blog.html', legend='New Blog Post', form_data=request.form)
 
 
         now_iso = datetime.now().isoformat()
@@ -1184,14 +1194,41 @@ def new_blog_post():
             'view_count': 0,
             'slug': post_slug
         }
-        # Ensure filename is 'config.json' or 'content.json' as per your rl_data.get_post
-        with open(os.path.join(post_dir_path, 'config.json'), 'w') as f: # Assuming 'config.json'
-            json.dump(post_data, f, indent=4)
 
-        flash('Blog post created successfully!', 'success')
-        return redirect(url_for('manage_blog_posts')) # Assuming this route exists
+        env_mode = os.environ.get('ENV_MODE', 'development').lower()
 
-    return render_template('admin/admin_post_blog.html', legend='New Blog Post') # Make sure this template exists
+        if env_mode == 'deploy':
+            # Save content.json to GCS
+            if rl_data.save_post_to_gcs(post_slug, post_data):
+                # Save images to GCS (loop through uploaded images and call rl_data_gcs.save_blog_image_to_gcs)
+                # This requires careful handling of FileStorage objects from request.files
+                # The 'unique_base_name' for rl_data_gcs.save_blog_image_to_gcs needs to be generated
+                # The rl_data_gcs.save_blog_image_to_gcs should handle creating both full and thumb if needed
+                # and return the base filename stored (e.g. "img_timestamp_0.png")
+                # which you then store in post_data['image_filenames']
+                gcs_image_filenames = []
+                for i, image_file_storage in enumerate(request.files.getlist(f'image_{i}')): # Pseudocode for getting files
+                    if image_file_storage and image_file_storage.filename:
+                        # ... generate unique_base_name ...
+                        # ... call rl_data_gcs.save_blog_image_and_thumbnail_to_gcs (you'll need this new helper) ...
+                        # saved_gcs_filename = rl_data_gcs.save_blog_image_and_thumbnail_to_gcs(post_slug, image_file_storage, unique_base_name)
+                        # if saved_gcs_filename: gcs_image_filenames.append(saved_gcs_filename) else: # handle error
+                        pass # Placeholder - image saving to GCS is complex
+                post_data['image_filenames'] = gcs_image_filenames # Update with GCS relative paths
+                rl_data.save_post_to_gcs(post_slug, post_data) # Re-save with correct image paths
+                flash('Blog post created successfully (GCS)!', 'success')
+            else:
+                flash('Error creating blog post on GCS.', 'danger')
+                # Potentially delete GCS folder if partially created
+        else:
+            # Ensure filename is 'content.json' or 'content.json' as per your rl_data.get_post
+            with open(os.path.join(post_dir_path, 'content.json'), 'w') as f: # Assuming 'content.json'
+                json.dump(post_data, f, indent=4)
+
+            flash('Blog post created successfully!', 'success')
+            return redirect(url_for('manage_blog_posts')) # Assuming this route exists
+
+    return render_template('admin_post_blog.html', legend='New Blog Post') # Make sure this template exists
 
 # 1b & 2. Admin: Manage (list, edit, delete links)
 @app.route('/admin/blog/manage', methods=['GET', 'POST'])
@@ -1214,7 +1251,7 @@ def manage_blog_posts():
         return redirect(url_for('manage_blog_posts')) # Redirect to refresh with GET
 
     # GET request
-    posts = rl_data.get_all_posts(include_unpublished=True) # Show all for admin management
+    posts = rl_data.get_all_posts(published_only=False) # Show all for admin management
     return render_template('admin_manage_posts.html', 
                            posts=posts, 
                            title='Manage Blog Posts',
@@ -1224,18 +1261,26 @@ def manage_blog_posts():
 # ... (all other imports and functions remain the same) ...
 # ... (imports) ...
 
+
 @app.route('/admin/blog/edit/<slug>', methods=['GET', 'POST'])
 @login_required
 def edit_blog_post(slug):
-    # Assuming rl_data.get_post loads from 'config.json'
-    post_data_from_file = rl_data.get_post(slug)
-    if not post_data_from_file:
+    env_mode = os.environ.get('ENV_MODE', 'development').lower()
+    post_data_from_storage = None
+
+    if env_mode == 'deploy':
+        post_data_from_storage = rl_data.get_post_from_gcs(slug)
+    else:
+        post_data_from_storage = rl_data.get_post(slug) # Assumes this loads from local LOCAL_BLOG_DATA_DIR
+
+    if not post_data_from_storage:
+        app.logger.warning(f"Edit attempt for non-existent post '{slug}' in mode '{env_mode}'.")
         abort(404)
 
-    post_for_processing = dict(post_data_from_file) # Work with a copy
+    # Work with a copy for modifications
+    post_for_processing = dict(post_data_from_storage)
 
-    # Caption alignment logic (as in your original code, ensure it's robust)
-    # ... (your existing caption alignment logic) ...
+    # --- Caption Alignment (same as before, good for consistency) ---
     filenames_count = len(post_for_processing.get('image_filenames', []))
     captions = post_for_processing.get('image_captions', [])
     if len(captions) < filenames_count:
@@ -1243,108 +1288,149 @@ def edit_blog_post(slug):
     elif len(captions) > filenames_count:
         captions = captions[:filenames_count]
     post_for_processing['image_captions'] = captions
-
+    # --- End Caption Alignment ---
 
     if request.method == 'POST':
-        # Get current published state BEFORE form processing
         was_published_before_edit = post_for_processing.get('is_published', False)
-        
+
         post_for_processing['headline'] = request.form.get('headline', post_for_processing['headline'])
         post_for_processing['text'] = request.form.get('content', post_for_processing['text'])
         post_for_processing['is_featured'] = 'is_featured' in request.form
-        is_published_now = 'is_published' in request.form # New state from form
+        is_published_now = 'is_published' in request.form
         post_for_processing['is_published'] = is_published_now
 
-        # ... (Image processing: deletion, updates, new uploads - as in your original code) ...
-        # (This complex logic needs to be complete and correct here)
-        original_filenames = list(post_data_from_file.get('image_filenames', []))
-        original_captions = list(post_data_from_file.get('image_captions', []))
-        # Sync original_captions length
-        if len(original_captions) < len(original_filenames):
-            original_captions.extend([""] * (len(original_filenames) - len(original_captions)))
-        elif len(original_captions) > len(original_filenames):
-            original_captions = original_captions[:len(original_filenames)]
+        # --- Image Processing ---
+        # Start with copies of what was loaded (before any POST modifications to post_for_processing lists)
+        original_filenames_from_storage = list(post_data_from_storage.get('image_filenames', []))
+        original_captions_from_storage = list(post_data_from_storage.get('image_captions', []))
+        # Sync original_captions length with original_filenames before processing deletions
+        if len(original_captions_from_storage) < len(original_filenames_from_storage):
+            original_captions_from_storage.extend([""] * (len(original_filenames_from_storage) - len(original_captions_from_storage)))
+        elif len(original_captions_from_storage) > len(original_filenames_from_storage):
+            original_captions_from_storage = original_captions_from_storage[:len(original_filenames_from_storage)]
 
         final_filenames = []
         final_captions = []
 
-        # Process Existing Images
-        for i, existing_filename in enumerate(original_filenames):
+        # 1. Process Existing Images: Keep or Delete, and Update Captions
+        for i, existing_filename in enumerate(original_filenames_from_storage):
             if request.form.get(f'delete_image_{i}'):
-                rl_data.delete_blog_image_and_thumbnail(slug, existing_filename)
-            else:
-                final_filenames.append(existing_filename)
-                updated_caption = request.form.get(f'current_caption_{i}', original_captions[i] if i < len(original_captions) else "").strip()
-                final_captions.append(updated_caption)
-        
-        # Handle New Image Uploads
-        for i in range(rl_data.MAX_IMAGES_PER_POST):
-            if len(final_filenames) >= rl_data.MAX_IMAGES_PER_POST: # Check against current final_filenames
-                # ... (flash message if max reached) ...
-                break
-            image_file = request.files.get(f'new_image_{i}')
-            new_caption_text = request.form.get(f'new_caption_{i}', '').strip()
-            if image_file and image_file.filename:
-                # ... (save new image and thumbnail, append to final_filenames, final_captions) ...
-                # (Ensure this logic is complete)
-                if not rl_data.allowed_file(image_file.filename):
-                    flash(f'New Image (slot {i+1}) type invalid.', 'warning'); continue
-                unique_base_name = f"img_edit_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{i}"
-                saved_filename = rl_data.save_uploaded_image_and_thumbnail(slug, image_file, unique_base_name)
-                if saved_filename:
-                    final_filenames.append(saved_filename)
-                    final_captions.append(new_caption_text)
+                # Image marked for deletion
+                if env_mode == 'deploy':
+                    rl_data.delete_blog_image_and_thumbnail_from_gcs(slug, existing_filename)
                 else:
-                    flash(f'Error saving new Image (slot {i+1}).', 'warning')
+                    rl_data.delete_blog_image_and_thumbnail(slug, existing_filename, rl_data.LOCAL_BLOG_DATA_DIR) # Pass local dir
+                app.logger.info(f"Deleted image '{existing_filename}' for post '{slug}' (mode: {env_mode}).")
+            else:
+                # Image is kept
+                final_filenames.append(existing_filename)
+                # Update its caption from the form
+                updated_caption = request.form.get(f'current_caption_{i}', '').strip()
+                final_captions.append(updated_caption)
+
+        # 2. Handle New Image Uploads
+        # Assuming rl_data.MAX_IMAGES_PER_POST is defined
+        for i in range(rl_data.MAX_IMAGES_PER_POST):
+            if len(final_filenames) >= rl_data.MAX_IMAGES_PER_POST:
+                if request.files.get(f'new_image_{i}') and request.files.get(f'new_image_{i}').filename: # Check if user tried to upload more
+                    flash(f'Maximum of {rl_data.MAX_IMAGES_PER_POST} images reached. Additional uploads ignored.', 'warning')
+                break # Stop processing new uploads if max is reached
+
+            image_file = request.files.get(f'new_image_{i}') # This is a FileStorage object
+            new_caption_text = request.form.get(f'new_caption_{i}', '').strip()
+
+            if image_file and image_file.filename:
+                if not rl_data.allowed_file(image_file.filename): # Common utility function
+                    flash(f'New Image (slot {i+1}) has an invalid file type. Not saved.', 'warning')
+                    continue
+
+                # Generate a unique base name for the image to avoid collisions
+                unique_base_name = f"img_edit_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{i}"
+                saved_image_basename = None
+
+                if env_mode == 'deploy':
+                    # This function needs to handle FileStorage, create full & thumb, upload both to GCS,
+                    # and return the base filename (e.g., "img_edit_timestamp_i.png")
+                    saved_image_basename = rl_data.save_uploaded_image_and_thumbnail_to_gcs(
+                        slug, image_file, unique_base_name
+                    )
+                else:
+                    saved_image_basename = rl_data.save_uploaded_image_and_thumbnail(
+                        slug, image_file, unique_base_name, rl_data.LOCAL_BLOG_DATA_DIR # Pass local dir
+                    )
+
+                if saved_image_basename:
+                    final_filenames.append(saved_image_basename)
+                    final_captions.append(new_caption_text)
+                    app.logger.info(f"Saved new image '{saved_image_basename}' for post '{slug}' (mode: {env_mode}).")
+                else:
+                    flash(f'Error saving new Image (slot {i+1}). Check logs.', 'warning')
+        # --- End Image Processing ---
 
         post_for_processing['image_filenames'] = final_filenames
         post_for_processing['image_captions'] = final_captions
 
         if not post_for_processing['image_filenames']:
-            flash('A post must have at least one image.', 'danger')
-            # Consider returning to the form with current data if save fails due to no images
-            # return render_template('admin/admin_post_blog.html', ..., post=post_for_processing, ...)
+            flash('A post must have at least one image. Please add an image.', 'danger')
+            # To prevent saving without images, return to form. Repopulating is key.
+            # This part is tricky to make perfect without a proper form library.
+            return render_template('admin_post_blog.html', # Assuming this is your template
+                                   legend=f'Edit Post: "{post_data_from_storage["headline"]}"',
+                                   post=post_for_processing, # Pass the current state
+                                   form_data=request.form, # Pass raw form data for repopulation
+                                   current_images_for_form=post_for_processing.get('image_filenames', []),
+                                   current_captions_for_form=post_for_processing.get('image_captions', []))
 
-        # --- Logic for published_at ---
+
+        # --- Timestamps and Published_at Logic (same as before) ---
         now_iso = datetime.now().isoformat()
         post_for_processing['updated_at'] = now_iso
 
         if is_published_now and not was_published_before_edit:
-            # Post is being published for the first time OR re-published after being unpublished
             post_for_processing['published_at'] = now_iso
         elif is_published_now and was_published_before_edit:
-            # Post was already published and remains published.
-            # Keep existing published_at unless it's missing (for older posts).
-            if not post_for_processing.get('published_at'):
-                post_for_processing['published_at'] = now_iso # Or post_data_from_file.get('created_at') as a fallback
-        elif not is_published_now:
-            # Post is being unpublished. published_at remains as is (or you could set to None).
-            # For simplicity, we'll leave it. It signifies the last time it *was* published.
-            pass
+            if not post_for_processing.get('published_at'): # For older posts missing this field
+                post_for_processing['published_at'] = post_for_processing.get('created_at', now_iso)
+        # If not is_published_now, published_at is preserved (or remains None)
+        # --- End Timestamps ---
 
+        # Save the updated post_for_processing data
+        save_successful = False
+        if env_mode == 'deploy':
+            save_successful = rl_data.save_post_to_gcs(slug, post_for_processing)
+        else:
+            local_post_dir_path = os.path.join(rl_data.LOCAL_BLOG_DATA_DIR, slug) # Define LOCAL_BLOG_DATA_DIR
+            # Ensure local directory exists (it should for an edit)
+            if not os.path.exists(local_post_dir_path): os.makedirs(local_post_dir_path, exist_ok=True)
+            try:
+                with open(os.path.join(local_post_dir_path, 'content.json'), 'w') as f:
+                    json.dump(post_for_processing, f, indent=4)
+                save_successful = True
+            except IOError as e:
+                app.logger.error(f"Error writing local content.json for {slug}: {e}")
+                flash(f'Error saving post data locally: {e}', 'danger')
 
-        post_dir_path = os.path.join(rl_data.BLOG_DATA_DIR, slug)
-        try:
-            # Ensure filename is 'config.json'
-            with open(os.path.join(post_dir_path, 'config.json'), 'w') as f:
-                json.dump(post_for_processing, f, indent=4)
+        if save_successful:
             flash('Blog post updated successfully!', 'success')
-            return redirect(url_for('manage_blog_posts'))
-        except IOError as e:
-            flash(f'Error saving post data: {e}', 'danger')
-            # Log error, potentially render form again with post_for_processing data
+            return redirect(url_for('manage_blog_posts')) # Make sure this route exists
+        else:
+            flash('Error saving post data. Check logs.', 'danger')
+            # Fall through to render form again, ideally with submitted data
+            # This is where a form library (like WTForms) would greatly simplify repopulation.
 
-    # GET request or if POST failed and fell through
-    # Ensure 'published_at' is available for the template if it exists
+
+    # --- GET request or if POST had issues and fell through ---
+    # For GET, `post_for_processing` (which is a copy of `post_data_from_storage`
+    # with aligned captions) is used to populate the form.
     form_data_for_template = {
         'headline': post_for_processing['headline'],
         'content': post_for_processing['text'],
         'is_featured': post_for_processing.get('is_featured', False),
-        'is_published': post_for_processing.get('is_published', True) # Default to true for existing posts if not set
+        'is_published': post_for_processing.get('is_published', True) # Default to true if not set
     }
-    return render_template('admin/admin_post_blog.html',
+    return render_template('admin_post_blog.html', # Use consistent template name
                            legend=f'Edit Post: "{post_for_processing["headline"]}"',
-                           post=post_for_processing, # This now includes 'published_at' if set
+                           post=post_for_processing,
                            form_data=form_data_for_template,
                            current_images_for_form=post_for_processing.get('image_filenames', []),
                            current_captions_for_form=post_for_processing.get('image_captions', []))
@@ -1372,6 +1458,7 @@ def delete_blog_post(slug):
 # Admin routes Above this line
 
 ##############################
+
 
 #One line of code cut our Flask page load times by 60%
 #https://medium.com/building-socratic/the-one-weird-trick-that-cut-our-flask-page-load-time-by-70-87145335f679
