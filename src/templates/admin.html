@@ -32,6 +32,22 @@
         <input type="submit" id="deleteCompetitorFilesBtn" name="deleteCompetitorFilesBtn" value="Delete Competitor">
     </form>
     <br/>
+    {# --- NEW: Sync Local Blogs to GCS Form --- #}
+    <form method="POST" action="{{ url_for('sync_blogs_to_gcs_route') }}" id="syncBlogsToGCSForm" class="mb-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <h3>Sync Local Blog Posts to GCS:</h3>
+        <p class="text-muted small">
+            This will attempt to copy any blog posts found in the application's local blog data
+            directory to the Google Cloud Storage bucket if they don't already exist there.
+            Useful after deploying new content within the image or for local development pushes.
+        </p>
+        <button type="submit" id="syncBlogsBtn" name="sync_blogs_button" class="btn btn-info">
+            Sync Local to GCS
+        </button>
+    </form>
+    <hr class="my-4">
+    {# --- END NEW --- #}
+
     <form method="POST" action="/admin/set-log-level" class="form-inline my-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label class="mr-2">Global Log Level:</label>
@@ -40,7 +56,6 @@
                 <option value="{{ level }}" {% if current_log_levels.global == level %}selected{% endif %}>{{ level }}</option>
             {% endfor %}
         </select>
-            
         <label class="mr-2">File Handler:</label>
         <select name="file_log_level" class="form-control mr-2">
             {% for level in ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] %}

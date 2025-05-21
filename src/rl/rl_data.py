@@ -59,7 +59,9 @@ ENV_DEVEL_FILE = Path('.') / ENV_DEVEL_FILENAME
 
 BLOG_DATA_DIR =  Path('blog_data')
 LOCAL_BLOG_DATA_DIR = BLOG_DATA_DIR
-BLOG_CONFIG_FILE_PATH = BLOG_DATA_DIR / 'blog_config.json' # Path to your config file
+BLOG_CONFIG_FILE = 'blog_config.json'
+BLOG_CONFIG_FILE_PATH = BLOG_DATA_DIR / BLOG_CONFIG_FILE # Path to your config file
+
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 MAX_IMAGES_PER_POST = 6
 THUMBNAIL_SIZE = (400, 400) # Max width, max height for thumbnails
@@ -70,7 +72,7 @@ ROBOTS_DIR       = Path('static')
 
 BUCKET_NAME = 'redline-fitness-results-feedback'
 BLOG_BUCKET_NAME = BUCKET_NAME
-BLOG_BLOB_DIR = Path('blog_data')
+BLOG_BLOB_DIR = BLOG_DATA_DIR
 
 FEEDBACK_BUCKET_NAME = BUCKET_NAME
 FEEDBACK_BLOB_DIR = Path('feedback')
@@ -365,6 +367,7 @@ def setup_logger():
     logging.getLogger('google.auth').setLevel(logging.WARNING)
     logging.getLogger('google_auth_httplib2').setLevel(logging.WARNING) # If using httplib2 transport
     logging.getLogger('urllib3.connectionpool').setLevel(logging.WARNING)
+    logging.getLogger('urllib3.util').setLevel(logging.WARNING)
 
     #import google.cloud.storage
     #logger.info(f"GOOGLE_CLOUD_STORAGE VERSION IN USE: {google.cloud.storage.__version__}")
@@ -379,7 +382,7 @@ def setup_logger():
 def update_log_level(global_level=None, handler_levels=None):
     """Update log levels and save to config file"""
     logger = get_logger()
-    logger.debug(f"update_log_level> {global_level}, {handler_levels}")
+    #logger.debug(f"update_log_level> {global_level}, {handler_levels}")
     
     # Load current config
     config = load_log_config()
@@ -414,7 +417,7 @@ def update_log_level(global_level=None, handler_levels=None):
 def get_log_levels():
     """Get current log levels from the active logger"""
     logger = get_logger()
-    logger.debug("get_log_levels>")
+    #logger.debug("get_log_levels>")
     
     levels = {
         'global': logging.getLevelName(logger.level),
@@ -428,7 +431,7 @@ def get_log_levels():
         elif isinstance(handler, logging.StreamHandler):
             levels['console'] = logging.getLevelName(handler.level)
     
-    logger.debug("get_log_levels<")
+    #logger.debug("get_log_levels<")
     return levels
 
 #############################
@@ -446,7 +449,7 @@ def save_feedback_to_gcs(name, email, comments, category, rating):
     new_row = [datetime.now().isoformat(), name, email, comments, category, rating]
     
     logger = get_logger()
-    logger.debug(f"save_feedback_to_gcs> {', '.join(str(item) for item in new_row)} !")
+    #logger.debug(f"save_feedback_to_gcs> {', '.join(str(item) for item in new_row)} !")
     
     # We'll handle the data differently based on whether the file exists
     if blob.exists():
@@ -510,20 +513,20 @@ def remove_files_from_directory(directory):
 
     logger = get_logger()
     
-    logger.debug("remove_files_from_directory> %s",str(directory))
+    #logger.debug("remove_files_from_directory> %s",str(directory))
     logger.debug("cwd %s",str(os.getcwd()))
     for filename in os.listdir(directory):
         file_path = os.path.join(directory, filename)
         if os.path.isfile(file_path):
             os.remove(file_path)
-    logger.debug("remove_files_from_directory<")
+    #logger.debug("remove_files_from_directory<")
 
 
 def delete_generated_files():
     """Removes all data files generated here included competitor files"""
 
     logger = get_logger()
-    logger.debug("delete_generated_files>")
+    #logger.debug("delete_generated_files>")
     
     remove_files_from_directory(CSV_GENERIC_DIR);
     remove_files_from_directory(PDF_COMP_DIR); 
@@ -531,18 +534,18 @@ def delete_generated_files():
     remove_files_from_directory(PNG_COMP_DIR); 
     remove_files_from_directory(PNG_GENERIC_DIR);
     
-    logger.debug("delete_generated_files<")
+    #logger.debug("delete_generated_files<")
 
 def delete_competitor_files():
     
     logger = get_logger()
-    logger.debug("delete_competitor_files>")
+    #logger.debug("delete_competitor_files>")
     
     """Removes all competitor data files generated here"""
     remove_files_from_directory(PDF_COMP_DIR); 
     remove_files_from_directory(PNG_COMP_DIR);
     
-    logger.debug("delete_competitor_files<") 
+    #logger.debug("delete_competitor_files<") 
 
 #############################
 # Helper function to convert seconds to minutes.
@@ -552,7 +555,7 @@ def format_seconds(seconds):
     
     logger = get_logger()
 
-    logger.debug("format_seconds>")
+    #logger.debug("format_seconds>")
     minutes = int(seconds // 60)
     sec = round(seconds % 60, 1)
     return f"{minutes}m {sec:.1f}s"
@@ -632,20 +635,102 @@ def convert_to_standard_time(time_str):
 
 # --- BLOG Helper Functions ---
 def load_global_blog_config():
-    try:
-        with open(BLOG_CONFIG_FILE_PATH, 'r') as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        # Return default config if file not found or invalid
-        return {"max_featured_posts_on_home": 3}
+    """
+    Loads the global blog configuration.
+    Reads from GCS if ENV_MODE is 'deploy', otherwise from local file.
+    Returns default config if not found or error.
+    """
+    logger = app.logger
+    env_mode = os.environ.get('ENV_MODE', 'development').lower()
+    default_config = {"max_featured_posts_on_home": 6} # Example defaults
+
+    if env_mode == 'deploy':
+        #logger.debug(f"Attempting to load global blog config from GCS.")
+        blog_bucket_name =  BLOG_BUCKET_NAME
+        bucket = get_gcs_bucket(blog_bucket_name)
+        if not bucket:
+            logger.error(f"Could not get GCS bucket '{blog_bucket_name}'.")
+            return default_config # Or raise error
+
+        blob = bucket.blob(str(BLOG_CONFIG_FILE_PATH))
+        try:
+            if blob.exists():
+                config_content = blob.download_as_string()
+                loaded_config = json.loads(config_content.decode('utf-8'))
+                #logger.info(f"Successfully loaded global blog config from GCS: gs://{bucket.name}/{str(BLOG_CONFIG_FILE_PATH)}")
+                return loaded_config
+            else:
+                logger.warning(f"Global blog config not found in GCS at gs://{bucket.name}/{str(BLOG_CONFIG_FILE_PATH)}. Returning default.")
+                return default_config
+        except json.JSONDecodeError as jde:
+            logger.error(f"Error decoding JSON from GCS config (gs://{bucket.name}/{str(BLOG_CONFIG_FILE_PATH)}): {jde}", exc_info=True)
+            return default_config
+        except Exception as e:
+            logger.error(f"Error loading global blog config from GCS (gs://{bucket.name}/{str(BLOG_CONFIG_FILE_PATH)}): {e}", exc_info=True)
+            return default_config
+    else: # Local development mode
+        #logger.debug(f"Attempting to load global blog config from local file: {str(BLOG_CONFIG_FILE_PATH)}")
+        try:
+            if BLOG_CONFIG_FILE_PATH.exists():
+                with open(str(BLOG_CONFIG_FILE_PATH), 'r', encoding='utf-8') as f:
+                    loaded_config = json.load(f)
+                #logger.info(f"Successfully loaded global blog config from local file: {str(BLOG_CONFIG_FILE_PATH)}")
+                return loaded_config
+            else:
+                logger.warning(f"Local global blog config file not found: {str(BLOG_CONFIG_FILE_PATH)}. Returning default.")
+                return default_config
+        except json.JSONDecodeError as jde:
+            logger.error(f"Error decoding JSON from local config file '{str(BLOG_CONFIG_FILE_PATH)}': {jde}", exc_info=True)
+            return default_config
+        except IOError as ioe:
+            logger.error(f"IOError reading local config file '{str(BLOG_CONFIG_FILE_PATH)}': {ioe}", exc_info=True)
+            return default_config
+        except Exception as e: # Catch any other unexpected errors
+            logger.error(f"Unexpected error loading local config file '{str(BLOG_CONFIG_FILE_PATH)}': {e}", exc_info=True)
+            return default_config
+
 
 def save_global_blog_config(config_data):
-    try:
-        with open(BLOG_CONFIG_FILE_PATH, 'w') as f:
-            json.dump(config_data, f, indent=4)
-        return True
-    except IOError:
-        return False
+    """
+    Saves the global blog configuration.
+    Writes to GCS if ENV_MODE is 'deploy', otherwise to local file.
+    """
+    logger = get_logger()
+    env_mode = os.environ.get('ENV_MODE', 'development').lower()
+
+    if env_mode == 'deploy':
+        logger.debug(f"Attempting to save global blog config to GCS.")
+        blog_bucket_name = BLOG_BUCKET_NAME
+
+        bucket = get_gcs_bucket(blog_bucket_name)
+        if not bucket:
+            logger.error(f"Could not get GCS bucket '{blog_bucket_name}' for save.")
+            return False
+
+        blob = bucket.blob(str(BLOG_CONFIG_FILE_PATH))
+        try:
+            json_string = json.dumps(config_data, indent=4)
+            blob.upload_from_string(json_string, content_type='application/json')
+            logger.info(f"Successfully saved global blog config to GCS: gs://{bucket.name}/{str(BLOG_CONFIG_FILE_PATH)}")
+            return True
+        except Exception as e:
+            logger.error(f"Error saving global blog config to GCS (gs://{bucket.name}/{str(BLOG_CONFIG_FILE_PATH)}): {e}", exc_info=True)
+            return False
+    else: # Local development mode
+        logger.debug(f"Attempting to save global blog config to local file: {str(BLOG_CONFIG_FILE_PATH)}")
+        try:
+            # Ensure parent directory exists for local file
+            BLOG_CONFIG_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with open(BLOG_CONFIG_FILE_PATH, 'w', encoding='utf-8') as f:
+                json.dump(config_data, f, indent=4)
+            logger.info(f"Successfully saved global blog config to local file: {str(BLOG_CONFIG_FILE_PATH)}")
+            return True
+        except IOError as ioe:
+            logger.error(f"IOError writing local config file '{str(BLOG_CONFIG_FILE_PATH)}': {ioe}", exc_info=True)
+            return False
+        except Exception as e: # Catch any other unexpected errors
+            logger.error(f"Unexpected error saving local config file '{str(BLOG_CONFIG_FILE_PATH)}': {e}", exc_info=True)
+            return False
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -709,7 +794,7 @@ def save_uploaded_image_and_thumbnail_to_gcs(slug, image_file_storage, unique_ba
     - unique_base_name: A unique name part, like 'img_timestamp_counter', without extension.
     Returns the final saved base filename (e.g., 'img_timestamp_counter.png') on success, None on failure.
     """
-    logger = get_logger
+    logger = get_logger()
 
     if not image_file_storage or not image_file_storage.filename:
         logger.error(f"No image file provided.")
@@ -745,7 +830,7 @@ def save_uploaded_image_and_thumbnail_to_gcs(slug, image_file_storage, unique_ba
         original_blob = bucket.blob(gcs_original_blob_path)
         # Use BytesIO to upload from memory
         original_blob.upload_from_file(BytesIO(image_bytes), content_type=image_file_storage.mimetype)
-        logger.info(f"Uploaded original image to {gcs_original_blob_path}")
+        #logger.info(f"Uploaded original image to {gcs_original_blob_path}")
 
         # 2. Create and upload thumbnail
         try:
@@ -766,7 +851,7 @@ def save_uploaded_image_and_thumbnail_to_gcs(slug, image_file_storage, unique_ba
 
             thumbnail_blob = bucket.blob(gcs_thumbnail_blob_path)
             thumbnail_blob.upload_from_file(thumb_io, content_type=f"image/{save_format.lower()}") # Set appropriate content type
-            logger.info(f"Uploaded thumbnail to {gcs_thumbnail_blob_path}")
+            #logger.info(f"Uploaded thumbnail to {gcs_thumbnail_blob_path}")
 
         except Exception as e_thumb:
             logger.error(f"Error creating/uploading thumbnail for {original_filename}: {e_thumb}", exc_info=True)
@@ -883,7 +968,7 @@ def delete_blog_image_and_thumbnail_from_gcs(slug, original_image_filename):
 
 def get_post_config_from_gcs(slug):
     """
-    Fetches and parses the config.json for a given slug from GCS.
+    Fetches and parses thecontent.json for a given slug from GCS.
     Returns the post data dictionary or None if not found or error.
     """
     logger = get_logger()
@@ -894,7 +979,7 @@ def get_post_config_from_gcs(slug):
         logger.error(f"Could not get GCS bucket '{blog_bucket_name}'.")
         return None
 
-    config_blob_path = f"{str(BLOG_BLOB_DIR)}/{slug}/config.json" # Assuming config file name
+    config_blob_path = f"{str(BLOG_BLOB_DIR)}/{slug}/content.json" # Assuming config file name
     blob = bucket.blob(config_blob_path)
 
     try:
@@ -902,7 +987,7 @@ def get_post_config_from_gcs(slug):
             config_content = blob.download_as_string()
             post_data = json.loads(config_content.decode('utf-8'))
             post_data['slug'] = slug # Ensure slug is part of the returned data
-            logger.debug(f"Successfully fetched config for slug '{slug}' from GCS.")
+            #logger.debug(f"Successfully fetched config for slug '{slug}' from GCS.")
             return post_data
         else:
             logger.warning(f"Post config not found in GCS: gs://{bucket.name}/{config_blob_path}")
@@ -915,7 +1000,7 @@ def get_post_config_from_gcs(slug):
         return None
 
 def save_post_config_to_gcs(slug, post_data):
-    """Saves the post_data dictionary as config.json for a slug in GCS."""
+    """Saves the post_data dictionary ascontent.json for a slug in GCS."""
     logger = app.logger
     log_prefix = "GCS_SAVE_POST_CONFIG_V1"
     # ... (similar bucket setup as above) ...
@@ -924,7 +1009,7 @@ def save_post_config_to_gcs(slug, post_data):
     if not bucket: # ... handle error ...
         return False
 
-    config_blob_path = f"{str(BLOG_BLOB_DIR)}/{slug}/config.json"
+    config_blob_path = f"{str(BLOG_BLOB_DIR)}/{slug}/content.json"
     blob = bucket.blob(config_blob_path)
     try:
         blob.upload_from_string(json.dumps(post_data, indent=4), content_type='application/json')
@@ -947,29 +1032,31 @@ def get_all_posts(published_only=True, sort_key='published_at', reverse_sort=Tru
     all_posts_data = []
 
     if env_mode == 'deploy':
-        logger.debug("get_all_posts: Fetching all posts from GCS (deploy mode).")
+        #logger.debug("get_all_posts: Fetching all posts from GCS (deploy mode).")
         blog_bucket_name = BLOG_BUCKET_NAME
         bucket = get_gcs_bucket(blog_bucket_name)
         if not bucket:
             logger.error(f"get_all_posts: Could not get GCS bucket '{blog_bucket_name}'.")
             return []
 
-        # GCS lists objects flatly. We need to find all 'config.json' files.
+        # GCS lists objects flatly. We need to find all 'content.json' files.
         # A common prefix for posts can help, e.g., if all posts are under 'posts/'
         # For now, assume slugs are top-level "directories".
         # Listing by delimiter '/' can simulate directories.
         
-        # Efficiently get slugs by looking for config.json markers
+        # Efficiently get slugs by looking forcontent.json markers
         slugs_in_gcs = set()
-        blobs = bucket.list_blobs(prefix='{LOCAL_BLOG_DATA_DIR}/') # Or a more specific prefix if your posts are nested
+        blobs = bucket.list_blobs(prefix=f'') # Or a more specific prefix if your posts are nested
         for blob_item in blobs:
-            # Assuming path is like "my-slug/config.json" or "my-slug/images/..."
+            # Assuming path is like "my-slug/content.json" or "my-slug/images/..."
             parts = blob_item.name.split('/')
+            #logger.debug(f"get_all_posts: Checking {parts}")
             if len(parts) > 1: # It's in a "folder"
-                if parts[-1] == 'config.json': # Found a config file
-                    slugs_in_gcs.add(parts[0])
+                if parts[-1] == 'content.json': # Found a config file
+                    #logger.debug(f"get_all_posts:content.json found in {parts}")
+                    slugs_in_gcs.add(parts[1]) # parts[0] is 'blog_data'
         
-        logger.info(f"get_all_posts: Found {len(slugs_in_gcs)} potential post slugs in GCS.")
+        #logger.info(f"get_all_posts: Found {len(slugs_in_gcs)} potential post slugs in GCS.")
 
         for slug_from_gcs in slugs_in_gcs:
             post_content = get_post_config_from_gcs(slug_from_gcs) # Fetch individual config
@@ -979,7 +1066,7 @@ def get_all_posts(published_only=True, sort_key='published_at', reverse_sort=Tru
                 all_posts_data.append(post_content)
     
     else: # Local development mode
-        logger.debug("get_all_posts: Fetching all posts from local filesystem (dev mode).")
+        #logger.debug("get_all_posts: Fetching all posts from local filesystem (dev mode).")
         if not os.path.exists(LOCAL_BLOG_DATA_DIR): # Ensure LOCAL_BLOG_DATA_DIR is correct
             logger.error(f"get_all_posts: Local blog data directory not found: {LOCAL_BLOG_DATA_DIR}")
             return []
@@ -987,7 +1074,7 @@ def get_all_posts(published_only=True, sort_key='published_at', reverse_sort=Tru
         for slug_folder_name in os.listdir(LOCAL_BLOG_DATA_DIR):
             post_dir = os.path.join(LOCAL_BLOG_DATA_DIR, slug_folder_name)
             if os.path.isdir(post_dir):
-                config_path = os.path.join(post_dir, 'config.json') # or content.json
+                config_path = os.path.join(post_dir, 'content.json') # or content.json
                 if os.path.exists(config_path):
                     try:
                         with open(config_path, 'r', encoding='utf-8') as f:
@@ -1030,14 +1117,8 @@ def get_all_posts(published_only=True, sort_key='published_at', reverse_sort=Tru
     #             except ValueError:
     #                 pass # Keep as string if parsing fails
                         
-    logger.info(f"get_all_posts: Returning {len(all_posts_data)} posts.")
+    #logger.info(f"get_all_posts: Returning {len(all_posts_data)} posts.")
     return all_posts_data
-
-# In your main rl_data.py (or wherever get_post is currently defined)
-# This function will call either local file logic or rl_data_gcs functions
-
-# Assuming LOCAL_BLOG_DATA_DIR is defined for local file operations
-# Assuming your local get_post_from_filesystem(slug) exists
 
 def get_post(slug, increment_view_count=False):
     """
@@ -1049,19 +1130,20 @@ def get_post(slug, increment_view_count=False):
     post_data = None
 
     if env_mode == 'deploy':
-        logger.debug(f"get_post: Fetching post '{slug}' from GCS (deploy mode).")
+        #logger.debug(f"get_post: Fetching post '{slug}' from GCS (deploy mode).")
         post_data = get_post_config_from_gcs(slug) # Uses the GCS helper
         if post_data and increment_view_count and post_data.get('is_published', False):
             post_data['view_count'] = post_data.get('view_count', 0) + 1
             post_data['updated_at'] = datetime.now().isoformat() # View count is an update
+            #logger.debug(f"get_post: incrementing view count {post_data['view_count']} for '{slug}' to GCS.")
             if not save_post_config_to_gcs(slug, post_data): # Save updated data back to GCS
                 logger.error(f"get_post: Failed to save updated view count for '{slug}' to GCS.")
                 # Decide how to handle: return old data, or None? For now, return potentially stale data.
     else: # Local development mode
-        logger.debug(f"get_post: Fetching post '{slug}' from local filesystem (dev mode).")
+        #logger.debug(f"get_post: Fetching post '{slug}' from local filesystem (dev mode).")
         # --- This needs to be your existing local file reading logic ---
         post_dir_path = os.path.join(LOCAL_BLOG_DATA_DIR, slug) # Ensure LOCAL_BLOG_DATA_DIR is correct
-        config_path = os.path.join(post_dir_path, 'config.json') # or content.json
+        config_path = os.path.join(post_dir_path, 'content.json') # or content.json
         if os.path.exists(config_path):
             try:
                 with open(config_path, 'r+', encoding='utf-8') as f: # Open r+ for read/write
@@ -1138,43 +1220,91 @@ def get_gcs_bucket(bucket_name):
         return None
     return storage_client.bucket(bucket_name)
 
-def list_blog_slugs_from_gcs():
+
+def list_blog_slugs_from_gcs(gcs_object_prefix=''): # Renamed for clarity from the method's 'prefix'
+    logger = get_logger()
     slugs = set()
-    bucket = get_gcs_bucket(BLOG_BUCKET_NAME)
+    log_prefix_func = "LIST_GCS_SLUGS_V1" # For this function's logs
+
+    #logger.info(f"{log_prefix_func} :: Listing slugs with GCS object prefix: '{gcs_object_prefix}'")
+    
+    bucket = get_gcs_bucket(BLOG_BUCKET_NAME) # Ensure BLOG_BUCKET_NAME is accessible
     if not bucket:
-        return list(slugs)
-    # Blog posts are directories (prefixes ending with '/')
-    # We list objects and infer directories from prefixes like "my-post-slug/"
-    # GCS doesn't have true "folders", but prefixes.
-    # We assume each slug corresponds to a "folder" prefix.
-    # A common way to mark a folder is to have an empty object like "my-post-slug/"
-    # Or, we can list all content.json files: "my-post-slug/content.json"
-    blobs = bucket.list_blobs(prefix='') # List all in bucket or a common blog prefix
-    for blob in blobs:
-        parts = blob.name.split('/')
-        if len(parts) > 1 and parts[-1] == 'content.json': # e.g., some-slug/content.json
-            slugs.add(parts[0])
+        logger.error(f"{log_prefix_func} :: Bucket not available.")
+        return list(slugs) # Return empty list on error
+
+    # Call list_blobs using the 'prefix' keyword argument
+    try:
+        blobs_iterator = bucket.list_blobs(prefix=gcs_object_prefix)
+        
+        # Logging the iterator itself won't show contents immediately
+        #logger.info(f"{log_prefix_func} :: Blobs iterator: {blobs_iterator}") 
+
+        processed_blob_names = 0
+        for blob in blobs_iterator:
+            processed_blob_names += 1
+            #logger.debug(f"{log_prefix_func} :: Processing GCS blob: {blob.name}")    
+            
+            # Make sure gcs_object_prefix is handled correctly for splitting
+            # If gcs_object_prefix is "posts/", and blob.name is "posts/my-slug/content.json"
+            # then relevant_path = "my-slug/content.json"
+            relevant_path = blob.name
+            if gcs_object_prefix and blob.name.startswith(gcs_object_prefix):
+                relevant_path = blob.name[len(gcs_object_prefix):].lstrip('/') # Remove prefix and leading slash
+
+            parts = relevant_path.split('/')
+            #logger.debug(f"{log_prefix_func} :: Relevant path parts: {parts} (from {blob.name})")
+                    
+            # We are looking for "slug/content.json" structure after the gcs_object_prefix
+            if len(parts) >= 2 and parts[-1] == 'content.json': # Or your content.json
+                slug = parts[-2] # The directory name containing content.json is the slug
+                #logger.debug(f"{log_prefix_func} :: Adding slug: {slug}")
+                slugs.add(slug)
+            #else:
+                #logger.debug(f"{log_prefix_func} :: len(parts): {len(parts)}, parts[-1]: {parts[-1]}")
+            #elif len(parts) == 1 and parts[0].endswith('content.json'): # Case: prefix="foo/bar/content.json"
+                # This case is less likely if gcs_object_prefix is a "directory"
+                #logger.debug(f"{log_prefix_func} :: Adding slug V2: {slug}")
+                #slug = parts[0][:-len('/content.json')]
+                #slugs.add(slug)
+
+
+        #if processed_blob_names == 0:
+        #    logger.info(f"{log_prefix_func} :: No blobs found matching prefix '{gcs_object_prefix}'.")
+        #else:
+        #    logger.info(f"{log_prefix_func} :: Processed {processed_blob_names} blobs from GCS matching prefix.")
+
+    except Exception as e_list:
+        logger.error(f"{log_prefix_func} :: Error during bucket.list_blobs or iteration: {e_list}", exc_info=True)
+        return list(slugs) # Return empty list on error
+
+    #logger.info(f"{log_prefix_func} :: Returning {len(slugs)} slugs: {slugs if len(slugs) < 10 else str(list(slugs)[:10]) + '...'}")
     return list(slugs)
 
-def get_post_from_gcs(slug):
+# In rl_data_gcs.py
+def check_if_post_slug_exists_in_gcs(slug_to_check):
     logger = get_logger()
-    bucket = get_gcs_bucket(BLOG_BUCKET_NAME)
+    
+    blog_bucket_name = BLOG_BUCKET_NAME
+    bucket = get_gcs_bucket(blog_bucket_name) # Your existing helper
     if not bucket:
-        return None
-    blob_name = f"{str(BLOG_BLOB_DIR)}/{slug}/content.json"
-    blob = bucket.blob(blob_name)
+        logger.error(f"Could not get GCS bucket for slug check.")
+        return True # Fail safe
+
+    # Check for the existence of the content.json file for that slug
+    config_blob_path = f"{slug_to_check}/content.json"
+    blob = bucket.blob(config_blob_path)
+    
     try:
         if blob.exists():
-            config_content = blob.download_as_string()
-            post_data = json.loads(config_content.decode('utf-8'))
-            post_data['slug'] = slug # Ensure slug is part of the returned data
-            return post_data
-        else:
-            logger.warning(f"Post config not found in GCS: {blob_name}")
-            return None
+            #logger.info(f"Slug '{slug_to_check}' (content.json) FOUND in GCS.")
+            return True
     except Exception as e:
-        logger.error(f"Error fetching post {slug} from GCS: {e}")
-        return None
+        logger.error(f"Error checking GCS for slug '{slug_to_check}': {e}", exc_info=True)
+        return True # Fail safe
+
+    logger.info(f"Slug '{slug_to_check}' (content.json) NOT FOUND in GCS.")
+    return False
 
 def save_post_to_gcs(slug, post_data):
     logger = get_logger()
@@ -1189,7 +1319,7 @@ def save_post_to_gcs(slug, post_data):
         # published_at logic should be handled in the route before this function
 
         blob.upload_from_string(json.dumps(post_data, indent=4), content_type='application/json')
-        logger.info(f"Post {slug} saved to GCS: {blob_name}")
+        #logger.info(f"Post {slug} saved to GCS: {blob_name}")
         return True
     except Exception as e:
         logger.error(f"Error saving post {slug} to GCS: {e}")
@@ -1214,7 +1344,7 @@ def get_blog_image_url_from_gcs(slug, filename):
     actual_filename_part = base_filename[len("thumb_"):] if is_thumbnail_in_name else base_filename
     path_in_bucket = f"{str(BLOG_BLOB_DIR)}/{slug}/images/{'thumb_' if is_thumbnail_in_name else ''}{actual_filename_part}"
 
-    logger.info(f"Attempting to sign for object: gs://{bucket.name}/{path_in_bucket}") #
+    #logger.info(f"Attempting to sign for object: gs://{bucket.name}/{path_in_bucket}") #
 
     blob = bucket.blob(path_in_bucket)
 
@@ -1280,7 +1410,7 @@ def get_blog_image_url_from_gcs(slug, filename):
             service_account_email=target_sa_email_for_signing, 
             access_token=credentials.token)       
     
-        logger.info(f" :: Successfully generated signed URL.")
+        #logger.info(f" :: Successfully generated signed URL.")
         return signed_url
     except AttributeError as ae: # "need private key"
          logger.error(f" :: AttributeError (likely 'need private key') with '{credentials_method_used}': {ae}", exc_info=True)
@@ -1294,22 +1424,80 @@ def get_blog_image_url_from_gcs(slug, filename):
         logger.error(f" :: General error generating signed URL with '{credentials_method_used}': {e}", exc_info=True)
         return None
 
+
 def delete_blog_post_from_gcs(slug):
+    """
+    Deletes all GCS objects associated with a blog post slug
+    under the configured BLOG_BLOB_DIR in the BLOG_BUCKET_NAME.
+    Effectively removes the "slug directory" and its contents.
+    """
     logger = get_logger()
-    bucket = get_gcs_bucket(BLOG_BUCKET_NAME)
-    if not bucket: return False
-    # Delete all objects with the prefix "slug/"
-    blobs_to_delete = bucket.list_blobs(prefix=f"{str(BLOG_BLOB_DIR)}/{slug}/")
-    deleted_count = 0
-    try:
-        for blob in blobs_to_delete:
-            blob.delete()
-            deleted_count +=1
-        logger.info(f"Deleted {deleted_count} objects for post {str(BLOG_BLOB_DIR)}/{slug} from GCS.")
-        return True
-    except Exception as e:
-        logger.error(f"Error deleting post {str(BLOG_BLOB_DIR)}/{slug} from GCS: {e}")
+
+    if not slug:
+        logger.error(f"Slug not provided for deletion.")
         return False
+
+    blog_bucket_name = BLOG_BUCKET_NAME
+    bucket = get_gcs_bucket(blog_bucket_name)
+    if not bucket:
+        logger.error(f"Could not get GCS bucket '{blog_bucket_name}'.")
+        return False
+
+    # Construct the prefix for objects to delete
+    # BLOG_BLOB_DIR is an optional top-level "folder" like "posts" or "blog_content"
+    # If BLOG_BLOB_DIR is empty, posts are at the bucket root.
+    blog_base_dir = BLOG_BLOB_DIR
+
+    # Ensure the prefix correctly forms "base_dir/slug/"
+    # Using f-string directly is fine as GCS paths are forward-slash separated
+    prefix_to_delete = f"{blog_base_dir}/{slug}/"
+    
+    logger.info(f"Attempting to delete all objects with prefix 'gs://{bucket.name}/{prefix_to_delete}'")
+
+    # List all blobs with this prefix.
+    # list() materializes the iterator, useful for counting or if you need the full list.
+    # For very many objects, you might process the iterator directly without list().
+    blobs_to_delete_iterator = bucket.list_blobs(prefix=prefix_to_delete)
+    
+    deleted_count = 0
+    errors_encountered = False
+
+    # Iterate and delete each blob
+    # This is robust as it attempts to delete each one individually.
+    for blob_item in blobs_to_delete_iterator:
+        try:
+            #(f"Deleting blob: gs://{bucket.name}/{blob_item.name}")
+            blob_item.delete()
+            deleted_count += 1
+        except Exception as e:
+            logger.error(f"Failed to delete blob gs://{bucket.name}/{blob_item.name}: {e}", exc_info=True)
+            errors_encountered = True
+            # Decide if you want to continue deleting others or stop on first error.
+            # This loop continues by default.
+
+    # Delete the image folder and slug folder
+    folders_to_try_delete = [
+        f"{str(BLOG_BLOB_DIR)}/{slug}/images",          # image folder
+        f"{str(BLOG_BLOB_DIR)}/{slug}"                  # slug folder
+    ]
+    for path_to_delete in folders_to_try_delete:
+        folder_blob = bucket.blob(path_to_delete)
+        try:
+            if folder_blob.exists():
+                folder_blob.delete()
+                logger.info(f"Deleted image {path_to_delete} from GCS for post {slug}.")
+        except Exception as e:
+            logger.error(f"Error deleting image {path_to_delete} from GCS for post {slug}: {e}")
+
+    if errors_encountered:
+        logger.warning(f"Finished deletion attempt for prefix 'gs://{bucket.name}/{prefix_to_delete}' with errors. Deleted {deleted_count} objects.")
+        return False # Indicate that not everything went smoothly
+    else:
+        if deleted_count > 0:
+            logger.info(f"Successfully deleted {deleted_count} objects for prefix 'gs://{bucket.name}/{prefix_to_delete}'.")
+        else:
+            logger.info(f"No objects found to delete for prefix 'gs://{bucket.name}/{prefix_to_delete}'. (Considered successful)")
+        return True
 
 def delete_blog_image_from_gcs(slug, filename):
     logger = get_logger()
@@ -1347,66 +1535,131 @@ def delete_blog_image_from_gcs(slug, filename):
             logger.error(f"Error deleting image {path_to_delete} from GCS for post {slug}: {e}")
     return deleted_any
 
+import os
+import json
+from pathlib import Path # For consistency if LOCAL_BLOG_DATA_DIR is Path
+from google.cloud import storage # Only if you intend to initialize client here, otherwise not needed
+from flask import current_app as app # Or your get_logger and how you access config
+
 def sync_local_blogs_to_gcs():
+    """
+    Synchronizes blog posts from the local directory to GCS.
+    Only syncs posts (slugs) that exist locally but not in GCS.
+    Assumes local directory names are the slugs.
+    Returns a dictionary with sync status and counts.
+    """
     logger = get_logger()
-    storage_client = storage.Client()
-    logger.info("Starting sync of local blog posts to GCS...")
-    if not BLOG_BUCKET_NAME or not storage_client:
-        logger.warning("GCS not configured for blog sync. Skipping.")
-        return
+    #logger.info(f"Starting sync of local blog posts to GCS...")
 
-    gcs_slugs = set(list_blog_slugs_from_gcs()) # Assumes this lists slugs from GCS
-    logger.info(f"Slugs currently in GCS: {gcs_slugs}")
+    # --- Configuration - ensure these are correctly fetched ---
+    local_blog_data_path = LOCAL_BLOG_DATA_DIR
+    blog_bucket_name_from_env = BLOG_BUCKET_NAME
+    blog_gcs_base_prefix = "blog_data" #if change this to a path then seems to be a problem.
 
-    if not os.path.exists(LOCAL_BLOG_DATA_DIR):
-        logger.info(f"Local blog data directory not found: {LOCAL_BLOG_DATA_DIR}. No local posts to sync.")
-        return
+    # --- GCS Client and Slug Listing ---
+    # list_blog_slugs_from_gcs should use a properly initialized client
+    # and account for blog_gcs_base_prefix.
+    try:
+        gcs_slugs = set(list_blog_slugs_from_gcs(gcs_object_prefix=blog_gcs_base_prefix))
+        logger.info(f"{len(gcs_slugs)} slugs found in GCS under prefix '{blog_gcs_base_prefix}'.")
+    except Exception as e_gcs_list:
+        logger.error(f"Failed to list slugs from GCS: {e_gcs_list}", exc_info=True)
+        return {"status": "error", "message": "Failed to list GCS slugs.", "synced_count": 0, "failed_count": 0, "skipped_count": 0}
 
-    for local_slug_folder in os.listdir(LOCAL_BLOG_DATA_DIR):
-        local_post_path = os.path.join(LOCAL_BLOG_DATA_DIR, local_slug_folder)
-        if os.path.isdir(local_post_path):
-            # Assume folder name is the slug, or read slug from local content.json
-            # For simplicity, let's assume folder name is slug for sync
-            slug_to_sync = local_slug_folder
+    if not local_blog_data_path.exists() or not local_blog_data_path.is_dir():
+        logger.info(f"Local blog data directory not found: {local_blog_data_path}. No local posts to sync.")
+        return {"status": "no_local_data", "message": "Local blog data directory not found.", "synced_count": 0, "failed_count": 0, "skipped_count": 0}
+
+    synced_this_run_count = 0
+    failed_this_run_slugs = []
+    skipped_this_run_count = 0
+    config_file_name = "content.json" # As per your original code
+
+    for local_slug_folder_name in os.listdir(local_blog_data_path):
+        local_post_full_path = local_blog_data_path / local_slug_folder_name
+        if local_post_full_path.is_dir():
+            slug_to_sync = local_slug_folder_name # Assuming folder name is the slug
             
-            if slug_to_sync not in gcs_slugs:
-                logger.info(f"New local post '{slug_to_sync}' found. Syncing to GCS.")
-                config_file_local_path = os.path.join(local_post_path, 'content.json')
+            if slug_to_sync not in gcs_slugs: # Core logic: only sync if not already in GCS
+                #logger.info(f"New local post '{slug_to_sync}' not in GCS. Attempting sync.")
+                config_file_local_path = local_post_full_path / config_file_name
                 
-                if os.path.exists(config_file_local_path):
+                if config_file_local_path.exists() and config_file_local_path.is_file():
+                    current_post_fully_synced = True # Assume success for this post initially
                     try:
                         with open(config_file_local_path, 'r', encoding='utf-8') as f_local:
                             post_data = json.load(f_local)
                         
-                        # Ensure the slug in post_data matches folder if needed, or use folder name
-                        # post_data['slug'] = slug_to_sync 
+                        if post_data.get('slug') != slug_to_sync:
+                            #logger.warning(f"Slug in '{config_file_name}' ('{post_data.get('slug')}') for '{slug_to_sync}' doesn't match folder. Using folder name.")
+                            post_data['slug'] = slug_to_sync 
                         
-                        if save_post_to_gcs(slug_to_sync, post_data):
-                            logger.info(f"Synced content.json for {slug_to_sync} to GCS.")
-                            # Sync images for this post
-                            local_images_path = os.path.join(local_post_path, 'images')
-                            if os.path.exists(local_images_path) and os.path.isdir(local_images_path):
-                                for img_filename in os.listdir(local_images_path):
-                                    local_img_full_path = os.path.join(local_images_path, img_filename)
-                                    if os.path.isfile(local_img_full_path):
-                                        with open(local_img_full_path, 'rb') as img_f_local:
-                                            # Need a unique base name for GCS save function;
-                                            # here img_filename from local is already unique (e.g. img_timestamp_0.png)
-                                            # The rl_data_gcs.save_blog_image_to_gcs expects FileStorage or stream
-                                            # For sync, we might need a slightly different GCS upload function or adapt.
-                                            # Let's make a simpler one for sync:
-                                            bucket = get_gcs_bucket(BLOG_BUCKET_NAME)
-                                            if bucket:
-                                                gcs_img_blob_name = f"{str(BLOG_BLOB_DIR)}/{slug_to_sync}/images/{img_filename}"
-                                                img_blob = bucket.blob(gcs_img_blob_name)
-                                                img_blob.upload_from_filename(local_img_full_path) # Simpler for sync
-                                                logger.info(f"Synced image {img_filename} for {slug_to_sync} to GCS.")
+                        # save_post_config_to_gcs should handle blog_gcs_base_prefix internally
+                        if save_post_config_to_gcs(slug_to_sync, post_data):
+                            logger.info(f"Synced '{config_file_name}' for '{slug_to_sync}' to GCS.")
+                            
+                            local_images_path = local_post_full_path / 'images'
+                            if local_images_path.exists() and local_images_path.is_dir():
+                                images_synced_for_this_post = 0
+                                bucket_for_img_upload = get_gcs_bucket(blog_bucket_name_from_env) # Get bucket once per post
+                                if not bucket_for_img_upload:
+                                    logger.error(f"Could not get GCS bucket for image upload of '{slug_to_sync}'. Skipping image sync for this post.")
+                                    current_post_fully_synced = False
+                                else:
+                                    for img_filename in os.listdir(local_images_path):
+                                        local_img_full_path = local_images_path / img_filename
+                                        if local_img_full_path.is_file():
+                                            # Construct GCS object name for the image
+                                            gcs_img_path_parts = [slug_to_sync, "images", img_filename]
+                                            if blog_gcs_base_prefix: # Add base prefix if it exists
+                                                gcs_img_path_parts.insert(0, blog_gcs_base_prefix)
+                                            gcs_img_blob_name = "/".join(gcs_img_path_parts)
+                                            
+                                            img_blob = bucket_for_img_upload.blob(gcs_img_blob_name)
+                                            try:
+                                                # Determine content type (optional but good)
+                                                content_type_guess = None
+                                                if '.' in img_filename:
+                                                    ext_map = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'gif': 'image/gif', 'webp': 'image/webp'}
+                                                    content_type_guess = ext_map.get(img_filename.rsplit('.', 1)[1].lower())
+
+                                                img_blob.upload_from_filename(str(local_img_full_path), content_type=content_type_guess)
+                                                #logger.info(f"Synced image '{img_filename}' for '{slug_to_sync}' to gs://{bucket_for_img_upload.name}/{gcs_img_blob_name}")
+                                                images_synced_for_this_post += 1
+                                            except Exception as e_img:
+                                                logger.error(f"Failed to upload image '{img_filename}' for '{slug_to_sync}': {e_img}", exc_info=True)
+                                                current_post_fully_synced = False
+                                    #logger.info(f"For post '{slug_to_sync}', attempted to sync {images_synced_for_this_post} images.")
+                            else:
+                                logger.info(f"No 'images' directory found for local post '{slug_to_sync}'.")
                         else:
-                             logger.error(f"Failed to save content.json for {slug_to_sync} to GCS during sync.")
-                    except Exception as e:
-                        logger.error(f"Error syncing post {slug_to_sync}: {e}")
+                             logger.error(f"Failed to save '{config_file_name}' for '{slug_to_sync}' to GCS.")
+                             current_post_fully_synced = False
+                        
+                        if current_post_fully_synced:
+                            synced_this_run_count += 1
+                        else:
+                            failed_this_run_slugs.append(slug_to_sync)
+
+                    except json.JSONDecodeError as jde:
+                        logger.error(f"Error decoding JSON from '{config_file_local_path}': {jde}", exc_info=True)
+                        failed_this_run_slugs.append(slug_to_sync)
+                    except Exception as e_sync_post:
+                        logger.error(f"General error syncing post '{slug_to_sync}': {e_sync_post}", exc_info=True)
+                        failed_this_run_slugs.append(slug_to_sync)
                 else:
-                    logger.warning(f"content.json not found for local post {slug_to_sync}. Skipping sync.")
+                    logger.warning(f"'{config_file_name}' not found for local post '{slug_to_sync}'. Skipping sync.")
+                    # Not necessarily a failure of the overall sync process, just this item.
+                    # You could add it to a list of "skipped_no_config_slugs" if needed.
             else:
-                logger.debug(f"Post '{slug_to_sync}' already in GCS or local folder name mismatch. Skipping sync for this.")
-    logger.info("Blog post sync check complete.")
+                #logger.debug(f"Post '{slug_to_sync}' already exists in GCS. Skipping sync.")
+                skipped_this_run_count += 1
+        # else: item is not a directory
+    
+    final_message = f"Sync complete. New posts synced: {synced_this_run_count}. Posts skipped (already in GCS): {skipped_this_run_count}. Posts failed to sync fully: {len(failed_this_run_slugs)}."
+    logger.info(f"{final_message}")
+    if failed_this_run_slugs:
+        logger.warning(f"Slugs that failed to sync completely: {failed_this_run_slugs}")
+        return {"status": "partial_success", "message": final_message, "synced": synced_this_run_count, "failed": len(failed_this_run_slugs), "skipped": skipped_this_run_count}
+    
+    return {"status": "success", "message": final_message, "synced": synced_this_run_count, "failed": 0, "skipped": skipped_this_run_count}

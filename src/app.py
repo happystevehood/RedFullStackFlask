@@ -116,11 +116,11 @@ def create_app():
     env_mode = os.environ.get('ENV_MODE', 'development').lower()
 
     #only use google cloud storage if in deploy mode
-    if env_mode == 'deploy':
+    if env_mode != 'deploy':
 
         #copy from local to gcs
-        rl_data.sync_local_blogs_to_gcs()
-    else:
+        #rl_data.sync_local_blogs_to_gcs()
+    #else:
         # Ensure blog_data directory exists
         if not os.path.exists(rl_data.BLOG_DATA_DIR):
             os.makedirs(rl_data.BLOG_DATA_DIR)
@@ -309,7 +309,7 @@ def sitemap():
     # Ensure rl_data.BLOG_DATA_DIR is the correct path to the directory containing post subfolders
     # e.g., /app/my_blog_data/posts/ (if posts are in /app/my_blog_data/posts/post-slug-folder/)
     blog_data_path = rl_data.BLOG_DATA_DIR # Use the actual path from your rl_data module
-    app.logger.info(f"Scanning for blog posts in: {blog_data_path}")
+    #app.logger.info(f"Scanning for blog posts in: {blog_data_path}")
 
     if not os.path.exists(blog_data_path) or not os.path.isdir(blog_data_path):
         app.logger.error(f"Blog data directory not found or not a directory: {blog_data_path}")
@@ -346,7 +346,7 @@ def sitemap():
         sitemap_xml_content = render_template("sitemap.xml", pages=pages)
         response = make_response(sitemap_xml_content)
         response.headers["Content-Type"] = "application/xml"
-        app.logger.info(f"Successfully rendered sitemap.xml with {len(pages)} URLs.")
+        #app.logger.info(f"Successfully rendered sitemap.xml with {len(pages)} URLs.")
         return response
     except Exception as e:
         app.logger.error(f"Error rendering sitemap.xml: {e}", exc_info=True)
@@ -779,18 +779,10 @@ def blog_post_image(slug, filename):
 @app.route('/blog/<slug>')
 def blog_post_detail(slug):
     env_mode = os.environ.get('ENV_MODE', 'development').lower()
-    post = None
-    if env_mode == 'deploy':
-        post = rl_data.get_post_from_gcs(slug)
-        # Increment view count if needed:
-        # 1. Get post
-        # 2. Increment view_count in post dict
-        # 3. Save post back to GCS (rl_data_gcs.save_post_to_gcs)
-        # This read-modify-write can have contention if high traffic. Consider alternatives for view counts.
-    else:
-        post = rl_data.get_post(slug, increment_view_count=True) # Your existing local logic
 
-    if not post or not post.get('is_published', True):
+    post = rl_data.get_post(slug, increment_view_count=True) # Your existing local logic
+
+    if not post: # or not post.get('is_published', True):
         abort(404)
     
     # For image URLs, they need to point to GCS in deploy mode
@@ -902,6 +894,10 @@ def postadmin():
     generated_delete = request.form.get("deleteGeneratedFilesBtn")
     competitor_delete = request.form.get("deleteCompetitorFilesBtn")
 
+    app.logger.debug(f"regenerate: {regenerate}")
+    app.logger.debug(f"generated_delete: {generated_delete}")
+    app.logger.debug(f"competitor_delete: {competitor_delete}")
+
     if generated_delete:
         app.logger.debug(f"Delete the generated files")
         # Delete all the Generic files include Competitor
@@ -921,7 +917,7 @@ def postadmin():
     level2 = session.get('log_levels')
 
     levels = rl_data.get_log_levels() or session.get('log_levels')
-    app.logger.info(f"Log Levels: {levels} {level1} {level2}") 
+    #app.logger.info(f"Log Levels: {levels} {level1} {level2}") 
 
     return render_template("admin.html", current_log_levels=levels)
 
@@ -1111,7 +1107,7 @@ def set_log_level():
         }
     )
     
-    app.logger.info(f"Log levels updated, global: {global_level}, file: {file_level}, console: {console_level}")
+    #app.logger.info(f"Log levels updated, global: {global_level}, file: {file_level}, console: {console_level}")
     return app.redirect(app.url_for('admin', _external=True, _scheme=request.scheme))
 
 #
@@ -1122,113 +1118,191 @@ def set_log_level():
 @app.route('/admin/blog/new', methods=['GET', 'POST'])
 @login_required
 def new_blog_post():
+    env_mode = os.environ.get('ENV_MODE', 'development').lower()
+
     if request.method == 'POST':
-        headline = request.form.get('headline')
-        text_content = request.form.get('content')
+        headline = request.form.get('headline', '').strip()
+        text_content = request.form.get('content', '').strip()
         is_featured = 'is_featured' in request.form
-        is_published_now = 'is_published' in request.form # Check if publishing now
+        is_published_now = 'is_published' in request.form
 
-        # ... (slug generation, post directory creation - as before) ...
-        # (Ensure this part is complete and correct as in your original code)
-        post_slug_base = slugify(headline)
-        post_slug = post_slug_base
+        if not headline:
+            flash('Headline is required.', 'danger')
+            return render_template('admin_post_blog.html', legend='New Blog Post', form_data=request.form) # Ensure template path
+
+        # --- Slug Generation and Uniqueness Check ---
+        original_post_slug = slugify(headline)
+        post_slug = original_post_slug
         counter = 1
-        # IMPORTANT: Make sure rl_data.BLOG_DATA_DIR is correctly defined and accessible
-        while os.path.exists(os.path.join(rl_data.BLOG_DATA_DIR, post_slug)):
-            post_slug = f"{post_slug_base}-{counter}"
-            counter += 1
-        post_dir_path = os.path.join(rl_data.BLOG_DATA_DIR, post_slug)
-        try:
-            os.makedirs(post_dir_path, exist_ok=True)
-        except OSError as e:
-            flash(f"Could not create directory: {e}", "danger")
-            return render_template('admin_post_blog.html', legend='New Blog Post', form_data=request.form)
+        slug_exists = True
 
+        while slug_exists:
+            if env_mode == 'deploy':
+                # Use your GCS helper: from .rl_data_gcs import check_if_post_slug_exists_in_gcs
+                slug_exists = rl_data.check_if_post_slug_exists_in_gcs(post_slug)
+            else:
+                # Use your local config: from .rl_data import LOCAL_BLOG_DATA_DIR
+                # This assumes LOCAL_BLOG_DATA_DIR is correctly configured, e.g., app.config['LOCAL_BLOG_DATA_DIR']
+                local_blog_dir_for_check = app.config.get('LOCAL_BLOG_DATA_DIR', './local_blog_data') # Example default
+                slug_exists = os.path.exists(os.path.join(local_blog_dir_for_check, post_slug))
+            
+            if slug_exists:
+                app.logger.info(f"Slug '{post_slug}' already exists (mode: {env_mode}). Trying next.")
+                post_slug = f"{original_post_slug}-{counter}"
+                counter += 1
+            else:
+                #app.logger.info(f"Generated unique slug '{post_slug}' (mode: {env_mode}).")
+                break # Exit while loop, slug is unique
+        # --- End Slug Generation ---
 
-        uploaded_image_filenames = []
+        post_dir_local_path = None # Only relevant for local mode
+        if env_mode != 'deploy':
+            local_blog_dir = app.config.get('LOCAL_BLOG_DATA_DIR', './local_blog_data')
+            post_dir_local_path = os.path.join(local_blog_dir, post_slug)
+            try:
+                os.makedirs(post_dir_local_path, exist_ok=True)
+                #app.logger.info(f"Created local directory: {post_dir_local_path}")
+            except OSError as e:
+                flash(f"Could not create local directory for post: {e}", "danger")
+                app.logger.error(f"OSError creating local directory {post_dir_local_path}: {e}")
+                return render_template('admin/admin_post_blog.html', legend='New Blog Post', form_data=request.form)
+
+        # --- Image Uploading ---
+        # Ensure these are defined in your rl_data or imported
+        # from .rl_data import MAX_IMAGES_PER_POST, allowed_file 
+        # from .rl_data_gcs import save_uploaded_image_and_thumbnail_to_gcs
+        # from .rl_data import save_uploaded_image_and_thumbnail as save_image_local
+
+        uploaded_image_basenames = [] # Store just basenames like "img_timestamp_0.png"
         uploaded_image_captions = []
-        # ... (image uploading logic as before, ensure it's complete) ...
-        # (This part is crucial and was condensed in your snippet)
-        for i in range(rl_data.MAX_IMAGES_PER_POST): # Assuming rl_data.MAX_IMAGES_PER_POST is defined
+        image_files_from_form = [] # Collect FileStorage objects first
+
+        # Collect all image FileStorage objects
+        for i in range(rl_data.MAX_IMAGES_PER_POST):
             image_file = request.files.get(f'image_{i}')
-            caption_text = request.form.get(f'caption_{i}', '').strip()
             if image_file and image_file.filename:
-                if not rl_data.allowed_file(image_file.filename): # Assuming rl_data.allowed_file
-                    flash(f'Image {i+1} invalid type. Not saved.', 'warning'); continue
-                
-                # Assuming rl_data.save_uploaded_image_and_thumbnail is defined
-                unique_base_name = f"img_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{i}"
-                saved_filename = rl_data.save_uploaded_image_and_thumbnail(post_slug, image_file, unique_base_name)
-
-                if saved_filename:
-                    uploaded_image_filenames.append(saved_filename)
-                    uploaded_image_captions.append(caption_text)
-                else:
-                    flash(f'Error saving Image {i+1}.', 'danger')
-                    # Cleanup logic (delete already uploaded images for this post, remove post_dir_path)
-                    for fn_to_delete in uploaded_image_filenames:
-                        rl_data.delete_blog_image_and_thumbnail(post_slug, fn_to_delete) # Assuming this function exists
-                    if os.path.exists(post_dir_path):
-                        shutil.rmtree(post_dir_path)
-                    return render_template('admin_post_blog.html', legend='New Blog Post', form_data=request.form)
-
-        if not uploaded_image_filenames: # Check if any images were actually saved
+                image_files_from_form.append(image_file)
+        
+        if not image_files_from_form:
             flash('At least one image is required.', 'danger')
-            if os.path.exists(post_dir_path): shutil.rmtree(post_dir_path) # Cleanup directory if no images
+            if env_mode != 'deploy' and post_dir_local_path and os.path.exists(post_dir_local_path):
+                shutil.rmtree(post_dir_local_path) # Cleanup local dir if created
             return render_template('admin_post_blog.html', legend='New Blog Post', form_data=request.form)
 
+        image_save_failed = False
+        for idx, image_file_to_save in enumerate(image_files_from_form):
+            caption_text = request.form.get(f'caption_{idx}', '').strip() # Assuming captions are indexed same as image_ fields
+            
+            # from .rl_data import allowed_file
+            if not rl_data.allowed_file(image_file_to_save.filename):
+                flash(f'Image {idx+1} ("{image_file_to_save.filename}") has an invalid file type. Not saved.', 'warning')
+                continue # Skip this file
 
+            unique_base_name_no_ext = f"img_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{idx}"
+            saved_basename_ext = None
+
+            image_file_to_save.seek(0) # Crucial: Reset stream before each save attempt
+
+            if env_mode == 'deploy':
+                # from .rl_data_gcs import save_uploaded_image_and_thumbnail_to_gcs
+                saved_basename_ext = rl_data.save_uploaded_image_and_thumbnail_to_gcs(
+                    post_slug, image_file_to_save, unique_base_name_no_ext
+                )
+            else:
+                # from .rl_data import save_uploaded_image_and_thumbnail as save_image_local
+                # This local save function needs to know about LOCAL_BLOG_DATA_DIR
+                saved_basename_ext = rl_data.save_image_local(
+                    post_slug, image_file_to_save, unique_base_name_no_ext, app.config['LOCAL_BLOG_DATA_DIR']
+                )
+            
+            if saved_basename_ext:
+                uploaded_image_basenames.append(saved_basename_ext)
+                uploaded_image_captions.append(caption_text)
+            else:
+                flash(f'Error saving Image {idx+1} ("{image_file_to_save.filename}"). Post creation aborted.', 'danger')
+                image_save_failed = True
+                break # Stop processing further images
+
+        if image_save_failed or not uploaded_image_basenames:
+            if not uploaded_image_basenames and not image_save_failed: # No valid images uploaded
+                 flash('At least one valid image is required and must be successfully uploaded.', 'danger')
+            
+            app.logger.warning(f"Image upload failed or no valid images for new post '{post_slug}'. Cleaning up.")
+            # Cleanup logic
+            if env_mode == 'deploy':
+                # from .rl_data_gcs import delete_blog_post_from_gcs # This deletes content.json AND images
+                # Since content.json hasn't been uploaded yet, we only need to delete images if any were uploaded.
+                # A simpler GCS cleanup here might be to delete objects under post_slug/images/
+                # For now, let's assume if save_post_to_gcs fails, or if we get here, we might call a full delete.
+                # This needs a careful GCS cleanup function for partially created posts.
+                app.logger.info(f"Attempting GCS cleanup for partially created post '{post_slug}' (if any images were uploaded).")
+                for fname in uploaded_image_basenames: # uploaded_image_basenames contains what SUCCEEDED
+                    # from .rl_data_gcs import delete_blog_image_and_thumbnail_from_gcs
+                    rl_data.delete_blog_image_and_thumbnail_from_gcs(post_slug, fname)
+            else: # Local cleanup
+                if post_dir_local_path and os.path.exists(post_dir_local_path):
+                    shutil.rmtree(post_dir_local_path)
+            return render_template('admin_post_blog.html', legend='New Blog Post', form_data=request.form)
+        # --- End Image Uploading ---
+
+        # --- Prepare Post Data ---
         now_iso = datetime.now().isoformat()
-        published_at_iso = now_iso if is_published_now else None # Set published_at if publishing now
-
+        published_at_iso = now_iso if is_published_now else None
         post_data = {
             'headline': headline,
             'text': text_content,
-            'image_filenames': uploaded_image_filenames,
+            'image_filenames': uploaded_image_basenames, # Use the successfully saved basenames
             'image_captions': uploaded_image_captions,
             'created_at': now_iso,
             'updated_at': now_iso,
-            'published_at': published_at_iso, # New field
+            'published_at': published_at_iso,
             'is_featured': is_featured,
             'is_published': is_published_now,
             'view_count': 0,
-            'slug': post_slug
+            'slug': post_slug # The unique slug
         }
+        # --- End Prepare Post Data ---
 
-        env_mode = os.environ.get('ENV_MODE', 'development').lower()
-
+        # --- Save Config File (content.json) ---
+        save_config_successful = False
         if env_mode == 'deploy':
-            # Save content.json to GCS
-            if rl_data.save_post_to_gcs(post_slug, post_data):
-                # Save images to GCS (loop through uploaded images and call rl_data_gcs.save_blog_image_to_gcs)
-                # This requires careful handling of FileStorage objects from request.files
-                # The 'unique_base_name' for rl_data_gcs.save_blog_image_to_gcs needs to be generated
-                # The rl_data_gcs.save_blog_image_to_gcs should handle creating both full and thumb if needed
-                # and return the base filename stored (e.g. "img_timestamp_0.png")
-                # which you then store in post_data['image_filenames']
-                gcs_image_filenames = []
-                for i, image_file_storage in enumerate(request.files.getlist(f'image_{i}')): # Pseudocode for getting files
-                    if image_file_storage and image_file_storage.filename:
-                        # ... generate unique_base_name ...
-                        # ... call rl_data_gcs.save_blog_image_and_thumbnail_to_gcs (you'll need this new helper) ...
-                        # saved_gcs_filename = rl_data_gcs.save_blog_image_and_thumbnail_to_gcs(post_slug, image_file_storage, unique_base_name)
-                        # if saved_gcs_filename: gcs_image_filenames.append(saved_gcs_filename) else: # handle error
-                        pass # Placeholder - image saving to GCS is complex
-                post_data['image_filenames'] = gcs_image_filenames # Update with GCS relative paths
-                rl_data.save_post_to_gcs(post_slug, post_data) # Re-save with correct image paths
-                flash('Blog post created successfully (GCS)!', 'success')
+            # from .rl_data_gcs import save_post_config_to_gcs
+            if rl_data.save_post_config_to_gcs(post_slug, post_data):
+                save_config_successful = True
+                flash('Blog post created successfully in GCS!', 'success')
             else:
-                flash('Error creating blog post on GCS.', 'danger')
-                # Potentially delete GCS folder if partially created
+                flash('Error saving blog post config to GCS. Images might have been uploaded. Check GCS.', 'danger')
+                # Major error: images uploaded but config failed. May need manual GCS cleanup or retry.
+                # For simplicity, we don't automatically delete uploaded images here if config save fails,
+                # as it might be a transient GCS issue.
+        else: # Local mode
+            try:
+                with open(os.path.join(post_dir_local_path, 'content.json'), 'w', encoding='utf-8') as f:
+                    json.dump(post_data, f, indent=4)
+                save_config_successful = True
+                flash('Blog post created successfully locally!', 'success')
+            except IOError as e:
+                flash(f'Error saving local content.json: {e}', 'danger')
+                app.logger.error(f"IOError saving local content.json for {post_slug}: {e}")
+                # Cleanup images and dir
+                if post_dir_local_path and os.path.exists(post_dir_local_path): shutil.rmtree(post_dir_local_path)
+
+        if save_config_successful:
+            return redirect(url_for('manage_blog_posts')) 
         else:
-            # Ensure filename is 'content.json' or 'content.json' as per your rl_data.get_post
-            with open(os.path.join(post_dir_path, 'content.json'), 'w') as f: # Assuming 'content.json'
-                json.dump(post_data, f, indent=4)
+            # If config save failed, images might still be there.
+            # This path leads back to the form.
+            # Cleanup was attempted earlier if image save failed. If config save failed after images,
+            # GCS images might still be there. Local images would be in the created dir which might also still be there.
+            # This is a complex state to fully roll back automatically.
+            if env_mode != 'deploy' and post_dir_local_path and os.path.exists(post_dir_local_path):
+                 shutil.rmtree(post_dir_local_path) # Attempt local cleanup if config save failed
 
-            flash('Blog post created successfully!', 'success')
-            return redirect(url_for('manage_blog_posts')) # Assuming this route exists
+            return render_template('admin_post_blog.html', legend='New Blog Post', form_data=request.form)
+            
+    # GET request
+    return render_template('admin_post_blog.html', legend='New Blog Post')
 
-    return render_template('admin_post_blog.html', legend='New Blog Post') # Make sure this template exists
 
 # 1b & 2. Admin: Manage (list, edit, delete links)
 @app.route('/admin/blog/manage', methods=['GET', 'POST'])
@@ -1268,10 +1342,7 @@ def edit_blog_post(slug):
     env_mode = os.environ.get('ENV_MODE', 'development').lower()
     post_data_from_storage = None
 
-    if env_mode == 'deploy':
-        post_data_from_storage = rl_data.get_post_from_gcs(slug)
-    else:
-        post_data_from_storage = rl_data.get_post(slug) # Assumes this loads from local LOCAL_BLOG_DATA_DIR
+    post_data_from_storage = rl_data.get_post(slug) # Assumes this loads from local LOCAL_BLOG_DATA_DIR
 
     if not post_data_from_storage:
         app.logger.warning(f"Edit attempt for non-existent post '{slug}' in mode '{env_mode}'.")
@@ -1440,18 +1511,60 @@ def edit_blog_post(slug):
 @app.route('/admin/blog/delete/<slug>', methods=['POST']) # Use POST for destructive actions
 @login_required
 def delete_blog_post(slug):
-    post_dir = os.path.join(rl_data.BLOG_DATA_DIR, slug)
-    if os.path.exists(post_dir) and os.path.isdir(post_dir):
-        try:
-            shutil.rmtree(post_dir) # This deletes content.json and all images/thumbnails
-            flash(f'Post "{slug}" and all its images deleted successfully.', 'success')
-        except OSError as e:
-            flash(f'Error deleting post (TODO Content delete, but dir remains) "{slug}": {e}', 'danger')
-            app.logger.error(f"Error deleting directory {post_dir}: {e}")
+    
+    env_mode = os.environ.get('ENV_MODE', 'development').lower()
+    if env_mode == 'deploy':
+        rl_data.delete_blog_post_from_gcs(slug)
     else:
-        flash(f'Post "{slug}" not found for deletion.', 'warning')
+        post_dir = os.path.join(rl_data.BLOG_DATA_DIR, slug)
+        if os.path.exists(post_dir) and os.path.isdir(post_dir):
+            try:
+                shutil.rmtree(post_dir) # This deletes content.json and all images/thumbnails
+                flash(f'Post "{slug}" and all its images deleted successfully.', 'success')
+            except OSError as e:
+                flash(f'Error deleting post (TODO Content delete, but dir remains) "{slug}": {e}', 'danger')
+                app.logger.error(f"Error deleting directory {post_dir}: {e}")
+        else:
+            flash(f'Post "{slug}" not found for deletion.', 'warning')
     return redirect(url_for('manage_blog_posts'))
 
+
+@app.route('/admin/sync-blogs-to-gcs', methods=['POST'])
+@login_required # Ensure only admins can access
+def sync_blogs_to_gcs_route():
+    logger = app.logger # Use Flask's app logger
+
+    app.logger.info(f"Sync to GCS requested by admin.")
+
+    # It's good practice to check the ENV_MODE here too,
+    # as this operation might behave differently or only make sense in certain modes.
+    env_mode = os.environ.get('ENV_MODE', 'development').lower()
+    
+    if env_mode == 'deploy':
+        logger.info(f"Running in DEPLOY mode. Sync will attempt to copy from Docker image's local data to GCS.")
+
+        try:
+            # Call your actual sync function.
+            success = rl_data.sync_local_blogs_to_gcs() 
+
+            if success is True or isinstance(success, dict) and success.get("status") == "success": # Adjust if your sync returns more detail
+                flash('Blog post sync to GCS Succeeded.', 'success')
+                logger.info(f"Sync function reported success.")
+            elif success is False or isinstance(success, dict) and success.get("status") == "partial_success":
+                flash('Blog post sync to GCS initiated with some issues. Check logs for details.', 'warning')
+                logger.warning(f"Sync function reported partial success or issues.")
+            else:
+                flash('Blog post sync to GCS failed to initiate or encountered errors. Check logs.', 'danger')
+                logger.error(f"Sync function reported failure.")
+                
+        except Exception as e:
+            flash(f'An unexpected error occurred during the sync process: {e}', 'danger')
+            logger.error(f"Exception during sync call: {e}", exc_info=True)
+    else:
+       logger.info(f"Running in {env_mode} mode. Sync will not attempt be attempted") 
+
+
+    return redirect(url_for('admin')) # Or whatever your main admin page route is named
 
 ##############################
 

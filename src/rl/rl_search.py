@@ -38,7 +38,7 @@ def find_competitor(competitor, callback):
 
                         if matchcount >= 50:
                             #leave early
-                            logger.debug(f'reached {matchcount} matches' )
+                            #logger.debug(f'reached {matchcount} matches' )
                             callback(competitor, matches)
                             return 
                            
