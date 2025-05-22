@@ -48,6 +48,7 @@
                     <th>Headline</th>
                     <th>Status</th>
                     <th>Created At</th>
+                    <th>Published At</th>
                     <th>Featured</th>
                     <th>Views</th>
                     <th>Actions</th>
@@ -62,6 +63,7 @@
                     </td>
                     <td>{% if post.is_published %}Published{% else %}Draft{% endif %}</td>
                     <td>{{ post.created_at | format_datetime }}</td>
+                    <td>{{ post.published_at | format_datetime if post.is_published else 'N/A' }}</td>
                     <td>{{ 'Yes' if post.is_featured else 'No' }}</td>
                     <td>{{ post.view_count | default(0) }}</td>
                     <td>

@@ -12,5 +12,5 @@ export PORT=5000
 cd "$(dirname "$0")/.."
 
 # Run the application with Docker Compose
-docker-compose down
-docker-compose up --build
+docker-compose -f docker-compose-local.yml down
+docker-compose -f docker-compose-local.yml  up --build

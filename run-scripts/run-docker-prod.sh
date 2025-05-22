@@ -12,5 +12,5 @@ cd "$(dirname "$0")/.."
 #docker desktop needs to be open to run this script.
 
 # Run the application with Docker Compose
-docker-compose down
-docker-compose up --build
+docker-compose -f docker-compose-local.yml down
+docker-compose -f docker-compose-local.yml up --build

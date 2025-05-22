@@ -771,7 +771,7 @@ def blog_post_image(slug, filename):
         # Your existing local image serving logic
         # return send_from_directory(os.path.join(rl_data.BLOG_DATA_DIR, slug, 'images'), filename)
         # Ensure your local rl_data.BLOG_DATA_DIR is correctly constructed
-        full_image_path_dir = os.path.join(rl_data.LOCAL_BLOG_DATA_DIR, slug, 'images') # Use LOCAL_BLOG_DATA_DIR
+        full_image_path_dir = os.path.join(rl_data.LOCAL_BLOG_DATA_DIR, slug, 'images') 
         return send_from_directory(full_image_path_dir, filename)
 
 
@@ -977,7 +977,7 @@ def export_feedback():
         bucket = storage_client.bucket(rl_data.BLOG_BUCKET_NAME)
         
         # Define the GCS object path
-        blob = bucket.blob(rl_data.FEEDBACK_BLOB_FILEPATH)
+        blob = bucket.blob(str(rl_data.FEEDBACK_BLOB_FILEPATH))
         
         if blob.exists():
             # Option 1: For smaller files - use a temporary file
@@ -1143,7 +1143,7 @@ def new_blog_post():
             else:
                 # Use your local config: from .rl_data import LOCAL_BLOG_DATA_DIR
                 # This assumes LOCAL_BLOG_DATA_DIR is correctly configured, e.g., app.config['LOCAL_BLOG_DATA_DIR']
-                local_blog_dir_for_check = app.config.get('LOCAL_BLOG_DATA_DIR', './local_blog_data') # Example default
+                local_blog_dir_for_check = rl_data.LOCAL_BLOG_DATA_DIR
                 slug_exists = os.path.exists(os.path.join(local_blog_dir_for_check, post_slug))
             
             if slug_exists:
@@ -1157,7 +1157,7 @@ def new_blog_post():
 
         post_dir_local_path = None # Only relevant for local mode
         if env_mode != 'deploy':
-            local_blog_dir = app.config.get('LOCAL_BLOG_DATA_DIR', './local_blog_data')
+            local_blog_dir = rl_data.LOCAL_BLOG_DATA_DIR
             post_dir_local_path = os.path.join(local_blog_dir, post_slug)
             try:
                 os.makedirs(post_dir_local_path, exist_ok=True)
@@ -1168,11 +1168,6 @@ def new_blog_post():
                 return render_template('admin/admin_post_blog.html', legend='New Blog Post', form_data=request.form)
 
         # --- Image Uploading ---
-        # Ensure these are defined in your rl_data or imported
-        # from .rl_data import MAX_IMAGES_PER_POST, allowed_file 
-        # from .rl_data_gcs import save_uploaded_image_and_thumbnail_to_gcs
-        # from .rl_data import save_uploaded_image_and_thumbnail as save_image_local
-
         uploaded_image_basenames = [] # Store just basenames like "img_timestamp_0.png"
         uploaded_image_captions = []
         image_files_from_form = [] # Collect FileStorage objects first
@@ -1210,9 +1205,8 @@ def new_blog_post():
                 )
             else:
                 # from .rl_data import save_uploaded_image_and_thumbnail as save_image_local
-                # This local save function needs to know about LOCAL_BLOG_DATA_DIR
-                saved_basename_ext = rl_data.save_image_local(
-                    post_slug, image_file_to_save, unique_base_name_no_ext, app.config['LOCAL_BLOG_DATA_DIR']
+                 saved_basename_ext = rl_data.save_uploaded_image_and_thumbnail(
+                    post_slug, image_file_to_save, unique_base_name_no_ext
                 )
             
             if saved_basename_ext:
@@ -1390,7 +1384,7 @@ def edit_blog_post(slug):
                 if env_mode == 'deploy':
                     rl_data.delete_blog_image_and_thumbnail_from_gcs(slug, existing_filename)
                 else:
-                    rl_data.delete_blog_image_and_thumbnail(slug, existing_filename, rl_data.LOCAL_BLOG_DATA_DIR) # Pass local dir
+                    rl_data.delete_blog_image_and_thumbnail(slug, existing_filename)
                 app.logger.info(f"Deleted image '{existing_filename}' for post '{slug}' (mode: {env_mode}).")
             else:
                 # Image is kept
@@ -1427,7 +1421,7 @@ def edit_blog_post(slug):
                     )
                 else:
                     saved_image_basename = rl_data.save_uploaded_image_and_thumbnail(
-                        slug, image_file, unique_base_name, rl_data.LOCAL_BLOG_DATA_DIR # Pass local dir
+                        slug, image_file, unique_base_name
                     )
 
                 if saved_image_basename:
@@ -1506,6 +1500,15 @@ def edit_blog_post(slug):
                            current_images_for_form=post_for_processing.get('image_filenames', []),
                            current_captions_for_form=post_for_processing.get('image_captions', []))
 
+def handle_rm_error(function, path, excinfo):
+    import stat
+    # Is the error an access error?
+    if not os.access(path, os.W_OK):
+        os.chmod(path, stat.S_IWUSR)
+        function(path)
+    else:
+        raise excinfo
+
 # ... (rest of your app.py) ...
 # 2b. Admin: Delete post
 @app.route('/admin/blog/delete/<slug>', methods=['POST']) # Use POST for destructive actions
@@ -1519,10 +1522,10 @@ def delete_blog_post(slug):
         post_dir = os.path.join(rl_data.BLOG_DATA_DIR, slug)
         if os.path.exists(post_dir) and os.path.isdir(post_dir):
             try:
-                shutil.rmtree(post_dir) # This deletes content.json and all images/thumbnails
+                shutil.rmtree(post_dir, onexc=handle_rm_error) # This deletes content.json and all images/thumbnails
                 flash(f'Post "{slug}" and all its images deleted successfully.', 'success')
             except OSError as e:
-                flash(f'Error deleting post (TODO Content delete, but dir remains) "{slug}": {e}', 'danger')
+                flash(f'Error deleting post (Content deleted, but dir remains) "{slug}": {e}', 'danger')
                 app.logger.error(f"Error deleting directory {post_dir}: {e}")
         else:
             flash(f'Post "{slug}" not found for deletion.', 'warning')

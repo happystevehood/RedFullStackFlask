@@ -165,8 +165,6 @@ class WorkerInfoFilter(logging.Filter):
     """Filter that adds worker ID and request info to log records"""
     def filter(self, record):
          
-        #print(f"filter: {record.getMessage()}")
-
         # Add worker_id attribute to the record
         if not hasattr(record, 'worker_id'):
             record.worker_id = WORKER_ID
@@ -177,8 +175,6 @@ class WorkerInfoFilter(logging.Filter):
                 record.request_id = thread_local.request_id
             else:
                 record.request_id = '-'
-
-        #print(f"record.worker_id: {record.worker_id} {record.request_id} {record.getMessage()}")
 
         return True
 
@@ -208,12 +204,6 @@ class SafeRotatingFileHandler(RotatingFileHandler):
         import sys # Import here to avoid circular imports
 
         """Thread and process-safe emit with file locking"""
-        # The original code seems to have a problem with non local moduls
-        ## Quick check for log level before trying to lock
-        ##if not self.filter(record):
-        ##    print(f"if not self.filter(record)") 
-        ##    return
-        
         # So replaced with the follwoing 2 if statements. ones.....
 
         # Add worker_id attribute to the record
@@ -230,12 +220,10 @@ class SafeRotatingFileHandler(RotatingFileHandler):
             # Use portalocker with a file path, not a file object
             lock_path = str(self.lock_file)
             with portalocker.Lock(lock_path, 'w', timeout=5):
-                #print(f"super().emit({record})") 
                 super().emit(record)
         except (portalocker.LockException, IOError, OSError) as e:
             # If locking fails, still try to emit without lock
             try:
-                #print(f"!super().emit({record})") 
                 super().emit(record)
             except Exception as e2:
                 # Last resort - print to stderr
@@ -368,13 +356,6 @@ def setup_logger():
     logging.getLogger('google_auth_httplib2').setLevel(logging.WARNING) # If using httplib2 transport
     logging.getLogger('urllib3.connectionpool').setLevel(logging.WARNING)
     logging.getLogger('urllib3.util').setLevel(logging.WARNING)
-
-    #import google.cloud.storage
-    #logger.info(f"GOOGLE_CLOUD_STORAGE VERSION IN USE: {google.cloud.storage.__version__}")
-    #logger.info(f"GOOGLE_CLOUD_STORAGE LOCATION: {google.cloud.storage.__file__}")
-    #import google.auth
-    #logger.info(f"GOOGLE_AUTH VERSION IN USE: {google.auth.__version__}")
-    #logger.info(f"GOOGLE_AUTH LOCATION: {google.auth.__file__}")
 
     logger.info(f"Logger initialized for worker {WORKER_ID}")
     return logger
@@ -1031,6 +1012,11 @@ def get_all_posts(published_only=True, sort_key='published_at', reverse_sort=Tru
     env_mode = os.environ.get('ENV_MODE', 'development').lower()
     all_posts_data = []
 
+    if published_only==False and sort_key == 'published_at' : # Don't filter by published status if not requested.
+        use_sort_key='created_at' # Use 'created_at' if not filtering by published status
+    else:
+        use_sort_key=sort_key # Use sort_key as selected by user
+
     if env_mode == 'deploy':
         #logger.debug("get_all_posts: Fetching all posts from GCS (deploy mode).")
         blog_bucket_name = BLOG_BUCKET_NAME
@@ -1087,16 +1073,16 @@ def get_all_posts(published_only=True, sort_key='published_at', reverse_sort=Tru
                         logger.error(f"get_all_posts: Error reading local post '{slug_folder_name}': {e}", exc_info=True)
     
     # Sort posts
-    if sort_key:
-        # Handle posts that might be missing the sort_key or have None for date fields
+    if use_sort_key:
+        # Handle posts that might be missing the use_sort_key or have None for date fields
         def get_sort_value(post):
-            val = post.get(sort_key)
+            val = post.get(use_sort_key)
             if isinstance(val, str): # Attempt to parse if it's a date string
                 try:
                     return datetime.fromisoformat(val.replace("Z", "+00:00"))
                 except ValueError:
                     return datetime.min.replace(tzinfo=datetime.timezone.utc) # Fallback for unparseable strings
-            elif val is None and sort_key.endswith('_at'): # Default for missing dates
+            elif val is None and use_sort_key.endswith('_at'): # Default for missing dates
                 return datetime.min.replace(tzinfo=datetime.timezone.utc)
             elif val is None: # Default for other missing keys
                 return 0 # Or some other sensible default
@@ -1105,7 +1091,7 @@ def get_all_posts(published_only=True, sort_key='published_at', reverse_sort=Tru
         try:
             all_posts_data.sort(key=get_sort_value, reverse=reverse_sort)
         except Exception as e_sort:
-            logger.error(f"get_all_posts: Error sorting posts by '{sort_key}': {e_sort}", exc_info=True)
+            logger.error(f"get_all_posts: Error sorting posts by '{use_sort_key}': {e_sort}", exc_info=True)
             # Proceed with unsorted data or handle as critical error
 
     # Convert date strings to datetime objects for template consistency if needed
