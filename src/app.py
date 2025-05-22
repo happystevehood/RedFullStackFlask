@@ -1022,7 +1022,7 @@ def clear_feedback():
         bucket = storage_client.bucket(rl_data.BLOG_BUCKET_NAME)
         
         # Define the GCS object path
-        blob = bucket.blob(rl_data.FEEDBACK_BLOB_FILEPATH)
+        blob = bucket.blob(str(rl_data.FEEDBACK_BLOB_FILEPATH))
         
         if blob.exists():
             # Option 1: Delete the file completely
