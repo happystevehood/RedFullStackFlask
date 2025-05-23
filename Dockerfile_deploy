@@ -14,9 +14,6 @@ COPY requirements.txt .
 # Install ONLY from requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Verify installed versions (optional, but good for Docker build log)
-#RUN pip show google-cloud-storage google-auth
-
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh 
 RUN chmod +x /app/docker-entrypoint.sh
 
@@ -25,4 +22,3 @@ COPY ./src /app/src
 # If your app is in /app/src/main.py and instance is 'app'
 ENV PYTHONPATH=/app 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
-# Your entrypoint should exec: gunicorn --bind "0.0.0.0:$PORT" "src.main:app"

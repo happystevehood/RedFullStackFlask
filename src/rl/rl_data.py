@@ -7,14 +7,13 @@ from logging.handlers import RotatingFileHandler
 import threading
 import portalocker  # Cross-platform file locking
 from werkzeug.utils import secure_filename
-from flask import g, render_template as flask_render_template
+from flask import render_template as flask_render_template
 
 from google.cloud import storage
 import csv
 import io
 import math
 from datetime import datetime, timedelta, timezone
-import sys
 from PIL import Image # Import Pillow
 from io import BytesIO
 
@@ -64,7 +63,7 @@ BLOG_CONFIG_FILE_PATH = BLOG_DATA_DIR / BLOG_CONFIG_FILE # Path to your config f
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 MAX_IMAGES_PER_POST = 6
-THUMBNAIL_SIZE = (400, 400) # Max width, max height for thumbnails
+THUMBNAIL_SIZE = (500, 500) # Max width, max height for thumbnails
 THUMBNAIL_PREFIX = "thumb_" # Prepended to original filename for thumbnail
 
 BASE_URL = "https://redline-results-951032250531.asia-southeast1.run.app"
@@ -78,7 +77,7 @@ FEEDBACK_BUCKET_NAME = BUCKET_NAME
 FEEDBACK_BLOB_DIR = Path('feedback')
 FEEDBACK_BLOB_FILEPATH = FEEDBACK_BLOB_DIR / FEEDBACK_FILENAME
 
-SERVICE_ACCOUNT_EMAIL = "951032250531-compute@developer.gserviceaccount.com"
+SERVICE_ACCOUNT_EMAIL = "default@email.com"
 
 #Here are the different logging levels 
 # DEBUG 
@@ -350,7 +349,7 @@ def setup_logger():
     except Exception as e:
         print(f"Error setting up console handler: {e}", file=sys.stderr)
     
-    #too many output messaes DEBUG messates
+     #too many output messaes DEBUG messates
     logging.getLogger('matplotlib.font_manager').setLevel(logging.WARNING)
     logging.getLogger('google.auth').setLevel(logging.WARNING)
     logging.getLogger('google_auth_httplib2').setLevel(logging.WARNING) # If using httplib2 transport
@@ -527,6 +526,16 @@ def delete_competitor_files():
     remove_files_from_directory(PNG_COMP_DIR);
     
     #logger.debug("delete_competitor_files<") 
+
+def handle_rm_error(function, path, excinfo):
+    import stat
+    # Is the error an access error?
+    if not os.access(path, os.W_OK):
+        os.chmod(path, stat.S_IWUSR)
+        function(path)
+    else:
+        raise excinfo
+    
 
 #############################
 # Helper function to convert seconds to minutes.
@@ -873,14 +882,6 @@ def delete_blog_image_and_thumbnail(post_slug, image_filename):
     except OSError as e:
         logger.error(f"Error deleting image files for {image_filename} in {post_slug}: {e}")
 
-
-import os
-from google.cloud import storage
-from flask import current_app as app # Or your logger
-
-# Assume BLOG_BUCKET_NAME is defined (e.g., from os.environ)
-# Assume THUMBNAIL_PREFIX is defined (e.g., THUMBNAIL_PREFIX = "thumb_")
-# Assume get_gcs_bucket(bucket_name_str) helper function is defined and works
 
 def delete_blog_image_and_thumbnail_from_gcs(slug, original_image_filename):
     """
@@ -1519,7 +1520,7 @@ from flask import current_app as app # Or your get_logger and how you access con
 
 def sync_local_blogs_to_gcs():
     """
-    Synchronizes blog posts from the local directory to GCS.
+    Synchronizes blog posts from the local directory inside docker to GCS.
     Only syncs posts (slugs) that exist locally but not in GCS.
     Assumes local directory names are the slugs.
     Returns a dictionary with sync status and counts.

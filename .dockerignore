@@ -8,8 +8,8 @@ venv/
 ENV/
 
 # Environment files
-#.env
 .env.deploy
+.env.development
 
 # Logs and temporary files
 *.log
@@ -35,6 +35,7 @@ Thumbs.db
 # Git
 .git/
 .gitignore
+.gitarrtibutes
 
 # Notebooks (if any)
 *.ipynb

@@ -37,7 +37,7 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <h3>Sync Local Blog Posts to GCS:</h3>
         <p class="text-muted small">
-            This will attempt to copy any blog posts found in the application's local blog data
+            This will attempt to copy any blog posts found in the application's local docker blog data
             directory to the Google Cloud Storage bucket if they don't already exist there.
             Useful after deploying new content within the image or for local development pushes.
         </p>

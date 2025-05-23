@@ -4,7 +4,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile_deploy
-    #  dockerfile: Dockerfile
     container_name: redline-fitness-games-results
     env_file:
       - ${ENV_FILE:-.env.${ENV_MODE:-deploy}}
@@ -13,7 +12,4 @@ services:
       - ENV_MODE=${ENV_MODE:-deploy}
     ports:
       - "${PORT:-8080}:${PORT:-8080}"
-    #volumes:
-    #  - ./src:/app/src
-    #  - ./src/static:/app/src/static
     restart: always

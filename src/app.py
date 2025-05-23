@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, render_template, send_file, send_from_directory, abort, session, redirect, url_for,  flash, g, make_response
 from markupsafe import escape
 from functools import wraps
-from datetime import datetime, timedelta, tzinfo
+from datetime import datetime
 
 from google.cloud import storage
 import tempfile
@@ -15,23 +15,14 @@ from dotenv import load_dotenv
 from pathlib import Path
 import uuid
 
-import secrets
-
 #for security purposes
-from flask_wtf.csrf import CSRFProtect, generate_csrf, CSRFError
+from flask_wtf.csrf import CSRFProtect, generate_csrf
 from flask_talisman import Talisman
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
 #for blog purposes
-import os
-from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, FileField, SubmitField, BooleanField
-from wtforms.validators import DataRequired, Length
-from flask_wtf.file import FileAllowed
-from werkzeug.utils import secure_filename
-from werkzeug.security import check_password_hash, generate_password_hash # If you have user auth
-from slugify import slugify # For URL-friendly slugs
+from slugify import slugify 
 from functools import wraps
 import shutil
 import json
@@ -41,8 +32,6 @@ from rl.rl_search import find_competitor
 import rl.rl_data as rl_data 
 from rl.rl_config import get_config 
 from rl.rl_vis import redline_vis_competitor_html, redline_vis_competitor_pdf, redline_vis_generic, redline_vis_generic_eventpdf, redline_vis_generic_eventhtml
-
-
 
 def create_app():
     """Create and configure the Flask application."""
@@ -128,38 +117,37 @@ def create_app():
     # --- Enable Jinja2 Loop Controls Extension ---
     app.jinja_env.add_extension('jinja2.ext.loopcontrols') 
 
-    '''
     #Error handling
-    app.config['TRAP_HTTP_EXCEPTIONS']=True
+    if env_mode == 'deploy':
+        app.config['TRAP_HTTP_EXCEPTIONS']=True
 
-    #some local error handing
-    @app.errorhandler(Exception)
-    def handle_error(e):
-        try:
-            if e.code == 401:
-                return  render_template('error.html', string1="Bad Request", string2="The page you're looking for was not found", 
-                                        error_code=e.code,        
-                                        name= e.name,
-                                        description= e.description)
-            elif e.code == 404:
-                return  render_template('error.html', string1="Page Not Found", string2="The page you're looking for was not found", 
-                                        error_code=e.code,        
-                                        name= e.name,
-                                        description= e.description)
-            if e.code == 405:
-                return  render_template('error.html', string1="Method Not Allowed", string2="The page you're looking for was not found", 
-                                        error_code=e.code,        
-                                        name= e.name,
-                                        description= e.description)
-            elif e.code == 500:
-                return  render_template('error.html', string1="Internal Server Error", string2="The page you're looking for was not found", 
-                                        error_code=e.code,        
-                                        name= e.name,
-                                        description= e.description)
-            raise e
-        except:
-            return  render_template('error.html', string1="Error", string2="Something went wrong")
-    '''
+        #some local error handing
+        @app.errorhandler(Exception)
+        def handle_error(e):
+            try:
+                if e.code == 401:
+                    return  render_template('error.html', string1="Bad Request", string2="The page you're looking for was not found", 
+                                            error_code=e.code,        
+                                            name= e.name,
+                                            description= e.description)
+                elif e.code == 404:
+                    return  render_template('error.html', string1="Page Not Found", string2="The page you're looking for was not found", 
+                                            error_code=e.code,        
+                                            name= e.name,
+                                            description= e.description)
+                if e.code == 405:
+                    return  render_template('error.html', string1="Method Not Allowed", string2="The page you're looking for was not found", 
+                                            error_code=e.code,        
+                                            name= e.name,
+                                            description= e.description)
+                elif e.code == 500:
+                    return  render_template('error.html', string1="Internal Server Error", string2="The page you're looking for was not found", 
+                                            error_code=e.code,        
+                                            name= e.name,
+                                            description= e.description)
+                raise e
+            except:
+                return  render_template('error.html', string1="Error", string2="Something went wrong")
 
     OutputInfo = False
 
@@ -207,7 +195,6 @@ def inject_global_vars():
 def setup_request_logging():
     # Generate a unique ID for this request
     request_id = str(uuid.uuid4())[:8]
-    g.request_id = request_id
     
     # Store in thread local for the logger
     rl_data.thread_local.request_id = request_id
@@ -233,8 +220,6 @@ def teardown_request_logging(exception=None):
 def make_session_permanent():
     session.permanent = True
 
-    #app.logger.debug(f"Session data at {request.path}: {dict(session)}")
-    #app.logger.debug(f"Session cookie: {request.cookies.get('session')}")
 
 @app.template_filter('format_datetime')
 def format_datetime_filter(value, format='%Y-%m-%d %H:%M'):
@@ -737,7 +722,6 @@ def post_display_vis():
 
 
 # 3. User: View blog index (list of posts, searchable)
-@app.route('/blog')
 @app.route('/blog')
 def blog_index():
     all_published_posts = rl_data.get_all_posts() # Default: published only
@@ -1530,14 +1514,6 @@ def edit_blog_post(slug):
                            post=post_for_processing, # This contains post_for_processing['images']
                            form_data=form_data_for_template) # Or just use request.form if POST failed
 
-def handle_rm_error(function, path, excinfo):
-    import stat
-    # Is the error an access error?
-    if not os.access(path, os.W_OK):
-        os.chmod(path, stat.S_IWUSR)
-        function(path)
-    else:
-        raise excinfo
 
 # ... (rest of your app.py) ...
 # 2b. Admin: Delete post
@@ -1552,7 +1528,7 @@ def delete_blog_post(slug):
         post_dir = os.path.join(rl_data.BLOG_DATA_DIR, slug)
         if os.path.exists(post_dir) and os.path.isdir(post_dir):
             try:
-                shutil.rmtree(post_dir, onexc=handle_rm_error) # This deletes content.json and all images/thumbnails
+                shutil.rmtree(post_dir, onexc=rl_data.handle_rm_error) # This deletes content.json and all images/thumbnails
                 flash(f'Post "{slug}" and all its images deleted successfully.', 'success')
             except OSError as e:
                 flash(f'Error deleting post (Content deleted, but dir remains) "{slug}": {e}', 'danger')
