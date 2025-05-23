@@ -125,6 +125,8 @@ def create_app():
         if not os.path.exists(rl_data.BLOG_DATA_DIR):
             os.makedirs(rl_data.BLOG_DATA_DIR)
 
+    # --- Enable Jinja2 Loop Controls Extension ---
+    app.jinja_env.add_extension('jinja2.ext.loopcontrols') 
 
     '''
     #Error handling
@@ -757,9 +759,9 @@ def blog_index():
 # Route to serve blog post images
 @app.route('/blog/image/<slug>/<path:filename>')
 def blog_post_image(slug, filename):
+
     env_mode = os.environ.get('ENV_MODE', 'development').lower()
     if env_mode == 'deploy':
-
         # Option 2: Redirect to Signed URL (more secure, handles private images)
         signed_url = rl_data.get_blog_image_url_from_gcs(slug, filename)
         if signed_url:
@@ -1128,7 +1130,7 @@ def new_blog_post():
 
         if not headline:
             flash('Headline is required.', 'danger')
-            return render_template('admin_post_blog.html', legend='New Blog Post', form_data=request.form) # Ensure template path
+            return render_template('admin/admin_post_blog.html', legend='New Blog Post', form_data=request.form) # Corrected template path likely
 
         # --- Slug Generation and Uniqueness Check ---
         original_post_slug = slugify(headline)
@@ -1138,11 +1140,8 @@ def new_blog_post():
 
         while slug_exists:
             if env_mode == 'deploy':
-                # Use your GCS helper: from .rl_data_gcs import check_if_post_slug_exists_in_gcs
                 slug_exists = rl_data.check_if_post_slug_exists_in_gcs(post_slug)
             else:
-                # Use your local config: from .rl_data import LOCAL_BLOG_DATA_DIR
-                # This assumes LOCAL_BLOG_DATA_DIR is correctly configured, e.g., app.config['LOCAL_BLOG_DATA_DIR']
                 local_blog_dir_for_check = rl_data.LOCAL_BLOG_DATA_DIR
                 slug_exists = os.path.exists(os.path.join(local_blog_dir_for_check, post_slug))
             
@@ -1151,28 +1150,25 @@ def new_blog_post():
                 post_slug = f"{original_post_slug}-{counter}"
                 counter += 1
             else:
-                #app.logger.info(f"Generated unique slug '{post_slug}' (mode: {env_mode}).")
-                break # Exit while loop, slug is unique
+                break
         # --- End Slug Generation ---
 
-        post_dir_local_path = None # Only relevant for local mode
+        post_dir_local_path = None
         if env_mode != 'deploy':
             local_blog_dir = rl_data.LOCAL_BLOG_DATA_DIR
             post_dir_local_path = os.path.join(local_blog_dir, post_slug)
             try:
                 os.makedirs(post_dir_local_path, exist_ok=True)
-                #app.logger.info(f"Created local directory: {post_dir_local_path}")
             except OSError as e:
                 flash(f"Could not create local directory for post: {e}", "danger")
                 app.logger.error(f"OSError creating local directory {post_dir_local_path}: {e}")
                 return render_template('admin/admin_post_blog.html', legend='New Blog Post', form_data=request.form)
 
         # --- Image Uploading ---
-        uploaded_image_basenames = [] # Store just basenames like "img_timestamp_0.png"
-        uploaded_image_captions = []
-        image_files_from_form = [] # Collect FileStorage objects first
+        # MODIFIED: Store image data as a list of dicts
+        uploaded_images_data = [] 
+        image_files_from_form = []
 
-        # Collect all image FileStorage objects
         for i in range(rl_data.MAX_IMAGES_PER_POST):
             image_file = request.files.get(f'image_{i}')
             if image_file and image_file.filename:
@@ -1181,59 +1177,61 @@ def new_blog_post():
         if not image_files_from_form:
             flash('At least one image is required.', 'danger')
             if env_mode != 'deploy' and post_dir_local_path and os.path.exists(post_dir_local_path):
-                shutil.rmtree(post_dir_local_path) # Cleanup local dir if created
-            return render_template('admin_post_blog.html', legend='New Blog Post', form_data=request.form)
+                shutil.rmtree(post_dir_local_path)
+            return render_template('admin/admin_post_blog.html', legend='New Blog Post', form_data=request.form)
 
         image_save_failed = False
         for idx, image_file_to_save in enumerate(image_files_from_form):
-            caption_text = request.form.get(f'caption_{idx}', '').strip() # Assuming captions are indexed same as image_ fields
+            caption_text = request.form.get(f'caption_{idx}', '').strip()
             
-            # from .rl_data import allowed_file
+            # NEW: Get 'show_in_gallery' status. Defaulting to True for now.
+            # When your HTML form has <input type="checkbox" name="show_in_gallery_{idx}">,
+            # you would change the line below to:
+            show_in_gallery = f'show_in_gallery_{idx}' in request.form
+            #show_in_gallery = True # <<< Placeholder: Default to True
+
             if not rl_data.allowed_file(image_file_to_save.filename):
                 flash(f'Image {idx+1} ("{image_file_to_save.filename}") has an invalid file type. Not saved.', 'warning')
-                continue # Skip this file
+                continue
 
             unique_base_name_no_ext = f"img_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{idx}"
             saved_basename_ext = None
 
-            image_file_to_save.seek(0) # Crucial: Reset stream before each save attempt
+            image_file_to_save.seek(0)
 
             if env_mode == 'deploy':
-                # from .rl_data_gcs import save_uploaded_image_and_thumbnail_to_gcs
                 saved_basename_ext = rl_data.save_uploaded_image_and_thumbnail_to_gcs(
                     post_slug, image_file_to_save, unique_base_name_no_ext
                 )
             else:
-                # from .rl_data import save_uploaded_image_and_thumbnail as save_image_local
                  saved_basename_ext = rl_data.save_uploaded_image_and_thumbnail(
                     post_slug, image_file_to_save, unique_base_name_no_ext
                 )
             
             if saved_basename_ext:
-                uploaded_image_basenames.append(saved_basename_ext)
-                uploaded_image_captions.append(caption_text)
+                # MODIFIED: Append a dictionary to uploaded_images_data
+                uploaded_images_data.append({
+                    "filename": saved_basename_ext,
+                    "caption": caption_text,
+                    "show_in_gallery": show_in_gallery 
+                })
             else:
                 flash(f'Error saving Image {idx+1} ("{image_file_to_save.filename}"). Post creation aborted.', 'danger')
                 image_save_failed = True
-                break # Stop processing further images
+                break
 
-        if image_save_failed or not uploaded_image_basenames:
-            if not uploaded_image_basenames and not image_save_failed: # No valid images uploaded
+        # MODIFIED: Check uploaded_images_data instead of uploaded_image_basenames
+        if image_save_failed or not uploaded_images_data:
+            if not uploaded_images_data and not image_save_failed:
                  flash('At least one valid image is required and must be successfully uploaded.', 'danger')
             
             app.logger.warning(f"Image upload failed or no valid images for new post '{post_slug}'. Cleaning up.")
-            # Cleanup logic
             if env_mode == 'deploy':
-                # from .rl_data_gcs import delete_blog_post_from_gcs # This deletes content.json AND images
-                # Since content.json hasn't been uploaded yet, we only need to delete images if any were uploaded.
-                # A simpler GCS cleanup here might be to delete objects under post_slug/images/
-                # For now, let's assume if save_post_to_gcs fails, or if we get here, we might call a full delete.
-                # This needs a careful GCS cleanup function for partially created posts.
                 app.logger.info(f"Attempting GCS cleanup for partially created post '{post_slug}' (if any images were uploaded).")
-                for fname in uploaded_image_basenames: # uploaded_image_basenames contains what SUCCEEDED
-                    # from .rl_data_gcs import delete_blog_image_and_thumbnail_from_gcs
-                    rl_data.delete_blog_image_and_thumbnail_from_gcs(post_slug, fname)
-            else: # Local cleanup
+                # MODIFIED: Iterate through uploaded_images_data to get filenames for cleanup
+                for img_data in uploaded_images_data: 
+                    rl_data.delete_blog_image_and_thumbnail_from_gcs(post_slug, img_data['filename'])
+            else:
                 if post_dir_local_path and os.path.exists(post_dir_local_path):
                     shutil.rmtree(post_dir_local_path)
             return render_template('admin_post_blog.html', legend='New Blog Post', form_data=request.form)
@@ -1245,30 +1243,26 @@ def new_blog_post():
         post_data = {
             'headline': headline,
             'text': text_content,
-            'image_filenames': uploaded_image_basenames, # Use the successfully saved basenames
-            'image_captions': uploaded_image_captions,
+            # MODIFIED: Use the new 'images' key with the list of dictionaries
+            'images': uploaded_images_data, 
             'created_at': now_iso,
             'updated_at': now_iso,
             'published_at': published_at_iso,
             'is_featured': is_featured,
             'is_published': is_published_now,
             'view_count': 0,
-            'slug': post_slug # The unique slug
+            'slug': post_slug
         }
         # --- End Prepare Post Data ---
 
         # --- Save Config File (content.json) ---
         save_config_successful = False
         if env_mode == 'deploy':
-            # from .rl_data_gcs import save_post_config_to_gcs
             if rl_data.save_post_config_to_gcs(post_slug, post_data):
                 save_config_successful = True
                 flash('Blog post created successfully in GCS!', 'success')
             else:
                 flash('Error saving blog post config to GCS. Images might have been uploaded. Check GCS.', 'danger')
-                # Major error: images uploaded but config failed. May need manual GCS cleanup or retry.
-                # For simplicity, we don't automatically delete uploaded images here if config save fails,
-                # as it might be a transient GCS issue.
         else: # Local mode
             try:
                 with open(os.path.join(post_dir_local_path, 'content.json'), 'w', encoding='utf-8') as f:
@@ -1278,20 +1272,13 @@ def new_blog_post():
             except IOError as e:
                 flash(f'Error saving local content.json: {e}', 'danger')
                 app.logger.error(f"IOError saving local content.json for {post_slug}: {e}")
-                # Cleanup images and dir
                 if post_dir_local_path and os.path.exists(post_dir_local_path): shutil.rmtree(post_dir_local_path)
 
         if save_config_successful:
-            return redirect(url_for('manage_blog_posts')) 
+            return redirect(url_for('manage_blog_posts')) # Assuming blueprint or direct route name
         else:
-            # If config save failed, images might still be there.
-            # This path leads back to the form.
-            # Cleanup was attempted earlier if image save failed. If config save failed after images,
-            # GCS images might still be there. Local images would be in the created dir which might also still be there.
-            # This is a complex state to fully roll back automatically.
             if env_mode != 'deploy' and post_dir_local_path and os.path.exists(post_dir_local_path):
-                 shutil.rmtree(post_dir_local_path) # Attempt local cleanup if config save failed
-
+                 shutil.rmtree(post_dir_local_path)
             return render_template('admin_post_blog.html', legend='New Blog Post', form_data=request.form)
             
     # GET request
@@ -1334,9 +1321,8 @@ def manage_blog_posts():
 @login_required
 def edit_blog_post(slug):
     env_mode = os.environ.get('ENV_MODE', 'development').lower()
-    post_data_from_storage = None
-
-    post_data_from_storage = rl_data.get_post(slug) # Assumes this loads from local LOCAL_BLOG_DATA_DIR
+    
+    post_data_from_storage = rl_data.get_post(slug) # Assumes this handles GCS/local
 
     if not post_data_from_storage:
         app.logger.warning(f"Edit attempt for non-existent post '{slug}' in mode '{env_mode}'.")
@@ -1345,15 +1331,35 @@ def edit_blog_post(slug):
     # Work with a copy for modifications
     post_for_processing = dict(post_data_from_storage)
 
-    # --- Caption Alignment (same as before, good for consistency) ---
-    filenames_count = len(post_for_processing.get('image_filenames', []))
-    captions = post_for_processing.get('image_captions', [])
-    if len(captions) < filenames_count:
-        captions.extend([""] * (filenames_count - len(captions)))
-    elif len(captions) > filenames_count:
-        captions = captions[:filenames_count]
-    post_for_processing['image_captions'] = captions
-    # --- End Caption Alignment ---
+    # --- Normalize image data to the new 'images' list of dicts format ---
+    if 'images' not in post_for_processing and 'image_filenames' in post_for_processing:
+        app.logger.info(f"Post '{slug}' uses old image format. Converting to new 'images' structure for editing.")
+        images_list = []
+        filenames = post_for_processing.get('image_filenames', [])
+        captions = post_for_processing.get('image_captions', [])
+        for i, filename_item in enumerate(filenames):
+            images_list.append({
+                "filename": filename_item,
+                "caption": captions[i] if i < len(captions) else "",
+                "show_in_gallery": True # Default for old data
+            })
+        post_for_processing['images'] = images_list
+        post_for_processing.pop('image_filenames', None) # Remove old keys
+        post_for_processing.pop('image_captions', None)
+    elif 'images' not in post_for_processing: # If no image keys at all (e.g. 'images' is not there, nor image_filenames)
+        post_for_processing['images'] = []
+
+    # Ensure all image dicts in 'images' have all keys (filename, caption, show_in_gallery)
+    # This handles cases where 'images' might exist but be missing some sub-keys.
+    normalized_images_temp = []
+    for img_data in post_for_processing.get('images', []): # Iterate over the potentially modified list
+        normalized_images_temp.append({
+            "filename": img_data.get("filename"), # Should always exist if img_data itself exists
+            "caption": img_data.get("caption", ""),
+            "show_in_gallery": img_data.get("show_in_gallery", True) # Default to True if missing
+        })
+    post_for_processing['images'] = normalized_images_temp
+    # --- End Image Data Normalization ---
 
     if request.method == 'POST':
         was_published_before_edit = post_for_processing.get('is_published', False)
@@ -1365,110 +1371,138 @@ def edit_blog_post(slug):
         post_for_processing['is_published'] = is_published_now
 
         # --- Image Processing ---
-        # Start with copies of what was loaded (before any POST modifications to post_for_processing lists)
-        original_filenames_from_storage = list(post_data_from_storage.get('image_filenames', []))
-        original_captions_from_storage = list(post_data_from_storage.get('image_captions', []))
-        # Sync original_captions length with original_filenames before processing deletions
-        if len(original_captions_from_storage) < len(original_filenames_from_storage):
-            original_captions_from_storage.extend([""] * (len(original_filenames_from_storage) - len(original_captions_from_storage)))
-        elif len(original_captions_from_storage) > len(original_filenames_from_storage):
-            original_captions_from_storage = original_captions_from_storage[:len(original_filenames_from_storage)]
+        # original_images_from_storage now comes from the normalized post_for_processing['images'] at the start of the request
+        # but before any POST modifications. We use what was loaded and normalized.
+        # The `post_for_processing['images']` at this point is what we'll iterate over for existing images.
+        
+        final_images_data = [] # This will hold the new list of image dicts
 
-        final_filenames = []
-        final_captions = []
+        # 1. Process Existing Images: Keep or Delete, and Update Captions/ShowInGallery
+        # Iterate based on the number of images present when the form was rendered.
+        # This count should match the number of 'delete_image_{idx}', 'current_caption_{idx}' fields submitted.
+        # We use the state of `post_for_processing['images']` as it was *before* this POST processing block.
+        # However, since `post_data_from_storage` is the pristine version, let's use that to determine original images.
+        # This is safer if `post_for_processing` was somehow mutated before this POST block but after normalization.
+        
+        # Re-normalize `post_data_from_storage` just for this section to get the initial list of images
+        # This avoids using `post_for_processing` which might be partially updated by form fields above.
+        initial_images_for_processing = []
+        if 'images' not in post_data_from_storage and 'image_filenames' in post_data_from_storage:
+            filenames_orig = post_data_from_storage.get('image_filenames', [])
+            captions_orig = post_data_from_storage.get('image_captions', [])
+            for i, fn_orig in enumerate(filenames_orig):
+                initial_images_for_processing.append({
+                    "filename": fn_orig,
+                    "caption": captions_orig[i] if i < len(captions_orig) else "",
+                    "show_in_gallery": True
+                })
+        elif 'images' in post_data_from_storage:
+            for img_d in post_data_from_storage.get('images', []):
+                 initial_images_for_processing.append({
+                    "filename": img_d.get("filename"),
+                    "caption": img_d.get("caption", ""),
+                    "show_in_gallery": img_d.get("show_in_gallery", True)
+                })
 
-        # 1. Process Existing Images: Keep or Delete, and Update Captions
-        for i, existing_filename in enumerate(original_filenames_from_storage):
+
+        for i, existing_image_data in enumerate(initial_images_for_processing):
+            existing_filename = existing_image_data['filename']
+            if not existing_filename: continue # Should not happen if data is clean
+
             if request.form.get(f'delete_image_{i}'):
                 # Image marked for deletion
                 if env_mode == 'deploy':
                     rl_data.delete_blog_image_and_thumbnail_from_gcs(slug, existing_filename)
                 else:
-                    rl_data.delete_blog_image_and_thumbnail(slug, existing_filename)
+                    rl_data.delete_blog_image_and_thumbnail(slug, existing_filename) # Local deletion
                 app.logger.info(f"Deleted image '{existing_filename}' for post '{slug}' (mode: {env_mode}).")
             else:
-                # Image is kept
-                final_filenames.append(existing_filename)
-                # Update its caption from the form
-                updated_caption = request.form.get(f'current_caption_{i}', '').strip()
-                final_captions.append(updated_caption)
+                # Image is kept, update its details
+                updated_caption = request.form.get(f'current_caption_{i}', existing_image_data['caption']).strip()
+                # For checkbox: if 'current_show_in_gallery_{i}' is in form, it's checked (True), else False.
+                updated_show_in_gallery = f'current_show_in_gallery_{i}' in request.form
+                
+                final_images_data.append({
+                    "filename": existing_filename,
+                    "caption": updated_caption,
+                    "show_in_gallery": updated_show_in_gallery
+                })
 
         # 2. Handle New Image Uploads
-        # Assuming rl_data.MAX_IMAGES_PER_POST is defined
-        for i in range(rl_data.MAX_IMAGES_PER_POST):
-            if len(final_filenames) >= rl_data.MAX_IMAGES_PER_POST:
-                if request.files.get(f'new_image_{i}') and request.files.get(f'new_image_{i}').filename: # Check if user tried to upload more
+        for i in range(rl_data.MAX_IMAGES_PER_POST): # MAX_IMAGES_PER_POST should be defined in rl_data
+            if len(final_images_data) >= rl_data.MAX_IMAGES_PER_POST:
+                if request.files.get(f'new_image_{i}') and request.files.get(f'new_image_{i}').filename:
                     flash(f'Maximum of {rl_data.MAX_IMAGES_PER_POST} images reached. Additional uploads ignored.', 'warning')
-                break # Stop processing new uploads if max is reached
+                break
 
-            image_file = request.files.get(f'new_image_{i}') # This is a FileStorage object
+            image_file = request.files.get(f'new_image_{i}')
             new_caption_text = request.form.get(f'new_caption_{i}', '').strip()
+            # For new images, 'show_in_gallery' is True if checked, False otherwise.
+            new_show_in_gallery = f'new_show_in_gallery_{i}' in request.form
 
             if image_file and image_file.filename:
-                if not rl_data.allowed_file(image_file.filename): # Common utility function
-                    flash(f'New Image (slot {i+1}) has an invalid file type. Not saved.', 'warning')
+                if not rl_data.allowed_file(image_file.filename):
+                    flash(f'New Image (slot {i+1}) "{image_file.filename}" has an invalid file type. Not saved.', 'warning')
                     continue
 
-                # Generate a unique base name for the image to avoid collisions
                 unique_base_name = f"img_edit_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{i}"
                 saved_image_basename = None
+                image_file.seek(0) # Reset stream just in case
 
                 if env_mode == 'deploy':
-                    # This function needs to handle FileStorage, create full & thumb, upload both to GCS,
-                    # and return the base filename (e.g., "img_edit_timestamp_i.png")
                     saved_image_basename = rl_data.save_uploaded_image_and_thumbnail_to_gcs(
                         slug, image_file, unique_base_name
                     )
                 else:
-                    saved_image_basename = rl_data.save_uploaded_image_and_thumbnail(
+                    saved_image_basename = rl_data.save_uploaded_image_and_thumbnail( # Local save
                         slug, image_file, unique_base_name
                     )
 
                 if saved_image_basename:
-                    final_filenames.append(saved_image_basename)
-                    final_captions.append(new_caption_text)
+                    final_images_data.append({
+                        "filename": saved_image_basename,
+                        "caption": new_caption_text,
+                        "show_in_gallery": new_show_in_gallery
+                    })
                     app.logger.info(f"Saved new image '{saved_image_basename}' for post '{slug}' (mode: {env_mode}).")
                 else:
-                    flash(f'Error saving new Image (slot {i+1}). Check logs.', 'warning')
+                    flash(f'Error saving new Image (slot {i+1}) "{image_file.filename}". Check logs.', 'warning')
         # --- End Image Processing ---
 
-        post_for_processing['image_filenames'] = final_filenames
-        post_for_processing['image_captions'] = final_captions
+        post_for_processing['images'] = final_images_data # Update with the new list of dicts
+        # Remove old keys if they somehow persisted (should be removed by normalization if they existed)
+        post_for_processing.pop('image_filenames', None)
+        post_for_processing.pop('image_captions', None)
 
-        if not post_for_processing['image_filenames']:
+        if not post_for_processing['images']: # Check if the list is empty
             flash('A post must have at least one image. Please add an image.', 'danger')
-            # To prevent saving without images, return to form. Repopulating is key.
-            # This part is tricky to make perfect without a proper form library.
-            return render_template('admin_post_blog.html', # Assuming this is your template
-                                   legend=f'Edit Post: "{post_data_from_storage["headline"]}"',
-                                   post=post_for_processing, # Pass the current state
-                                   form_data=request.form, # Pass raw form data for repopulation
-                                   current_images_for_form=post_for_processing.get('image_filenames', []),
-                                   current_captions_for_form=post_for_processing.get('image_captions', []))
+            # Repopulate form with current (failed) submission state
+            return render_template('admin_post_blog.html', 
+                                   legend=f'Edit Post: "{post_data_from_storage["headline"]}"', # Use original headline for legend
+                                   post=post_for_processing, # Pass the current state of post_for_processing
+                                   form_data=request.form) # Pass raw form data for general field repopulation
 
-
-        # --- Timestamps and Published_at Logic (same as before) ---
+        # --- Timestamps and Published_at Logic ---
         now_iso = datetime.now().isoformat()
         post_for_processing['updated_at'] = now_iso
 
         if is_published_now and not was_published_before_edit:
             post_for_processing['published_at'] = now_iso
         elif is_published_now and was_published_before_edit:
-            if not post_for_processing.get('published_at'): # For older posts missing this field
+            if not post_for_processing.get('published_at'):
                 post_for_processing['published_at'] = post_for_processing.get('created_at', now_iso)
-        # If not is_published_now, published_at is preserved (or remains None)
         # --- End Timestamps ---
 
         # Save the updated post_for_processing data
         save_successful = False
         if env_mode == 'deploy':
-            save_successful = rl_data.save_post_to_gcs(slug, post_for_processing)
+            # save_post_to_gcs should now expect post_for_processing['images']
+            save_successful = rl_data.save_post_config_to_gcs(slug, post_for_processing) # Assuming save_post_config_to_gcs
         else:
-            local_post_dir_path = os.path.join(rl_data.LOCAL_BLOG_DATA_DIR, slug) # Define LOCAL_BLOG_DATA_DIR
-            # Ensure local directory exists (it should for an edit)
+            local_post_dir_path = os.path.join(rl_data.LOCAL_BLOG_DATA_DIR, slug)
             if not os.path.exists(local_post_dir_path): os.makedirs(local_post_dir_path, exist_ok=True)
             try:
-                with open(os.path.join(local_post_dir_path, 'content.json'), 'w') as f:
+                with open(os.path.join(local_post_dir_path, 'content.json'), 'w', encoding='utf-8') as f:
                     json.dump(post_for_processing, f, indent=4)
                 save_successful = True
             except IOError as e:
@@ -1477,28 +1511,24 @@ def edit_blog_post(slug):
 
         if save_successful:
             flash('Blog post updated successfully!', 'success')
-            return redirect(url_for('manage_blog_posts')) # Make sure this route exists
+            return redirect(url_for('manage_blog_posts')) # Adjust if not using blueprint
         else:
             flash('Error saving post data. Check logs.', 'danger')
-            # Fall through to render form again, ideally with submitted data
-            # This is where a form library (like WTForms) would greatly simplify repopulation.
-
+            # Fall through to render form again with submitted data (post_for_processing should have it)
 
     # --- GET request or if POST had issues and fell through ---
-    # For GET, `post_for_processing` (which is a copy of `post_data_from_storage`
-    # with aligned captions) is used to populate the form.
-    form_data_for_template = {
+    # `post_for_processing` at this point (for GET) has been normalized.
+    # For POST fall-through, it contains the data from the failed POST attempt.
+    form_data_for_template = { # Primarily for non-image fields if not directly using post_for_processing in template
         'headline': post_for_processing['headline'],
         'content': post_for_processing['text'],
         'is_featured': post_for_processing.get('is_featured', False),
-        'is_published': post_for_processing.get('is_published', True) # Default to true if not set
+        'is_published': post_for_processing.get('is_published', True)
     }
-    return render_template('admin_post_blog.html', # Use consistent template name
+    return render_template('admin_post_blog.html',
                            legend=f'Edit Post: "{post_for_processing["headline"]}"',
-                           post=post_for_processing,
-                           form_data=form_data_for_template,
-                           current_images_for_form=post_for_processing.get('image_filenames', []),
-                           current_captions_for_form=post_for_processing.get('image_captions', []))
+                           post=post_for_processing, # This contains post_for_processing['images']
+                           form_data=form_data_for_template) # Or just use request.form if POST failed
 
 def handle_rm_error(function, path, excinfo):
     import stat

@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}{{ legend }}{% endblock %}
+{% block title %}{{ title }}{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
     <h2>{{ legend }}</h2>
     <hr>
-    {# Standard flash message rendering (ensure you have _flashes.html or similar) #}
+    {# Standard flash message rendering #}
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}
@@ -20,6 +20,7 @@
 
     <form method="POST" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        
         <div class="mb-3">
             <label for="headline" class="form-label">Headline</label>
             <input type="text" class="form-control" id="headline" name="headline" value="{{ form_data.headline if form_data else (post.headline if post else '') }}" required>
@@ -33,97 +34,121 @@
         <fieldset class="mb-3 border p-3">
             <legend class="w-auto px-2 h6">Images (1 to {{ max_images_per_post_const }})</legend>
             
-            {% if post %} {# --- EDITING EXISTING POST --- #}
-                {# ... (existing image deletion logic) ... #}
-                {% if current_images_for_form %}
-                    <h6>Current Images:</h6>
-                    <div class="row mb-3">
-                        {% for filename in current_images_for_form %}
-                        <div class="col-md-6 col-lg-4 mb-3"> {# Adjusted column for caption field #}
-                            <div class="card">
-                                <img src="{{ url_for('blog_post_image', slug=post.slug, filename=thumbnail_prefix ~ filename) }}?v={{ post.updated_at|replace(':', '')|replace('-', '') }}" 
-                                     class="card-img-top" alt="Current Image {{ loop.index }}" style="max-height: 120px; object-fit: contain; padding: 5px;">
-                                <div class="card-body p-2">
-                                    <p class="card-text small text-truncate" title="{{ filename }}">{{ filename }}</p>
-                                    {# Caption for existing image #}
-                                    <div class="mb-2">
-                                        <label for="current_caption_{{ loop.index0 }}" class="form-label form-label-sm visually-hidden">Caption for Image {{loop.index}}</label>
-                                        <input type="text" class="form-control form-control-sm" 
-                                                id="current_caption_{{ loop.index0 }}" 
-                                                name="current_caption_{{ loop.index0 }}" 
-                                                placeholder="Caption for Image {{ loop.index }} (optional)" 
-                                                value="{{ current_captions_for_form[loop.index0] if current_captions_for_form and loop.index0 < current_captions_for_form|length else '' }}">
-                                                
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" name="delete_image_{{ loop.index0 }}" id="delete_image_{{ loop.index0 }}">
-                                        <label class="form-check-label small" for="delete_image_{{ loop.index0 }}">
-                                            Delete Image {{ loop.index }}
-                                        </label>
-                                    </div>
+            {% if post and post.images %} {# --- EDITING EXISTING POST --- #}
+                {# Display existing images from post.images which is a list of dicts #}
+                <h6>Current Images:</h6>
+                <div class="row mb-3">
+                    {% for img_data in post.images %}
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card">
+                            <img src="{{ url_for('blog_post_image', slug=post.slug, filename=thumbnail_prefix ~ img_data.filename) }}?v={{ post.updated_at|replace(':', '')|replace('-', '') }}" 
+                                 class="card-img-top" alt="Current Image {{ loop.index }}" style="max-height: 120px; object-fit: contain; padding: 5px;">
+                            <div class="card-body p-2">
+                                <p class="card-text small text-truncate" title="{{ img_data.filename }}">{{ img_data.filename }}</p>
+                                
+                                <div class="mb-2">
+                                    <label for="current_caption_{{ loop.index0 }}" class="form-label form-label-sm visually-hidden">Caption for Image {{loop.index}}</label>
+                                    <input type="text" class="form-control form-control-sm" 
+                                            id="current_caption_{{ loop.index0 }}" 
+                                            name="current_caption_{{ loop.index0 }}" 
+                                            placeholder="Caption (optional)" 
+                                            value="{{ img_data.caption }}">
+                                </div>
+                                
+                                <div class="form-check mb-1">
+                                    <input class="form-check-input" type="checkbox" 
+                                           name="current_show_in_gallery_{{ loop.index0 }}" 
+                                           id="current_show_in_gallery_{{ loop.index0 }}"
+                                           {% if img_data.show_in_gallery %}checked{% endif %}>
+                                    <label class="form-check-label small" for="current_show_in_gallery_{{ loop.index0 }}">
+                                        Show in gallery
+                                    </label>
+                                </div>
+
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="delete_image_{{ loop.index0 }}" id="delete_image_{{ loop.index0 }}">
+                                    <label class="form-check-label small text-danger" for="delete_image_{{ loop.index0 }}">
+                                        Delete Image
+                                    </label>
                                 </div>
                             </div>
                         </div>
-                        {% endfor %}
                     </div>
-                    <hr class="my-3">
-                {% endif %}
-                
-                <h6>Add New Images:</h6>
-                {# ... (existing new image upload slots) ... #}
-                 {% for i in range(max_images_per_post_const) %}
-                <div class="row mb-2 align-items-center">
-                    <div class="col-md-6">
-                        <label for="new_image_{{ i }}" class="form-label form-label-sm visually-hidden">New Image File {{ i + 1 }}</label>
-                        <input type="file" class="form-control form-control-sm" id="new_image_{{ i }}" name="new_image_{{ i }}" accept="image/*">
-                    </div>
-                    <div class="col-md-6">
-                         <label for="new_caption_{{ i }}" class="form-label form-label-sm visually-hidden">Caption for New Image {{ i + 1 }}</label>
-                        <input type="text" class="form-control form-control-sm" 
-                            id="new_caption_{{ i }}" 
-                            name="new_caption_{{ i }}" 
-                            placeholder="Caption for new image {{ i + 1 }} (optional)">
-                    </div>
+                    {% endfor %}
                 </div>
+                <hr class="my-3">
+                <h6>Add New Images (up to {{ max_images_per_post_const }} total):</h6>
+                {# Slots for adding new images when editing #}
+                {% for i in range(max_images_per_post_const - (post.images|length if post.images else 0) ) %} {# Only show slots up to max #}
+                    <div class="row mb-2 align-items-center">
+                        <div class="col-md-5">
+                            <label for="new_image_{{ i }}" class="form-label form-label-sm visually-hidden">New Image File {{ i + 1 }}</label>
+                            <input type="file" class="form-control form-control-sm" id="new_image_{{ i }}" name="new_image_{{ i }}" accept="image/*">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="new_caption_{{ i }}" class="form-label form-label-sm visually-hidden">Caption for New Image {{ i + 1 }}</label>
+                            <input type="text" class="form-control form-control-sm" 
+                                id="new_caption_{{ i }}" 
+                                name="new_caption_{{ i }}" 
+                                placeholder="Caption for new image (optional)">
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-check mt-1">
+                                <input class="form-check-input" type="checkbox" 
+                                       name="new_show_in_gallery_{{ i }}" 
+                                       id="new_show_in_gallery_{{ i }}"
+                                       checked> {# Default new images to be shown in gallery #}
+                                <label class="form-check-label small" for="new_show_in_gallery_{{ i }}">
+                                    Show in gallery
+                                </label>
+                            </div>
+                        </div>
+                    </div>
                 {% endfor %}
-
 
             {% else %} {# --- CREATING NEW POST --- #}
                 <p class="small text-muted">Upload at least one image. All uploaded images will be included up to {{ max_images_per_post_const }}.</p>
                 {% for i in range(max_images_per_post_const) %}
                 <div class="row mb-3 align-items-center">
-                    <div class="col-md-6">
-                        <label for="image_{{ i }}" class="form-label">Image {{ i + 1 }} {% if i == 0 %}<span class="text-danger small">(Required)</span>{% else %}(Optional){% endif %}</label>
-                        <input type="file" class="form-control" id="image_{{ i }}" name="image_{{ i }}" accept="image/*">
+                    <div class="col-md-5">
+                        <label for="image_{{ i }}" class="form-label visually-hidden">Image {{ i + 1 }}</label>
+                        <input type="file" class="form-control" id="image_{{ i }}" name="image_{{ i }}" accept="image/*" {% if i == 0 %}required{% endif %}>
+                        {% if i == 0 %}<div class="form-text small">First image is required.</div>{% endif %}
                     </div>
-                    <div class="col-md-6">
-                        <label for="caption_{{ i }}" class="form-label">Caption for Image {{ i + 1 }} (Optional)</label>
-                        <input type="text" class="form-control" id="caption_{{ i }}" name="caption_{{ i }}" placeholder="Enter caption">
+                    <div class="col-md-4">
+                        <label for="caption_{{ i }}" class="form-label visually-hidden">Caption for Image {{ i + 1 }}</label>
+                        <input type="text" class="form-control" id="caption_{{ i }}" name="caption_{{ i }}" placeholder="Caption for image {{ i + 1 }} (optional)">
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-check mt-1">
+                            <input class="form-check-input" type="checkbox" 
+                                   name="show_in_gallery_{{ i }}" 
+                                   id="show_in_gallery_{{ i }}"
+                                   checked> {# Default new images to be shown in gallery #}
+                            <label class="form-check-label small" for="show_in_gallery_{{ i }}">
+                                Show in gallery
+                            </label>
+                        </div>
                     </div>
                 </div>
                 {% endfor %}
             {% endif %}
         </fieldset>       
 
-        {# --- New Published Checkbox --- #}
         <div class="mb-3 form-check">
-            <input type="checkbox" class="form-check-input" id="is_published" name="is_published" value="true" 
+            <input type="checkbox" class="form-check-input" id="is_published" name="is_published" 
                    {% if (form_data and form_data.is_published) or (post and post.is_published) or (not post and not form_data) %}checked{% endif %}>
             <label class="form-check-label" for="is_published">Publish Post (visible to users)</label>
         </div>
-        {# --- End Published Checkbox --- #}
 
         <div class="mb-3 form-check">
-            <input type="checkbox" class="form-check-input" id="is_featured" name="is_featured" value="true" {% if (form_data and form_data.is_featured) or (post and post.is_featured) %}checked{% endif %}>
+            <input type="checkbox" class="form-check-input" id="is_featured" name="is_featured" {% if (form_data and form_data.is_featured) or (post and post.is_featured) %}checked{% endif %}>
             <label class="form-check-label" for="is_featured">Feature on Homepage?</label>
         </div>
 
         <button type="submit" class="btn btn-primary">{% if post %}Update{% else %}Create{% endif %} Post</button>
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <a href="{{ url_for('manage_blog_posts') }}" class="btn btn-secondary">Cancel</a>
+        <a href="{{ url_for('manage_blog_posts') }}" class="btn btn-secondary">Cancel</a> {# Assuming admin blueprint #}
     </form>
-    <p class="mt-3">
-        <a href="{{ url_for('manage_blog_posts') }}" class="btn btn-info">Manage All Posts</a>
-    </p>
+
 </div>
 {% endblock %}

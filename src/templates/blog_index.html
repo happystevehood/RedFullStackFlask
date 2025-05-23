@@ -59,6 +59,14 @@
                                  alt="{{ post.headline }} preview">
                         </a>
                     </div>
+                    {% elif post.images and post.images[0] and post.images[0].filename %}
+                    <div class="blog-index-preview-image-container">
+                        <a href="{{ url_for('blog_post_detail', slug=post.slug) }}">
+                            <img src="{{ url_for('blog_post_image', slug=post.slug, filename=thumbnail_prefix ~ post.images[0].filename) }}"
+                                 class="img-fluid blog-index-preview-image" {# img-fluid is key here #}
+                                 alt="{{ post.headline }} preview">
+                        </a>
+                    </div>
                     {% elif not query %} {# Optional: Show placeholder only if not a search result page #}
                     <div class="blog-index-preview-image-container">
                          <a href="{{ url_for('blog_post_detail', slug=post.slug) }}">

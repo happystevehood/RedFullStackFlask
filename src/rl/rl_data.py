@@ -1150,16 +1150,6 @@ def get_post(slug, increment_view_count=False):
         logger.warning(f"get_post: Post '{slug}' not found in mode '{env_mode}'.")
         return None
 
-    # Convert date strings to datetime objects if your templates expect them
-    # This should ideally be done consistently or handled by template filters
-    # for key in ['created_at', 'updated_at', 'published_at']:
-    #     if post_data.get(key):
-    #         try:
-    #             post_data[key] = datetime.fromisoformat(post_data[key].replace("Z", "+00:00"))
-    #         except (ValueError, TypeError):
-    #             logger.warning(f"get_post: Could not parse date string for '{key}' in post '{slug}'.")
-    #             pass # Keep as string if parsing fails
-
     return post_data
 
 def get_static_page_lastmod(template_name):
@@ -1168,7 +1158,7 @@ def get_static_page_lastmod(template_name):
         filepath = os.path.join(TEMPLATE_FOLDER, template_name)
         if os.path.exists(filepath):
             mod_time = os.path.getmtime(filepath)
-            return datetime.fromtimestamp.fromtimestamp(mod_time, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+            return datetime.fromtimestamp(mod_time, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
     except Exception as e:
         logger.error(f"Error getting lastmod for {template_name}: {e}")
     return None

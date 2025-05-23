@@ -48,7 +48,6 @@
                     <th>Headline</th>
                     <th>Status</th>
                     <th>Created At</th>
-                    <th>Published At</th>
                     <th>Featured</th>
                     <th>Views</th>
                     <th>Actions</th>
@@ -63,7 +62,6 @@
                     </td>
                     <td>{% if post.is_published %}Published{% else %}Draft{% endif %}</td>
                     <td>{{ post.created_at | format_datetime }}</td>
-                    <td>{{ post.published_at | format_datetime if post.is_published else 'N/A' }}</td>
                     <td>{{ 'Yes' if post.is_featured else 'No' }}</td>
                     <td>{{ post.view_count | default(0) }}</td>
                     <td>
@@ -82,5 +80,11 @@
     {% else %}
     <p>No blog posts yet. <a href="{{ url_for('new_blog_post') }}">Create one!</a></p>
     {% endif %}
+    <br/>
+    <p> Here is html to use to embed images with captions in your blog post</p>
+    <textarea rows="2" cols="80">
+    <img src="/blog/image/<slug here>/thumb_" alt="Caption - click to expand" >
+    can include styling such as width="40%" border="2"
+    </textarea>
 </div>
 {% endblock %}
