@@ -4,42 +4,53 @@
 
 {% block head %}
 {{ super() }}
-<meta name="description" content="{{ post.text | striptags | truncate(160) }}">
-<meta property="og:title" content="{{ post.headline }}">
-<meta property="og:description" content="{{ post.text | striptags | truncate(160) }}">
-{% if post.image_filenames and post.image_filenames[0] %} {# Use first image for OG tag #}
-<meta property="og:image" content="{{ url_for('blog_post_image', slug=post.slug, filename=post.image_filenames[0], _external=True) }}">
+{# ... your meta tags ... #}
+{% if post.images and post.images[0] %}
+    {% for image_info in post.images %}
+        {% if loop.first or image_info.show_in_gallery %}
+            <meta property="og:image" content="{{ url_for('blog_post_image', slug=post.slug, filename=image_info.filename, _external=True) }}">
+            {% break %}
+        {% endif %}
+    {% endfor %}
 {% endif %}
-<meta property="og:url" content="{{ url_for('blog_post_detail', slug=post.slug, _external=True) }}">
-<meta property="og:type" content="article">
 <style nonce="{{ csp_nonce() }}">
-    .blog-image-thumbnail-link {
-        display: inline-block; /* Allows figure to behave better with margin */
+    /* Styles for gallery images */
+    .blog-image-thumbnail-link { display: inline-block; text-decoration: none; }
+    .blog-image-thumbnail { cursor: pointer; transition: opacity .2s ease-in-out; max-width: 100%; height: auto; border: 1px solid #ddd; padding: 4px; }
+    .blog-image-thumbnail:hover { opacity: 0.8; }
+    .figure-caption { font-size: 0.9em; color: #6c757d; } /* For gallery captions */
+
+    /* Styles for modal */
+    #imageModal .modal-lg { max-width: 85%; }
+    #imageModal .modal-body img { max-height: 80vh; width: auto; max-width: 100%; display: block; margin-left: auto; margin-right: auto; }
+
+    /* Styles for embedded images and their JS-added captions */
+    .embedded-image-link {
+        display: block; /* Or inline-block if you prefer */
+        /*margin-bottom: 0.25em; /* Small space before caption if image is block */
         text-decoration: none;
     }
-    .blog-image-thumbnail {
+    img.embedded-image-content { /* Class for the <img> tag itself inside .blog-content */
         cursor: pointer;
         transition: opacity .2s ease-in-out;
-        max-width: 100%;
+        max-width: 100%; /* Default, can be overridden by inline styles on img */
         height: auto;
-        border: 1px solid #ddd;
-        padding: 4px;
+        border: 1px solid #ddd; /* Consistent with gallery thumbs */
+        padding: 4px;          /* Consistent with gallery thumbs */
+        display: block; /* Important for margin auto and proper block behavior */
+        margin-left: auto; /* Center if parent allows, or if width is less than 100% */
+        margin-right: auto;
     }
-    .blog-image-thumbnail:hover {
+    img.embedded-image-content:hover {
         opacity: 0.8;
     }
-    .figure-caption {
-        font-size: 0.9em;
-        color: #6c757d;
-    }
-    #imageModal .modal-lg { max-width: 85%; }
-    #imageModal .modal-body img {
-        max-height: 80vh; /* Limit image height in modal */
-        width: auto;      /* Maintain aspect ratio */
-        max-width: 100%;  /* Ensure it doesn't overflow modal width */
+    .js-embedded-image-caption {
         display: block;
-        margin-left: auto;
-        margin-right: auto;
+        text-align: center; /* Or as desired */
+        font-size: 0.9em;
+        color: #6c757d; /* Match gallery caption color */
+        /*padding: 0.25em 0;*/
+        margin-bottom: 1em; /* Space after caption block */
     }
 </style>
 {% endblock %}
@@ -49,35 +60,46 @@
     <article class="blog-post">
         <h1 class="display-5 fw-bold">{{ post.headline }}</h1>
         <p class="blog-post-meta text-muted">
-            Posted on {{ post.created_at | format_datetime('%B %d, %Y at %H:%M') }}
-            {% if post.created_at != post.updated_at %}
-                (Last updated: {{ post.updated_at | format_datetime('%B %d, %Y at %H:%M') }})
+            {% if post.is_published and post.published_at %}
+                Published on {{ post.published_at | format_datetime('%B %d, %Y at %H:%M') }}
+            {% elif post.created_at %}
+                Created on {{ post.created_at | format_datetime('%B %d, %Y at %H:%M') }}
             {% endif %}
         </p>
         <hr>
+        
         <div class="blog-content lead">
-            {{ post.text | safe }} {# Assuming admin content can be trusted HTML #}
+            {{ post.text | safe }} {# Embedded images are within this 'post.text' #}
         </div>
-        {% if post.image_filenames %}
-        <div class="row mb-4">
-            {% for image_filename in post.image_filenames %}
-            <div class="col-md-4 col-sm-6 mb-3 d-flex align-items-stretch"> {# Use flex for equal height figures if desired #}
-                <figure class="figure text-center w-100">
-                    <a href="#" class="blog-image-thumbnail-link"
-                       data-bs-toggle="modal" 
-                       data-bs-target="#imageModal"
-                       data-fullsize-src="{{ url_for('blog_post_image', slug=post.slug, filename=image_filename) }}"
-                       data-caption="{{ post.headline }} - Figure {{ loop.index }}">
-                        <img src="{{ url_for('blog_post_image', slug=post.slug, filename=thumbnail_prefix ~ image_filename) }}"
-                             class="figure-img img-fluid rounded shadow-sm blog-image-thumbnail"
-                             alt="Figure {{ loop.index }} - Thumbnail of {{ image_filename }}">
-                    </a>
-                    <figcaption class="figure-caption">Figure {{ loop.index }}</figcaption>
-                </figure>
-            </div>
+
+        {# Image Gallery (uses post.images) - this part remains for your top gallery #}
+        {% if post.images %}
+        <div class="row mb-4 image-gallery-row">
+            {% for image_data in post.images %}
+                {% if image_data.show_in_gallery %}
+                <div class="col-md-4 col-sm-6 mb-3 d-flex align-items-stretch">
+                    <figure class="figure text-center w-100">
+                        {% set display_caption = image_data.caption | trim if image_data.caption | trim else "Figure " ~ loop.index %}
+                        <a href="#" class="blog-image-thumbnail-link"
+                           data-bs-toggle="modal" 
+                           data-bs-target="#imageModal"
+                           data-fullsize-src="{{ url_for('blog_post_image', slug=post.slug, filename=image_data.filename) }}"
+                           data-caption="{{ display_caption }}">
+                            <img src="{{ url_for('blog_post_image', slug=post.slug, filename=thumbnail_prefix ~ image_data.filename) }}"
+                                 class="figure-img img-fluid rounded shadow-sm blog-image-thumbnail"
+                                 alt="{{ display_caption }} - Thumbnail">
+                        </a>
+                        <figcaption class="figure-caption">{{ display_caption }}</figcaption>
+                    </figure>
+                </div>
+                {% endif %}
             {% endfor %}
         </div>
         {% endif %}
+        
+        <div class="text-muted mt-4 pt-2 border-top">
+            <small>Viewed {{ post.view_count | default(0) }} times.</small>
+        </div>
         <hr>
         <a href="{{ url_for('blog_index') }}" class="btn btn-outline-secondary">« Back to Blog Index</a>
     </article>
@@ -103,24 +125,143 @@
 {{ super() }}
 <script nonce="{{ csp_nonce() }}">
 document.addEventListener('DOMContentLoaded', function () {
-    var imageModal = document.getElementById('imageModal');
-    if (imageModal) {
-        imageModal.addEventListener('show.bs.modal', function (event) {
-            var triggerElement = event.relatedTarget; // Anchor tag that triggered the modal
-            var fullsizeSrc = triggerElement.getAttribute('data-fullsize-src');
-            var caption = triggerElement.getAttribute('data-caption');
+    const imageModalEl = document.getElementById('imageModal');
+    const THUMBNAIL_PREFIX = "{{ thumbnail_prefix }}"; // Ensure this is passed from Flask
 
-            var modalTitle = imageModal.querySelector('.modal-title');
-            var modalImage = imageModal.querySelector('#fullImageInModal');
+    // Function to get full-size URL from a (potential) thumbnail URL
+    function getFullImageUrl(thumbnailUrl) {
+        if (!thumbnailUrl) return '';
+        const parts = thumbnailUrl.split('/');
+        let filename = parts.pop();
+        // Handle potential double prefix from content then single prefix from display logic
+        if (filename.startsWith(THUMBNAIL_PREFIX + THUMBNAIL_PREFIX)) {
+            filename = filename.substring(THUMBNAIL_PREFIX.length);
+        } else if (filename.startsWith(THUMBNAIL_PREFIX)) {
+            filename = filename.substring(THUMBNAIL_PREFIX.length);
+        }
+        parts.push(filename);
+        return parts.join('/');
+    }
 
-            modalTitle.textContent = caption;
+    // Function to get a caption, prioritizing alt text, then filename, then a generic default.
+    // This is primarily for the MODAL.
+    function getCaptionForModal(imgElement) {
+        if (imgElement && imgElement.alt && imgElement.alt.trim() !== "") {
+            return imgElement.alt.trim();
+        }
+        if (imgElement && imgElement.src) {
+            const srcParts = imgElement.src.split('/');
+            let filename = srcParts.pop() || 'Image';
+            filename = filename.substring(0, filename.lastIndexOf('.')) || filename; // Remove extension
+            if (filename.startsWith(THUMBNAIL_PREFIX + THUMBNAIL_PREFIX)) {
+                filename = filename.substring(THUMBNAIL_PREFIX.length * 2);
+            } else if (filename.startsWith(THUMBNAIL_PREFIX)) {
+                filename = filename.substring(THUMBNAIL_PREFIX.length);
+            }
+            filename = filename.replace(/[_-]/g, ' ').replace(/img /i, '').trim();
+            if (filename.length > 3) { // Only use filename if it's somewhat descriptive
+                 // Capitalize first letter of each word
+                return filename.replace(/\b\w/g, l => l.toUpperCase());
+            }
+        }
+        return "Image Preview"; // Generic default for modal
+    }
+
+    // Initialize modal logic (for gallery images AND embedded ones)
+    if (imageModalEl) {
+        imageModalEl.addEventListener('show.bs.modal', function (event) {
+            const triggerElement = event.relatedTarget; // This is the <a> tag
+            const fullsizeSrc = triggerElement.getAttribute('data-fullsize-src');
+            const captionFromData = triggerElement.getAttribute('data-caption'); // This comes from data-caption
+
+            const modalTitle = imageModalEl.querySelector('.modal-title');
+            const modalImage = imageModalEl.querySelector('#fullImageInModal');
+
+            modalTitle.textContent = captionFromData || "Image Preview";
             modalImage.src = fullsizeSrc;
-            modalImage.alt = caption;
+            modalImage.alt = captionFromData || "Full-size image";
         });
-        // Optional: Clear image src when modal is hidden to free memory/stop loading
-        imageModal.addEventListener('hidden.bs.modal', function() {
-            var modalImage = imageModal.querySelector('#fullImageInModal');
+        imageModalEl.addEventListener('hidden.bs.modal', function() {
+            const modalImage = imageModalEl.querySelector('#fullImageInModal');
             modalImage.src = ''; 
+            modalImage.alt = 'Full-size image';
+            imageModalEl.querySelector('.modal-title').textContent = 'Image Preview';
+        });
+    }
+
+    // Enhance embedded images within .blog-content
+    const blogContent = document.querySelector('.blog-content');
+    if (blogContent) {
+        const embeddedImages = blogContent.querySelectorAll('img');
+
+        embeddedImages.forEach(img => {
+            // Skip if already part of a gallery modal link (e.g. if you mistakenly put gallery code in blog-content)
+            if (img.closest('a.blog-image-thumbnail-link')) {
+                return; 
+            }
+            // Add class for styling the image itself
+            img.classList.add('embedded-image-content');
+
+            const currentSrc = img.getAttribute('src');
+            if (!currentSrc) return;
+
+            const fullsizeSrc = getFullImageUrl(currentSrc);
+            const captionForModal = getCaptionForModal(img); // Get caption for the modal
+            const altTextForDisplay = img.alt ? img.alt.trim() : ""; // Raw alt text for display
+
+            // Ensure the image is wrapped in an <a> tag for modal triggering
+            let linkWrapper = img.parentElement;
+            if (linkWrapper.nodeName !== 'A' || !linkWrapper.hasAttribute('data-bs-toggle')) {
+                const newLink = document.createElement('a');
+                newLink.href = "#"; // Prevent page jump
+                img.parentNode.replaceChild(newLink, img); // Replace img with link
+                newLink.appendChild(img);                  // Put img inside link
+                linkWrapper = newLink;
+            }
+            
+            linkWrapper.classList.add('embedded-image-link');
+            linkWrapper.setAttribute('data-bs-toggle', 'modal');
+            linkWrapper.setAttribute('data-bs-target', '#imageModal');
+            linkWrapper.setAttribute('data-fullsize-src', fullsizeSrc);
+            linkWrapper.setAttribute('data-caption', captionForModal);
+
+
+            // Add caption element IF alt text is meaningful
+            // Check if a caption element already exists (e.g., from a previous run or manual addition)
+            let nextSibling = linkWrapper.nextElementSibling;
+            let captionDiv = null;
+            if (nextSibling && nextSibling.classList.contains('js-embedded-image-caption')) {
+                captionDiv = nextSibling; // Reuse existing caption div
+            }
+
+
+            if (altTextForDisplay && altTextForDisplay.toLowerCase() !== "image" && altTextForDisplay.toLowerCase() !== "thumbnail") {
+                if (!captionDiv) { // Create caption div if it doesn't exist
+                    captionDiv = document.createElement('div');
+                    captionDiv.classList.add('js-embedded-image-caption');
+                    
+                    // Insertion logic: place after the linkWrapper.
+                    // If linkWrapper is inside a <p> and is the only content, place caption after the <p>.
+                    let insertionPoint = linkWrapper;
+                    if (linkWrapper.parentElement.tagName === 'P' && 
+                        (linkWrapper.parentElement.childNodes.length === 1 || 
+                         (linkWrapper.parentElement.childNodes.length === 2 && 
+                          (linkWrapper.parentElement.childNodes[0].nodeType === Node.TEXT_NODE && linkWrapper.parentElement.childNodes[0].textContent.trim() === "") ||
+                          (linkWrapper.parentElement.childNodes[1].nodeType === Node.TEXT_NODE && linkWrapper.parentElement.childNodes[1].textContent.trim() === "")
+                         ) // handles <p><a>img</a></p> or <p> <a>img</a> </p>
+                        )
+                       ) {
+                        insertionPoint = linkWrapper.parentElement;
+                    }
+                    insertionPoint.parentNode.insertBefore(captionDiv, insertionPoint.nextSibling);
+                }
+                captionDiv.textContent = altTextForDisplay; // Update/set text content
+            } else {
+                // If alt text is not suitable and a caption div exists from previous run, remove it
+                if (captionDiv) {
+                    captionDiv.remove();
+                }
+            }
         });
     }
 });

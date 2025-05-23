@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Home | Redline Fitness Games{% endblock %}
+{% block title %}Home | Redline Results{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
@@ -34,6 +34,10 @@
                             <img src="{{ url_for('blog_post_image', slug=post.slug, filename=thumbnail_prefix ~ post.image_filenames[0]) }}"
                                 class="card-img-top" alt="{{ post.headline }} preview" 
                                 style="height: 200px; object-fit: cover;">
+                            {% elif post.images and post.images[0] and post.images[0].filename %}
+                            <img src="{{ url_for('blog_post_image', slug=post.slug, filename=thumbnail_prefix ~ post.images[0].filename) }}"
+                                class="card-img-top" alt="{{ post.headline }} preview" 
+                                style="height: 200px; object-fit: cover;">
                             {% else %}
                             <img src="{{ url_for('static', filename='images/placeholder.png') }}" {# Have a placeholder image #}
                                 class="card-img-top" alt="No image available" 
@@ -42,7 +46,7 @@
                         </a>
                     <div class="card-body d-flex flex-column">
                         <h5 class="card-title"><a href="{{ url_for('blog_post_detail', slug=post.slug) }}" class="text-decoration-none text-dark stretched-link">{{ post.headline }}</a></h5>
-                        <p class="card-text text-muted small">{{ post.created_at | format_datetime('%B %d, %Y') }}</p>
+                        <p class="card-text text-muted small">{{ post.published_at | format_datetime('%B %d, %Y') }}</p>
                         <p class="card-text">{{ post.text | striptags | truncate(100, True, '...') }}</p>
                         {# Stretched link on title makes the whole card clickable to the post, so no separate "Read More" button needed if card-body is mostly text #}
                     </div>

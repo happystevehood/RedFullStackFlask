@@ -23,10 +23,11 @@
 <div class="container mt-4">
     <div class="row">
         <div class="col-md-8">
-            <h2>Redline Blog</h2>
+            <h2>The Redline Fitness Games Results Explorer Blog</h2>
             <hr>
 
             <form method="GET" action="{{ url_for('blog_index') }}" class="mb-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="input-group">
                     <input type="text" name="q" class="form-control" placeholder="Search blog posts..." value="{{ query or '' }}">
                     <button class="btn btn-outline-secondary" type="submit">Search</button>
@@ -41,7 +42,12 @@
                 <article class="blog-post mb-4 pb-4 border-bottom">
                     <h3><a href="{{ url_for('blog_post_detail', slug=post.slug) }}">{{ post.headline }}</a></h3>
                     <p class="blog-post-meta text-muted">
-                        Posted on {{ post.created_at | format_datetime('%B %d, %Y') }}
+                        {% if post.is_published and post.published_at %}
+                            Published on {{ post.published_at | format_datetime('%B %d, %Y at %H:%M') }}
+                        {% elif post.created_at %}
+                            {# Fallback for posts that might not have published_at yet or are drafts #}
+                            Created on {{ post.created_at | format_datetime('%B %d, %Y at %H:%M') }}
+                        {% endif %}
                     </p>
 
                     {# --- IMAGE PREVIEW SECTION --- #}
@@ -49,6 +55,14 @@
                     <div class="blog-index-preview-image-container">
                         <a href="{{ url_for('blog_post_detail', slug=post.slug) }}">
                             <img src="{{ url_for('blog_post_image', slug=post.slug, filename=thumbnail_prefix ~ post.image_filenames[0]) }}"
+                                 class="img-fluid blog-index-preview-image" {# img-fluid is key here #}
+                                 alt="{{ post.headline }} preview">
+                        </a>
+                    </div>
+                    {% elif post.images and post.images[0] and post.images[0].filename %}
+                    <div class="blog-index-preview-image-container">
+                        <a href="{{ url_for('blog_post_detail', slug=post.slug) }}">
+                            <img src="{{ url_for('blog_post_image', slug=post.slug, filename=thumbnail_prefix ~ post.images[0].filename) }}"
                                  class="img-fluid blog-index-preview-image" {# img-fluid is key here #}
                                  alt="{{ post.headline }} preview">
                         </a>
@@ -102,7 +116,7 @@
             {# Sidebar content #}
             <h4>Recent Posts</h4>
             <ul class="list-unstyled">
-                {% set recent_posts_list = get_all_posts_for_template(sort_by_date=True, reverse=True)[:5] %}
+                {% set recent_posts_list = get_all_posts_for_template(sort_key='published_at', reverse_sort=True)[:10] %}
                 {% for r_post in recent_posts_list %}
                 <li><a href="{{ url_for('blog_post_detail', slug=r_post.slug) }}">{{ r_post.headline }}</a></li>
                 {% else %}

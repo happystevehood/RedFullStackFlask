@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Search | Redline Fitness Games{% endblock %}
+{% block title %}Search | Redline Results{% endblock %}
 
 {% block content %}
 <style nonce="{{ csp_nonce() }}">
@@ -25,6 +25,7 @@
                 <input type="text" class="form-control" id="competitorToSearch" name="competitor" placeholder="Joe Bloggs" maxlength="100">
             </div>
             <div class="col-auto">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-primary">Search</button>
             </div>
         </form>

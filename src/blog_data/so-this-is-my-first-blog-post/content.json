@@ -1,0 +1,18 @@
+{
+    "headline": "So this is my first blog post.",
+    "text": "<p>I realised last night that a blog post feature might be a good thing to add. :) I still need to allow comments, and likes, and maybe a load counter to see what is popular.</p>\r\n<br/>\r\n<p>For now just let me say a big hello and hope that you all enjoy using this site.... The image in Figure 1 is a sample of may of the data visualisations that one can see on this site.....</p>\r\n<br/>\r\n<p>If you have any questions, requests or need any explanations, please stick it in the <a href=\"/feedback\">feedback form</a>. and I'll do my best to address.</p>\r\n\r\n<p>Thanks,</p>\r\n<p>Steve.</p>",
+    "created_at": "2025-05-16T12:05:01.033120",
+    "updated_at": "2025-05-23T15:22:07.029314",
+    "published_at": "2025-05-18T21:22:12.087297",
+    "is_featured": false,
+    "slug": "so-this-is-my-first-blog-post",
+    "is_published": true,
+    "view_count": 10,
+    "images": [
+        {
+            "filename": "img_20250516120500907751_0.png",
+            "caption": "Various Visualisations",
+            "show_in_gallery": true
+        }
+    ]
+}

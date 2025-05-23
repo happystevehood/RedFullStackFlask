@@ -1,7 +1,9 @@
 #!/bin/bash
 # Deploy the application to a production server 
 
-export IMAGE=gcr.io/redline-fitness-results/app.py:latest
+export NAME_VERSION=blog_v3.04
+export PROJECT_ID=redline-fitness-results
+export IMAGE=gcr.io/$PROJECT_ID/app.py:$NAME_VERSION
 
 # Set environment variables
 export ENV_FILE=.env.deploy
@@ -13,4 +15,5 @@ export PORT=8080
 cd "$(dirname "$0")/.."
 
 #Build your Docker image
+#docker build --no-cache -f Dockerfile_deploy -t $IMAGE .
 docker build -f Dockerfile_deploy -t $IMAGE .
