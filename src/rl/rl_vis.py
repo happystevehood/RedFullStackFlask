@@ -1823,6 +1823,172 @@ def ShowCatBarCharts(df):
     plt.close(fig)
     session['runtime'] = runtimeVars
 
+
+import pandas as pd
+import numpy as np
+import os
+from pathlib import Path
+# Assuming session, rl_data, runtimeVars, df are defined elsewhere
+# Assuming rl_data.format_time_mm_ss helper function is available
+
+def format_time_mm_ss(seconds_total): # Keep your robust formatter
+    if pd.isna(seconds_total) or not isinstance(seconds_total, (int, float, np.number)):
+        return "N/A"
+    try:
+        seconds_total = int(round(float(seconds_total)))
+    except (ValueError, TypeError):
+        return "N/A"
+    minutes = seconds_total // 60
+    seconds = seconds_total % 60
+    return f"{minutes:02d}:{seconds:02d}"
+
+def CreatePacingTable(df):
+    runtimeVars = session.get('runtime', {})
+
+    event_name_for_file = runtimeVars['eventDataList'][0]
+    filepath = Path(rl_data.CSV_GENERIC_DIR) / Path(f"PacingTable{event_name_for_file}.csv")
+
+    if os.path.isfile(filepath):
+        print(f"File {filepath} already exists. Skipping generation for {runtimeVars['eventDataList'][0]}.")
+        return
+    
+    print(f"Generating Pacing Table for event {runtimeVars['eventDataList'][0]}")
+
+    station_names = runtimeVars['EventList']
+    target_percentiles = np.arange(0.1, 1.0, 0.1) # 10%, 20%, ..., 90%
+
+    # Define the window around the target percentile's POSITION to select the cohort
+    # e.g., for 10th percentile, with a 5% window, consider athletes from 5th to 15th percentile rank
+    COHORT_POSITION_WINDOW_PERCENTAGE = 0.05 # +/- 5 percentile points from the target
+
+    pacing_table_data_list_of_dicts = [] 
+
+    # --- Data Preparation and Cleaning ---
+    df_cleaned = df.copy()
+    df_cleaned['Net Time'] = pd.to_numeric(df_cleaned['Net Time'], errors='coerce')
+    for event in station_names:
+        df_cleaned[event] = pd.to_numeric(df_cleaned[event], errors='coerce')
+    
+    if 'Time Adj' in df_cleaned.columns:
+        df_cleaned['Time Adj'] = pd.to_numeric(df_cleaned['Time Adj'], errors='coerce')
+    else:
+        print("Warning: 'Time Adj' column not found. Assuming all Time Adj are 0.")
+        df_cleaned['Time Adj'] = 0 
+
+    df_cleaned.dropna(subset=['Net Time'], inplace=True)
+    if df_cleaned.empty:
+        print("No valid numeric Net Time data to generate pacing table.")
+        runtimeVars['pacingTable'] = []
+        session['runtime'] = runtimeVars
+        return None
+
+    # Filter out athletes with non-zero 'Time Adj'
+    df_for_pacing_calcs = df_cleaned[df_cleaned['Time Adj'].fillna(0) == 0].copy()
+
+    # Fallback if filtering results in an empty DataFrame
+    df_to_use_for_cohorts_and_percentiles = df_for_pacing_calcs
+    if df_for_pacing_calcs.empty:
+        print("Warning: No athletes found with Time Adj == 0. Pacing table will be based on all athletes.")
+        df_to_use_for_cohorts_and_percentiles = df_cleaned
+        if df_to_use_for_cohorts_and_percentiles.empty:
+            print("Critical: No data left. Cannot generate table.")
+            runtimeVars['pacingTable'] = []
+            session['runtime'] = runtimeVars
+            return None
+    
+    # Sort by Net Time to easily get positional percentiles
+    df_sorted = df_to_use_for_cohorts_and_percentiles.sort_values(by='Net Time').reset_index(drop=True)
+    total_ranked_athletes = len(df_sorted)
+
+    if total_ranked_athletes == 0:
+        print("No ranked athletes to process after filtering.")
+        runtimeVars['pacingTable'] = []
+        session['runtime'] = runtimeVars
+        return None
+
+    # Header row
+    header_dict = {'Station': 'Station'}
+    for p_val in target_percentiles:
+        header_dict[f'Top {int(p_val*100)}%'] = f'Top {int(p_val*100)}%'
+    pacing_table_data_list_of_dicts.append(header_dict)
+
+    sum_of_avg_station_times_per_percentile = {f'Top {int(p*100)}%': 0.0 for p in target_percentiles}
+
+    for station in station_names:
+        station_pacing_row = {'Station': station}
+        for p_val in target_percentiles:
+            percentile_key_name = f'Top {int(p_val*100)}%'
+            
+            # Define the positional window
+            # Example for p_val = 0.1 (10th percentile) and window = 0.05 (5%)
+            # Lower rank percentile: 0.1 - 0.05 = 0.05 (5th percentile)
+            # Upper rank percentile: 0.1 + 0.05 = 0.15 (15th percentile)
+            lower_rank_percentile = max(0, p_val - COHORT_POSITION_WINDOW_PERCENTAGE)
+            upper_rank_percentile = min(1, p_val + COHORT_POSITION_WINDOW_PERCENTAGE)
+            
+            start_index = int(lower_rank_percentile * total_ranked_athletes)
+            # For upper bound, make sure it includes up to that percentile, so use ceil or adjust index
+            end_index = int(np.ceil(upper_rank_percentile * total_ranked_athletes)) 
+            # Ensure end_index does not exceed total_ranked_athletes
+            end_index = min(end_index, total_ranked_athletes)
+
+
+            # Ensure start_index is less than end_index for slicing
+            if start_index >= end_index and total_ranked_athletes > 0: # If window is too small or at extremes
+                # Fallback: take a small number of athletes around the target_index
+                target_index = int(p_val * (total_ranked_athletes -1) ) # -1 because of 0-based indexing
+                num_either_side = max(1, int(COHORT_POSITION_WINDOW_PERCENTAGE * total_ranked_athletes / 2))
+                start_index = max(0, target_index - num_either_side)
+                end_index = min(total_ranked_athletes, target_index + num_either_side + 1)
+
+            cohort_df = df_sorted.iloc[start_index:end_index]
+            
+            avg_station_time_seconds = np.nan 
+            if not cohort_df.empty and station in cohort_df.columns:
+                valid_station_times = cohort_df[station].dropna()
+                if not valid_station_times.empty:
+                    avg_station_time_seconds = valid_station_times.mean()
+            
+            station_pacing_row[percentile_key_name] = rl_data.format_time_mm_ss(avg_station_time_seconds)
+            if not pd.isna(avg_station_time_seconds):
+                sum_of_avg_station_times_per_percentile[percentile_key_name] += avg_station_time_seconds
+        
+        pacing_table_data_list_of_dicts.append(station_pacing_row)
+
+    # Row for Sum of Average Station Times
+    sum_avg_station_times_row = {'Station': 'SUM OF AVG STATION TIMES'}
+    for p_key in sum_of_avg_station_times_per_percentile.keys():
+        sum_avg_station_times_row[p_key] = rl_data.format_time_mm_ss(sum_of_avg_station_times_per_percentile[p_key])
+    pacing_table_data_list_of_dicts.append(sum_avg_station_times_row)
+
+    # Row for Actual Average Net Time of the Cohort (for comparison)
+    # This is more complex as the cohort changes for each percentile
+    # Instead, let's use the quantile Net Time of the df_to_use_for_cohorts_and_percentiles
+    actual_net_time_quantiles_row = {'Station': 'TARGET NET TIME (Quantile)'}
+    for p_val in target_percentiles:
+        percentile_key_name = f'Top {int(p_val*100)}%'
+        target_net_time_for_percentile = df_to_use_for_cohorts_and_percentiles['Net Time'].quantile(p_val)
+        actual_net_time_quantiles_row[percentile_key_name] = rl_data.format_time_mm_ss(target_net_time_for_percentile)
+    pacing_table_data_list_of_dicts.append(actual_net_time_quantiles_row)
+    
+    runtimeVars['pacingTable'] = pacing_table_data_list_of_dicts
+    session['runtime'] = runtimeVars
+    
+    if pacing_table_data_list_of_dicts:
+        # Create DataFrame using the first row (header_dict) as keys for columns
+        pacing_df_for_csv = pd.DataFrame(pacing_table_data_list_of_dicts[1:])
+        pacing_df_for_csv.columns = list(pacing_table_data_list_of_dicts[0].values())
+        
+        try:
+            pacing_df_for_csv.to_csv(filepath, index=False)
+            print(f"Saved pacing table to {filepath}")
+        except Exception as e:
+            print(f"Error saving pacing table to CSV: {e}")
+    else:
+        print("No pacing table data generated to save.")
+
+    return pacing_table_data_list_of_dicts
+
 #############################
 # Start of redline visuation method
 # competitorDetails will be search details of one competitor
@@ -1953,7 +2119,7 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList, io_pngStr
             if(config['showCatBar']): ShowCatBarCharts(df)
             if(config['showCorr']): ShowCorrInfo(df=df)
             if(config['showCutOffBar']): ShowBarChartCutOffEvent(df=df)
-
+            if(config['createPacingTable']): CreatePacingTable(df)
 
             
 
@@ -2066,6 +2232,7 @@ def redline_vis_competitor_html(competitorDetails, io_stringHtml, io_pngList, io
         "showHist" : False,
         "showHeat" : False,
         "showCatBar": False, 
+        "createPacingTable": False,  
 
         #competitor only
         "showGroupBar"  : True, 
@@ -2119,6 +2286,7 @@ def redline_vis_competitor_pdf(competitorDetails, io_stringHtml, io_pngList, io_
         "showHist" : False,
         "showHeat" : False,
         "showCatBar": False, 
+        "createPacingTable": False, 
 
         #competitor only
         "showGroupBar"  : True, 
@@ -2172,7 +2340,8 @@ def redline_vis_generic():
         "showCutOffBar" : True,
         "showHist" : True,
         "showHeat" : True,
-        "showCatBar": True, 
+        "showCatBar": True,  
+        "createPacingTable": True,
 
         #competitor only
         "showGroupBar"  : False, 
@@ -2233,7 +2402,8 @@ def redline_vis_generic_eventpdf(details, io_stringHtml, io_pngList, io_pngStrin
         "showCutOffBar" : True,
         "showHist" : True,
         "showHeat" : True,
-        "showCatBar": True, 
+        "showCatBar": True,  
+        "createPacingTable": True,
 
         #competitor only
         "showGroupBar"  : False, 
@@ -2290,6 +2460,7 @@ def redline_vis_generic_eventhtml(details, io_stringHtml, io_pngList, io_pngStri
         "showHist" : True,
         "showHeat" : True,
         "showCatBar": True, 
+        "createPacingTable": True, 
 
         #competitor only
         "showGroupBar"  : False, 
@@ -2333,26 +2504,26 @@ def redline_vis_developer():
         "pltPngOut" :          True,
         "createPdf" : False,
         
-        "competitorAnalysis" : True,
+        "competitorAnalysis" : False,
 
         #generic & Competitor.
         "showPie" : True,
-        "showBar" : True,
-        "showViolin" : True,
-        "showRadar" : True,
-        "showCorr" : True,
+        "showBar" : False,
+        "showViolin" : False,
+        "showRadar" : False,
+        "showCorr" : False,
 
         #generic only
-        "showCutOffBar" : True,
-        "showHist" : True,
-        "showHeat" : True,
-        "showCatBar": True, 
+        "showCutOffBar" : False,
+        "showHist" : False,
+        "showHeat" : False,
+        "showCatBar": False, 
+        "createPacingTable": True,
 
         #competitor only
-        "showGroupBar"  : True, 
-        "showCumulTime" : True,
-        'showTimeDiff' : True,
-
+        "showGroupBar"  : False, 
+        "showCumulTime" : False,
+        'showTimeDiff' : False,
     }
 
     # Store config in session

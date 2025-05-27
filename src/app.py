@@ -375,7 +375,7 @@ def feedback():
     ##############################################
     #print(f"Before redline_vis_developer() call...")    
     #redline_vis_developer()
-    #DEVELOPMENT print(f"After redline_vis_developer() call...") 
+    #print(f"After redline_vis_developer() call...") 
     ##############################################
     # HACK Code to be executed before the first request
     ##############################################
@@ -561,7 +561,22 @@ def postdisplayEvent():
         headers = df.columns.tolist()
 
         return render_template('table.html', headers=headers, data=data, title=title)
-               
+
+    if selected_view == "pacing_table" and selected_format == "html":
+
+        filepath = Path(rl_data.CSV_GENERIC_DIR) / Path("PacingTable" + rl_data.EVENT_DATA_LIST[index][0] + ".csv")
+        title = rl_data.EVENT_DATA_LIST[index][1] + " Pacing Chart"
+
+        # Load CSV file into a DataFrame
+        df = pd.read_csv(filepath, na_filter=False)
+     
+        # Convert DataFrame to list of dicts (records) for Jinja2
+        # This naturally excludes the index
+        data = df.to_dict(orient='records')
+        headers = df.columns.tolist()
+
+        return render_template('table.html', headers=headers, data=data, title=title)
+                   
     if selected_view == "visualization" and selected_format == "file":
 
         details = {
@@ -588,6 +603,10 @@ def postdisplayEvent():
     if selected_view == "orig_table" and selected_format == "file":
         # get the file path
         filepath = Path(rl_data.CSV_INPUT_DIR) / Path(rl_data.EVENT_DATA_LIST[index][0] + ".csv")
+
+    if selected_view == "pacing_table" and selected_format == "file":
+
+        filepath = Path(rl_data.CSV_GENERIC_DIR) / Path("PacingTable" + rl_data.EVENT_DATA_LIST[index][0] + ".csv")
 
     # dowload the file
     response = send_file(filepath, as_attachment=True)

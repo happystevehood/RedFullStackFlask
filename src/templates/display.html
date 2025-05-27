@@ -24,6 +24,11 @@
             <input type="radio" name="view_option" value="orig_table" {% if selected_view == 'orig_table' %}checked{% endif %}>
             Original 'cleaned' results shared by the event organisers
         </label>
+        <br/>
+        <label>
+            <input type="radio" name="view_option" value="pacing_table" {% if selected_view == 'pacing_table' %}checked{% endif %}>
+            Pacing Table Estimated (based on actual pace of athletes with +/-5% of Targetted Pacing Position)
+        </label>
         <br/><br/>
         <h3>Do you want to view the results as:</h3>
         <label>
