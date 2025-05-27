@@ -103,8 +103,9 @@ def tidyTheData(df, filename):
                     df.loc[x,event] = timedelta.total_seconds(datetime.strptime(rl_data.convert_to_standard_time(df.loc[x,event]                                   ) ,"%H:%M:%S.%f") 
                                                             - datetime.strptime(rl_data.convert_to_standard_time(df.loc[x,runtimeVars['EventListStart'][MyIndex-1]]) ,"%H:%M:%S.%f"))
  
-                    #if value less than 10 seconds, then somthing wrong, data not trust worthy so want to drop the row.
-                    if df.loc[x,event] < 10.0:
+                    # was originally 10 seconds, changeing to 45 seconds.....
+                    #if value less than 45 seconds, then somthing wrong, data not trust worthy so want to drop the row.
+                    if df.loc[x,event] < 45.0:
                         #print data...
                         if(OutputInfo == True): logger.debug(f"Removed Low value {filename} {x} {event} {df.loc[x,event]} {df.loc[x,'Pos']}")
                                                 
@@ -162,8 +163,8 @@ def tidyTheData(df, filename):
 
                             twoEventDuration = timedelta.total_seconds(datetime.strptime(rl_data.convert_to_standard_time(dforig.loc[x,event]                                   ),"%H:%M:%S.%f") 
                                                                      - datetime.strptime(rl_data.convert_to_standard_time(dforig.loc[x,runtimeVars['EventListStart'][MyIndex-2]]),"%H:%M:%S.%f"))
-
-                            if (twoEventDuration < 60.0):
+                            #change from 60 seconds to 90 seconds
+                            if (twoEventDuration < 90.0):
                                 if(OutputInfo == True): logger.debug(f"2 EventDurLow {filename} {x} {event} {twoEventDuration}")
                                 #drop the row
                                 df.drop(x, inplace = True)
@@ -202,8 +203,8 @@ def tidyTheData(df, filename):
             else:
                 df.loc[x,'Time Adj'] = 0.0
 
-            #if net time less than 6 minutes
-            if ((df.loc[x,'Net Time']) < 360.0):
+            #if net time less than 15 minutes (used to be 6 minutes)
+            if ((df.loc[x,'Net Time']) < 900.0):
                 #print data...
                 if(OutputInfo == True): logger.debug(f"Removed Low NetTime {filename} {x} {df.loc[x,'Net Time']} {df.loc[x,'Pos']}")
                 #drop the row
@@ -222,9 +223,9 @@ def tidyTheData(df, filename):
             #Store the event time.
             df.loc[x,'Calc Time'] = calculatedNetTime    
 
-            #if NetTime - Calculated time is less than 12 seconds
-            if (abs(df.loc[x,'Net Time'] - calculatedNetTime) > 12):                               
-                if(OutputInfo == True):  logger.debug(f"NetTime Mismatch {filename} {abs(df.loc[x,'Net Time'] - calculatedNetTime)}, {x}"  )
+            #if NetTime - Calculated time is more than 13 seconds
+            if (abs(df.loc[x,'Net Time'] - calculatedNetTime) > 13):                               
+                if(OutputInfo == True):  logger.debug(f"Warning: NetTime Mismatch {filename} {abs(df.loc[x,'Net Time'] - calculatedNetTime)}, {x}"  )
 
         except (ValueError, TypeError):
                  #Set Time values to None
@@ -577,7 +578,7 @@ def ShowHistAgeCat(df):
             Category_order_single = ["18-24", "25-29", "30-34", "35-39", "40-44",  "45-49", "50+"]
             colors_single =         ['red'  , 'tan'  , 'lime' , 'blue' , 'purple', 'orange', 'grey']
 
-            #Competitive Dobules Mixed Relay Category 
+            #Competitive Doubles & Team Relay Category 
             category_order_team = ["< 30", "30-44", "45+"]
             colors_team =         ['red' , 'tan'  , 'lime']
 
@@ -653,141 +654,304 @@ def ShowHistAgeCat(df):
 #############################
 # Bar chart Events
 #############################
-
-def ShowBarChartEvent(df,competitorIndex=-1):
-
-    maxEventList = []
-    q1EventList = []
-    medianEventList = []
-    q3EventList = []
-    q4EventList = []
-    minEventList = []
-    compList= []
-    maxTime = 0.0
-
+def ShowBarChartEvent(df, competitorIndex=-1):
     runtimeVars = session.get('runtime', {})
+    config = session.get('config', {})
 
-    if (competitorIndex == -1):
-        filepath = Path(rl_data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'Bar' + '.png')
-        runtimeVars['pngStrings'].append(rl_data.pngStringEventBarChart)
+    # --- Filename Generation ---
+    event_name_for_file = runtimeVars['eventDataList'][0].replace(" ", "_").replace("/", "_")
+    if competitorIndex == -1:
+        filename = f"{event_name_for_file}_BarChart.png"
+        filepath = Path(rl_data.PNG_GENERIC_DIR) / Path(filename)
+        if 'pngStrings' not in runtimeVars: runtimeVars['pngStrings'] = []
+        if 'pngList' not in runtimeVars: runtimeVars['pngList'] = []
+        runtimeVars['pngStrings'].append(rl_data.pngStringEventBarChart) 
     else:
-        filepath = Path(rl_data.PNG_COMP_DIR) / Path(runtimeVars['eventDataList'][0] + runtimeVars['competitorName'] + 'Bar' + '.png')
+        competitor_name_from_df = df.loc[competitorIndex, 'Name'] if 'Name' in df.columns else "Competitor"
+        competitor_name_for_file = competitor_name_from_df.replace(" ", "_").replace(",", "").replace("'", "")
+        filename = f"{event_name_for_file}_{competitor_name_for_file}_BarChart.png"
+        filepath = Path(rl_data.PNG_COMP_DIR) / Path(filename)
+        if 'pngStrings' not in runtimeVars: runtimeVars['pngStrings'] = []
+        if 'pngList' not in runtimeVars: runtimeVars['pngList'] = []
         runtimeVars['pngStrings'].append(rl_data.pngStringEventBarChartCompetitor)
     
-    #for PDF creation
     runtimeVars['pngList'].append(str(filepath))
+    session['runtime'] = runtimeVars
 
-    # check if file exists
-    if (os.path.isfile(filepath) == False):    
+    if os.path.isfile(filepath) and not config.get('forcePng', False):
+        print(f"File {filepath} already exists. Skipping generation.")
+        return
+        
+    #print(f"Generating Bar Chart with Top Legends for event {runtimeVars['eventDataList'][0]} at {filepath}")
 
-        config = session.get('config', {})
+    station_names = runtimeVars['EventList']
+    x_positions = np.arange(len(station_names))
 
-        # get the median time for each event.
-        for event in runtimeVars['EventList']:
-
-            maxEventList.append(df[event].quantile(0.90))
-            q1EventList.append(df[event].quantile(0.70))
-            medianEventList.append(df[event].quantile(0.50))
-            q3EventList.append(df[event].quantile(0.30))
-            q4EventList.append(df[event].quantile(0.10))
-            minEventList.append(df[event].min())
-
-            if (competitorIndex != -1):
-                compList.append(df.loc[competitorIndex,event])
-                if (df[event].quantile(0.90) > maxTime):
-                    maxTime = df[event].quantile(0.90)
-
-        fig, ax = plt.subplots(figsize=(10, 10))
-
-        plt.bar(runtimeVars['EventList'], maxEventList,       color='grey'   , label='70%-90%')
-        plt.bar(runtimeVars['EventList'], q1EventList,        color='red'    , label='50%-70%')
-        plt.bar(runtimeVars['EventList'], medianEventList,    color='orange' , label='30%-50%')
-        plt.bar(runtimeVars['EventList'], q3EventList,        color='green'  , label='10%-30%')
-        plt.bar(runtimeVars['EventList'], q4EventList,        color='purple'  , label='0%-10%')
-        plt.bar(runtimeVars['EventList'], minEventList,       color='blue'   , label='fastest')
-
-        if (competitorIndex != -1):
-            plt.plot(compList, marker='_', markersize=40.0, markeredgewidth=2.0, color='navy', linewidth=0.0)
-
-            #coorinates via trial an error.
-            plt.text(4.0,maxTime*1.02,'____='+ df.loc[competitorIndex,'Name'] , fontsize = 10, color='blue')
-
-
-        #keep the y axis showing multiples of 60
-        plt.yticks(range(0,int(max(maxEventList))+30,60))
-        plt.grid(color ='grey', linestyle ='-.', linewidth = 0.5, alpha = 0.4)
-
-        plt.tick_params(axis='x', labelrotation=90)
-        plt.ylabel('Time in Seconds')
-
-        if (competitorIndex == -1):
-            plt.title(runtimeVars['eventDataList'][1] + ' Bar Station Breakdown')
-        else:
-            plt.title(runtimeVars['eventDataList'][1] + ' ' + df.loc[competitorIndex,'Name'] + ' Bar Stations')
+    percentile_bands_data = {
+        '70-90%': [df[event].quantile(0.90) for event in station_names],
+        '50-70%': [df[event].quantile(0.70) for event in station_names],
+        '30-50%': [df[event].quantile(0.50) for event in station_names],
+        '10-30%': [df[event].quantile(0.30) for event in station_names],
+        '01-10%': [df[event].quantile(0.10) for event in station_names],
+        'Fastest': [df[event].min() for event in station_names]
+    }
     
-        plt.legend() 
+    band_colors = {
+        '70-90%': 'grey', '50-70%': 'red', '30-50%': 'orange',
+        '10-30%': 'green', '01-10%': 'purple', 'Fastest': 'blue'
+    }
+    plot_order_bands = ['70-90%', '50-70%', '30-50%', '10-30%', '01-10%', 'Fastest']
 
-        # Output/Show depending of global variable setting with some padding
-        if ( config['pltPngOut'] ): plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.5)
-        if ( config['pltShow'] ):   plt.show()
-        if ( config['pltPngOut'] or  config['pltShow']):   plt.close()
+    fig, ax = plt.subplots(figsize=(10, 10)) # Square figure
 
+    bar_handles_for_legend1 = [] 
+    bar_labels_for_legend1 = []
+
+    for band_label in plot_order_bands:
+        times = percentile_bands_data[band_label]
+        plot_times = [0 if pd.isna(t) else t for t in times]
+        bar_container = ax.bar(station_names, plot_times, color=band_colors[band_label], label=band_label, width=0.8)
+        if bar_container:
+             bar_handles_for_legend1.append(bar_container[0])
+             bar_labels_for_legend1.append(band_label)
+
+    competitor_handle = None
+    if competitorIndex != -1:
+        competitor_event_times = [df.loc[competitorIndex, event] for event in station_names]
+        competitor_plot_name = df.loc[competitorIndex, 'Name'] if 'Name' in df.columns else "Competitor"
+        
+        competitor_handle = ax.scatter(x_positions, competitor_event_times, 
+                   marker='P', s=100, color='cyan', 
+                   edgecolor='black', linewidth=1.5,
+                   label=f"{competitor_plot_name}'s Time", 
+                   zorder=10)
+
+        for i, time_val in enumerate(competitor_event_times):
+            if not pd.isna(time_val):
+                ax.annotate(rl_data.format_time_mm_ss(time_val),
+                            (x_positions[i], time_val),
+                            textcoords="offset points", xytext=(0, 8), # Slightly more offset for marker
+                            ha='center', fontsize=7, color='black',
+                            bbox=dict(boxstyle="round,pad=0.15", fc="white", ec="none", alpha=0.75))
+                            
+    max_y_val_for_plot = 0
+    valid_top_band_times = [t for t in percentile_bands_data['70-90%'] if not pd.isna(t)]
+    if valid_top_band_times: max_y_val_for_plot = max(valid_top_band_times)
+
+    if competitorIndex != -1 and 'competitor_event_times' in locals():
+        valid_comp_times = [t for t in competitor_event_times if not pd.isna(t)]
+        if valid_comp_times: max_y_val_for_plot = max(max_y_val_for_plot, max(valid_comp_times))
+    
+    # Add more padding to Y-lim if legends are at the top inside
+    #ax.set_ylim(0, max_y_val_for_plot * 1.25 if max_y_val_for_plot > 0 else 300) 
+    ax.set_ylim(0, max_y_val_for_plot * 1.05 if max_y_val_for_plot > 0 else 300) 
+
+    current_ylim_top = ax.get_ylim()[1]
+    step_y = 60 if current_ylim_top > 240 else 30 
+    if step_y <= 0: step_y = 30 
+    ax.set_yticks(np.arange(0, current_ylim_top + step_y, step_y))
+
+    ax.grid(True, axis='y', linestyle=':', color='grey', alpha=0.6)
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(station_names, rotation=60, ha="right", fontsize=9)
+    
+    ax.tick_params(axis='y', labelsize=9)
+    ax.set_ylabel('Time in Seconds', fontsize=10)
+    # xlabel can be omitted if x-tick labels are descriptive and space is needed at bottom
+    # ax.set_xlabel('Workout Station', fontsize=10) 
+
+    # --- Title ---
+    # Reduced title padding to bring it closer to the plot
+    title_pad = 10 
+    if competitorIndex == -1:
+        ax.set_title(f"{runtimeVars['eventDataList'][1]}\nStation Time Distribution", fontsize=13, pad=title_pad)
+    else:
+        competitor_title_name = df.loc[competitorIndex, 'Name'] if 'Name' in df.columns else "Selected Competitor"
+        ax.set_title(f"{runtimeVars['eventDataList'][1]} - {competitor_title_name}\nPerformance vs. Time Percentiles", fontsize=13, pad=title_pad)
+    
+    # --- Legend Handling: Two separate legends at the top ---
+    # Legend 1: Percentile Bands (reversed for visual stacking order)
+    leg1_handles = bar_handles_for_legend1[::-1]
+    leg1_labels = bar_labels_for_legend1[::-1]
+    
+    legend1 = ax.legend(leg1_handles, leg1_labels,
+                        loc='upper center', 
+                        bbox_to_anchor=(0.5, 0.99), # High up, centered
+                        ncol=3, # Try to fit in 2 rows if 6 items
+                        fancybox=True, shadow=False, fontsize=7,
+                        handletextpad=0.4, columnspacing=0.8, labelspacing=0.3,
+                        title="Time at Percentile of Athletes", title_fontsize=7.5)
+    if legend1: legend1.get_title().set_fontweight('bold')
+
+    if competitorIndex != -1 and competitor_handle:
+        # Legend 2: Competitor's Time
+        # Place it slightly offset from the first legend, or in a different corner
+        legend2 = ax.legend([competitor_handle], [competitor_handle.get_label()],
+                            loc='upper right', # Or 'upper left'
+                            bbox_to_anchor=(0.98, 0.99), # Adjust to fit, e.g., top-right corner
+                            fancybox=True, shadow=False, fontsize=8, frameon=True, facecolor='white', edgecolor='lightgray')
+        ax.add_artist(legend1) # IMPORTANT: Add the first legend back
+
+    # Adjust subplot parameters to minimize unused space and ensure legends fit
+    # We want to maximize plot area, so reduce bottom margin significantly
+    # Top margin needs to be just enough for title and upper legends
+    plt.subplots_adjust(left=0.08, right=0.95, top=0.97, bottom=0.15) # Reduced bottom margin
+
+    if config.get('pltPngOut', False):
+        plt.savefig(filepath, bbox_inches='tight', pad_inches=0.1)
+        #print(f"Saved square bar chart with top legends to {filepath}")
+    if config.get('pltShow', False):
+        plt.show()
+    
+    if config.get('pltPngOut', False) or config.get('pltShow', False):
+        plt.close(fig)
+    
+    session['runtime'] = runtimeVars
 
 #############################
 # Violin chart Events
 #############################
 
-def ShowViolinChartEvent(df,competitorIndex=-1):
-
+def ShowViolinChartEvent(df, competitorIndex=-1):
     runtimeVars = session.get('runtime', {})
+    config = session.get('config', {})
 
-    if (competitorIndex == -1):
-        filepath = Path(rl_data.PNG_GENERIC_DIR) / Path(runtimeVars['eventDataList'][0] + 'Violin' + '.png')
+    # --- Filename Generation ---
+    event_name_for_file = runtimeVars['eventDataList'][0].replace(" ", "_").replace("/", "_")
+    if competitorIndex == -1:
+        filename = f"{event_name_for_file}_Violin.png"
+        filepath = Path(rl_data.PNG_GENERIC_DIR) / Path(filename)
+        if 'pngStrings' not in runtimeVars: runtimeVars['pngStrings'] = []
+        if 'pngList' not in runtimeVars: runtimeVars['pngList'] = []
         runtimeVars['pngStrings'].append(rl_data.pngStringEventViolinChart)
     else:
-        filepath = Path(rl_data.PNG_COMP_DIR) / Path(runtimeVars['eventDataList'][0] + runtimeVars['competitorName'] + 'Violin' + '.png')
+        competitor_name = df.loc[competitorIndex, 'Name'] if 'Name' in df.columns else "Competitor"
+        competitor_name_for_file = competitor_name.replace(" ", "_").replace(",", "").replace("'", "")
+        filename = f"{event_name_for_file}_{competitor_name_for_file}_Violin.png"
+        filepath = Path(rl_data.PNG_COMP_DIR) / Path(filename)
+        if 'pngStrings' not in runtimeVars: runtimeVars['pngStrings'] = []
+        if 'pngList' not in runtimeVars: runtimeVars['pngList'] = []
         runtimeVars['pngStrings'].append(rl_data.pngStringEventViolinChartCompetitor)
-
-    #for PDF creation
-    runtimeVars['pngList'].append(str(filepath))
-
-    # check if file exists  
-    if (os.path.isfile(filepath) == False):
-
-        config = session.get('config', {})
-
-        compList= []
-
-        # compile list of comeptitor times.
-        if (competitorIndex != -1):
-            for event in runtimeVars['EventList']:
-                compList.append(df.loc[competitorIndex,event])
-
-        #Draw Violin plot. 600 value used to exclude outliers, but should be chosen algorithmically.
-        g=sns.violinplot(data=df[df[runtimeVars['EventList']]<600.0][runtimeVars['EventList']] , inner='box', cut=1)
-        g.figure.set_size_inches(10,10)
-
-        if (competitorIndex != -1):
-            plt.plot(compList, marker='_', markersize=40.0, markeredgewidth=2.0, color='navy', linewidth=0.0)
-
-            #coorinates via trial an error.
-            plt.text(4.0,645,'____='+ df.loc[competitorIndex,'Name'], color='navy' , fontsize = 10)
-
-        plt.yticks(range(0,660+30,60))
-        plt.tick_params(axis='x', labelrotation=90)
-        plt.ylabel('Time in Seconds')
-        plt.grid(color ='grey', linestyle ='-.', linewidth = 0.5, alpha = 0.4)
-        
-        if (competitorIndex == -1):
-            plt.title(runtimeVars['eventDataList'][1] + ' Violin Station Breakdown')
-        else:
-            plt.title(runtimeVars['eventDataList'][1] + ' ' + df.loc[competitorIndex,'Name'] + ' Violin Stations')
     
-        # Output/Show depending of global variable setting with some padding
-        if ( config['pltPngOut'] ): plt.savefig(filepath , bbox_inches='tight', pad_inches = 0.5)
-        if ( config['pltShow'] ):   plt.show()
-        if ( config['pltPngOut'] or  config['pltShow']):   plt.close()
+    runtimeVars['pngList'].append(str(filepath))
+    session['runtime'] = runtimeVars
 
+    if os.path.isfile(filepath) and not config.get('forcePng', False):
+        print(f"File {filepath} already exists. Skipping generation.")
+        return
+        
+    #print(f"Generating Violin Chart for event {runtimeVars['eventDataList'][0]} at {filepath}")
+
+    station_data_df = df[runtimeVars['EventList']].copy()
+    for col in runtimeVars['EventList']:
+        station_data_df[col] = pd.to_numeric(station_data_df[col], errors='coerce')
+
+    all_station_times_flat = station_data_df.values.flatten()
+    all_station_times_flat = all_station_times_flat[~np.isnan(all_station_times_flat)] 
+    
+    cutoff_time = 600.0 
+    if len(all_station_times_flat) > 0:
+        pass 
+
+    df_melted = station_data_df.melt(var_name='Station', value_name='Time (s)')
+    df_melted['Station'] = pd.Categorical(df_melted['Station'], categories=runtimeVars['EventList'], ordered=True)
+    df_melted_filtered = df_melted[df_melted['Time (s)'] < cutoff_time].dropna(subset=['Time (s)'])
+
+    plt.figure(figsize=(12, 12))
+    ax = plt.gca() # Get current axes to use for annotations later
+
+    if not df_melted_filtered.empty:
+        sns.violinplot(ax=ax, x='Station', y='Time (s)', data=df_melted_filtered, 
+                       order=runtimeVars['EventList'], 
+                       inner='quartile', 
+                       cut=1,          
+                       hue='Station',         
+                       palette='viridis',     
+                       legend=False,          
+                       linewidth=1.5,   
+                       density_norm='width')
+    else:
+        print("Warning: All data filtered out by cutoff time. Plotting empty chart structure.")
+        ax.set_xticks(np.arange(len(runtimeVars['EventList'])))
+        ax.set_xticklabels(runtimeVars['EventList'], rotation=90, fontsize=9)
+
+    if competitorIndex != -1:
+        compList_station_times_raw = [] # Store raw times for labeling
+        compList_station_times_plot = [] # Store potentially clamped times for plotting marker
+
+        for event in runtimeVars['EventList']:
+            comp_time = df.loc[competitorIndex, event]
+            try:
+                comp_time_numeric = float(comp_time)
+                compList_station_times_raw.append(comp_time_numeric)
+                # If competitor time is above cutoff, clamp it for marker visibility
+                plot_time = min(comp_time_numeric, cutoff_time -1) if not pd.isna(comp_time_numeric) else np.nan
+                compList_station_times_plot.append(plot_time)
+            except (ValueError, TypeError):
+                compList_station_times_raw.append(np.nan)
+                compList_station_times_plot.append(np.nan)
+
+        x_positions = np.arange(len(runtimeVars['EventList']))
+        
+        competitor_name_legend = df.loc[competitorIndex, 'Name'] if 'Name' in df.columns else "Competitor"
+
+        plt.scatter(x_positions, compList_station_times_plot, 
+                    marker='D', s=80, color='orangered', 
+                    edgecolor='black', linewidth=1,
+                    label=f"{competitor_name_legend}'s Time", 
+                    zorder=10)
+        
+        # Add mm:ss labels to each competitor marker
+        for i, raw_time in enumerate(compList_station_times_raw):
+            plot_time_for_marker = compList_station_times_plot[i] # Y-coordinate of the marker
+            if not pd.isna(raw_time) and not pd.isna(plot_time_for_marker):
+                ax.annotate(rl_data.format_time_mm_ss(raw_time), # Label with the raw, un-clamped time
+                            (x_positions[i], plot_time_for_marker),
+                            textcoords="offset points", 
+                            xytext=(0, 7), # Offset 7 points vertically upwards
+                            ha='center', 
+                            fontsize=7, 
+                            color='black', # Or 'orangered' to match marker
+                            bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", lw=0.5, alpha=0.7))
+
+        plt.legend(loc='upper right', fontsize=9)
+
+    max_y_for_ticks = cutoff_time
+    # Ensure compList_station_times_plot exists and is populated before using it in nanmax
+    if competitorIndex != -1 and 'compList_station_times_plot' in locals() and len(compList_station_times_plot) > 0:
+         valid_comp_plot_times = [t for t in compList_station_times_plot if not pd.isna(t)]
+         if valid_comp_plot_times: # Check if there are any valid (non-NaN) times
+            max_y_for_ticks = max(cutoff_time, np.nanmax(valid_comp_plot_times))
+    
+    upper_ytick_limit = max_y_for_ticks + 60
+    if upper_ytick_limit <=0 : upper_ytick_limit = 60 
+    step = 60 if upper_ytick_limit > 240 else 30 # Adjust step based on range for better ticking
+    plt.yticks(np.arange(0, upper_ytick_limit, step))
+
+    plt.tick_params(axis='x', labelrotation=90, labelsize=9)
+    plt.tick_params(axis='y', labelsize=9)
+    plt.ylabel('Time in Seconds', fontsize=10)
+    plt.xlabel('Workout Station', fontsize=10)
+    plt.grid(True, linestyle=':', color='grey', alpha=0.6)
+    
+    if competitorIndex == -1:
+        plt.title(f"{runtimeVars['eventDataList'][1]} Station Time Distribution", fontsize=14)
+    else:
+        competitor_title_name = df.loc[competitorIndex, 'Name'] if 'Name' in df.columns else "Selected Competitor"
+        plt.title(f"{runtimeVars['eventDataList'][1]} - {competitor_title_name}\nStation Time vs. Distribution", fontsize=14)
+    
+    plt.tight_layout(pad=1.0)
+
+    if config.get('pltPngOut', False):
+        plt.savefig(filepath, bbox_inches='tight', pad_inches=0.3)
+        #print(f"Saved violin chart to {filepath}")
+    if config.get('pltShow', False):
+        plt.show()
+    
+    if config.get('pltPngOut', False) or config.get('pltShow', False):
+        plt.close()
+    
+    session['runtime'] = runtimeVars
 
 #############################
 # Bar chart Cut Off Events
@@ -999,6 +1163,665 @@ def ShowScatterPlot(df, eventName, corr, competitorIndex=-1):
         if ( config['pltShow'] ):   plt.show()
         if ( config['pltPngOut'] or  config['pltShow']):   plt.close()
 
+#############################
+# Bar chart Events
+#############################
+
+def ShowRadar(df, competitorIndex=-1):
+    runtimeVars = session.get('runtime', {})
+    config = session.get('config', {})
+
+    # --- Filename Generation (simplified for clarity in this snippet) ---
+    if competitorIndex == -1:
+        event_name_for_file = runtimeVars['eventDataList'][0].replace(" ", "_").replace("/", "_")
+        filename = f"{event_name_for_file}Radar.png" # New filename
+        filepath = Path(rl_data.PNG_GENERIC_DIR) / Path(filename)
+        runtimeVars['pngStrings'].append(rl_data.pngStringEventRadarChart) # Ensure this string is appropriate
+    else:
+        competitor_name_for_file = df.loc[competitorIndex, 'Name'].replace(" ", "_").replace(",", "").replace("'", "")
+        event_name_for_file = runtimeVars['eventDataList'][0].replace(" ", "_").replace("/", "_")
+        filename = f"{event_name_for_file}{competitor_name_for_file}Radar.png"
+        filepath = Path(rl_data.PNG_COMP_DIR) / Path(filename)
+        runtimeVars['pngStrings'].append(rl_data.pngStringEventRadarChartCompetitor)
+    
+    runtimeVars['pngList'].append(str(filepath))
+
+    # Check if file exists or force generation
+    if not os.path.isfile(filepath):    
+        num_vars = len(runtimeVars['EventList'])
+        angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
+        
+        fig, ax = plt.subplots(figsize=(9, 9), subplot_kw=dict(polar=True)) # Use consistent larger size
+
+        if competitorIndex == -1:
+            # --- Generic Radar: Median Actual Times (Y-axis in seconds) ---
+            # Faster times (lower seconds) will be closer to the center.
+            
+            median_event_times_actual = []
+            station_axis_labels = [] # For station names only on this plot
+
+            for event in runtimeVars['EventList']:
+                median_time = df[event].quantile(0.50)
+                median_event_times_actual.append(median_time)
+                station_axis_labels.append(event) # Just the event name for axis labels
+
+            # Data to plot (actual median times), close the loop for plot
+            values_to_plot = np.concatenate((median_event_times_actual, [median_event_times_actual[0]]))
+            plot_angles = angles + [angles[0]] # Close the loop for angles as well
+
+            ax.plot(plot_angles, values_to_plot, linewidth=2, linestyle='solid', label='Median Time (s)', color='darkorange', zorder=2)
+            ax.fill(plot_angles, values_to_plot, color='gold', alpha=0.25, zorder=1)
+
+            # Set Y-axis limits based on actual median times
+            min_y_val = 0 # Or min(median_event_times_actual) * 0.9 if you don't want to start at 0
+            max_y_val = max(median_event_times_actual) * 1.1 # Extend a bit for labels
+            ax.set_ylim(min_y_val, max_y_val)
+
+            # Add labels for each data point on the median line
+            for i, value in enumerate(median_event_times_actual):
+                angle_rad = angles[i] # Use original angles (not plot_angles) for label placement
+                # Add a small offset to place label slightly outside the point
+                offset = (max_y_val - min_y_val) * 0.05 # 5% of range as offset
+                ax.text(angle_rad, value + offset, f"{value:.0f}s", 
+                        horizontalalignment='center', verticalalignment='center', # Adjust as needed
+                        fontsize=7, color='black', bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="gray", lw=0.5, alpha=0.7))
+
+            # Y-axis ticks and labels (showing seconds)
+            num_yticks = 5 
+            yticks = np.linspace(min_y_val if min_y_val > 0 else ax.get_yticks()[1], max_y_val, num_yticks, endpoint=True) # Avoid 0 if min_y_val is 0 for first tick
+            ax.set_yticks(yticks)
+            ax.set_yticklabels([f"{val:.0f}s" for val in yticks])
+
+            ax.set_xticks(angles) # Use original angles for xticks
+            ax.set_xticklabels(station_axis_labels) # Set x-tick labels to event names
+            
+            plt.title(f"{runtimeVars['eventDataList'][1]}\nMedian Performance Times (Seconds)", size=14, color='black', y=1.1)
+            ax.legend(loc='upper right', bbox_to_anchor=(1.15, 1.1)) # Moved legend
+
+        else: # competitorIndex != -1 (Individual Competitor Plot - kept as your preferred version)
+            compEventPercentiles = []
+            compEventLabels = [] 
+
+            for event in runtimeVars['EventList']:
+                raw_rank = df.loc[competitorIndex, event + ' Rank']
+                max_rank = df[event + ' Rank'].max() 
+               
+                valid_ranks = df[event + ' Rank'].dropna()
+                if len(valid_ranks) <= 1:
+                    percentile = 50 # Default for no meaningful rank
+                else:
+                    percentile = ((raw_rank) / max_rank) * 100 if max_rank > 0 else 0
+
+                percentile = max(0, min(100, percentile)) # Clamp
+                eventLabelString = f"{event}\nTop {percentile:.1f}%"
+
+                compEventPercentiles.append(percentile)
+                compEventLabels.append(eventLabelString)
+
+            plot_angles = angles + [angles[0]] # Ensure plot_angles is defined here too
+            values_to_plot = np.concatenate((compEventPercentiles, [compEventPercentiles[0]]))
+            
+            ax.plot(plot_angles, values_to_plot, linewidth=2, linestyle='solid', label='Competitor %ile Rank', color='dodgerblue', zorder=3)
+            ax.fill(plot_angles, values_to_plot, color='dodgerblue', alpha=0.3, zorder=2)
+
+            median_percentiles_benchmark = np.array([50] * (num_vars + 1)) 
+            ax.plot(plot_angles, median_percentiles_benchmark, linewidth=1, linestyle='--', color='brown', label='Median (50th %ile)', zorder=1)
+            
+            # This y_lim inversion was key to your "Top X%" label making sense with lower %ile being better graphically
+            ax.set_ylim(100, 0) 
+            ax.set_yticks(np.arange(0, 101, 20)) 
+            ax.set_yticklabels(["Top % ", "Top 20%", "Top 40%", "Top 60%", "Top 80%", " "]) 
+
+            ax.set_xticks(plot_angles[:-1])
+            ax.set_xticklabels(compEventLabels) 
+            
+            label_padding = -5 # Experiment with this value (e.g., 10, 15, 20, 25) 
+            ax.tick_params(axis='x', pad=label_padding)
+
+            plt.title(f"{runtimeVars['eventDataList'][1]}\n{df.loc[competitorIndex,'Name']} Performance Rank Percentile",y=1.12,size=14, color='black')
+            ax.legend(loc='upper right', bbox_to_anchor=(1.25, 1.1)) # Adjusted anchor for more space
+
+        # --- Common Styling for Both Plot Types (Mostly for competitor plot now, generic has its own) ---
+        if competitorIndex != -1 : # Apply this specific styling only to competitor plot
+            ax.yaxis.grid(True, linestyle='--', color='gray', alpha=0.7)
+            ax.xaxis.grid(True, linestyle='--', color='gray', alpha=0.7)
+
+        # Station labels - adjust font size and padding if they overlap
+        # This loop applies to both, but specific font sizes/alignments might differ
+        for label, angle_rad_val in zip(ax.get_xticklabels(), angles): # Use original angles for positioning
+            if np.isclose(angle_rad_val, np.pi * 0.5) or np.isclose(angle_rad_val, np.pi * 1.5):
+                label.set_horizontalalignment('center')
+            elif (0 <= angle_rad_val < np.pi * 0.5) or (np.pi * 1.5 < angle_rad_val < np.pi * 2):
+                label.set_horizontalalignment('left')
+            else:
+                label.set_horizontalalignment('right')
+            
+            label.set_fontsize(9 if competitorIndex != -1 else 8) # Slightly smaller for generic if needed
+            label.set_rotation_mode('anchor')
+
+
+        ax.tick_params(axis='y', labelsize=8, colors='dimgray')
+        ax.tick_params(axis='x', pad=15 if competitorIndex != -1 else 20) # More padding for generic if labels are simpler
+
+        # Legend position for generic plot was set earlier. For competitor plot:
+        if competitorIndex != -1:
+            legend = ax.get_legend() # Retrieve already created legend
+            if legend:
+                 legend.set_loc('upper right')
+                 legend.set_bbox_to_anchor((1.27, 1.13)) # Consistent with your else block
+                 for text in legend.get_texts():
+                    text.set_color('dimgray')
+        else: # Generic plot legend
+            legend = ax.get_legend()
+            if legend:
+                legend.set_loc('upper right')
+                legend.set_bbox_to_anchor((1.25, 1.05)) # Try to fit inside or slightly outside
+                for text in legend.get_texts():
+                    text.set_color('dimgray')
+
+
+
+        if config.get('pltPngOut', False):
+            plt.savefig(filepath, bbox_inches='tight', pad_inches=0.2)
+        if config.get('pltShow', False):
+            plt.show()
+        
+        if config.get('pltPngOut', False) or config.get('pltShow', False) : # Corrected logic
+            plt.close(fig)
+
+    session['runtime'] = runtimeVars
+
+
+
+def ShowGroupBarChart(df, competitorIndex=-1):
+    runtimeVars = session.get('runtime', {})
+    config = session.get('config', {})
+
+    if competitorIndex == -1:
+        print("Error: ShowGroupBarChart requires a valid competitorIndex.")
+        return
+
+    # --- Filename Generation ---
+    competitor_name = df.loc[competitorIndex, 'Name']
+    competitor_name_for_file = competitor_name.replace(" ", "_").replace(",", "").replace("'", "")
+    event_name_for_file = runtimeVars['eventDataList'][0].replace(" ", "_").replace("/", "_")
+    filename = f"{event_name_for_file}_{competitor_name_for_file}BarSimilar.png" # More descriptive
+    filepath = Path(rl_data.PNG_COMP_DIR) / Path(filename)
+    
+    # Ensure pngStrings and pngList are handled correctly if they are part of runtimeVars
+    if 'pngStrings' not in runtimeVars: runtimeVars['pngStrings'] = []
+    if 'pngList' not in runtimeVars: runtimeVars['pngList'] = []
+    
+    runtimeVars['pngStrings'].append(rl_data.pngStringEventGroupBarChartCompetitor) # Make sure this constant exists
+    runtimeVars['pngList'].append(str(filepath))
+    session['runtime'] = runtimeVars # Save early in case of return
+
+    # Check if file exists or force generation
+    if os.path.isfile(filepath) and not config.get('forcePng', False):
+        print(f"File {filepath} already exists. Skipping generation.")
+        return
+    
+    #print(f"Generating Group Bar Chart for {competitor_name} at {filepath}")
+
+    # 0. Get the competitor's time for each event
+    competitor_event_times = []
+    station_names = runtimeVars['EventList'] # Use this for x-axis labels
+
+    for event in station_names:
+        competitor_event_times.append(df.loc[competitorIndex, event])
+     
+    # 1. Get competitors with similar finish times
+    competitor_net_time = df.loc[competitorIndex, 'Net Time']
+
+    lower_bound_time = competitor_net_time * (1 - rl_data.TIME_SIMILARITY_PERCENTAGE)
+    upper_bound_time = competitor_net_time * (1 + rl_data.TIME_SIMILARITY_PERCENTAGE)
+
+    similarFinishers_df = df[
+        (df['Net Time'] >= lower_bound_time) & 
+        (df['Net Time'] <= upper_bound_time) &
+        (df.index != competitorIndex) # Exclude the competitor themselves (using index)
+    ].copy() # Use .copy() to avoid SettingWithCopyWarning if you modify it later
+
+    # 2. Get the average time for similar finishers for each event
+    similar_finishers_avg_times = []
+    if not similarFinishers_df.empty:
+        for event in station_names:
+            # Ensure we only average valid (non-NaN) times
+            valid_times = similarFinishers_df[event].dropna()
+            if not valid_times.empty:
+                similar_finishers_avg_times.append(valid_times.mean())
+            else:
+                similar_finishers_avg_times.append(np.nan) # Or 0, or competitor's time as fallback
+    else:
+        print(f"No similar finishers found for {competitor_name}.")
+        # Fallback: use competitor's times or NaNs if no similar finishers
+        similar_finishers_avg_times = [np.nan] * len(station_names) # Or competitor_event_times
+
+    # --- Create Grouped Bar Chart ---
+    x = np.arange(len(station_names))  # the label locations
+    width = 0.35  # the width of the bars
+
+    fig, ax = plt.subplots(figsize=(14, 14)) # Adjusted figsize for better label fitting
+
+    # Plot competitor's bars
+    rects1 = ax.bar(x - width/2, competitor_event_times, width, 
+                    label=f"{competitor_name}'s Time", color='cornflowerblue')
+
+    # Plot similar finishers' average bars
+    # Handle potential NaNs in similar_finishers_avg_times if no similar finishers or no data for an event
+    # For plotting, replace NaN with 0 or another placeholder if necessary, or filter out.
+    # Here, we'll plot them, NaNs will appear as gaps if not handled by bar function.
+    # A better approach is to ensure similar_finishers_avg_times has numeric values (e.g. fallback to 0 or competitor time)
+    
+    # Ensure similar_finishers_avg_times has numeric values for plotting
+    # If an average is NaN (e.g., no similar finishers or no data for that event), 
+    # you might want to plot 0, or skip that bar, or use competitor's time.
+    # For this example, let's replace NaN with 0 for plotting, but indicate this limitation.
+    plotable_similar_times = [0 if np.isnan(t) else t for t in similar_finishers_avg_times]
+
+    rects2 = ax.bar(x + width/2, plotable_similar_times, width, 
+                    label='Avg. Similar Finishers', color='lightcoral')
+
+    # Add some text for labels, title and custom x-axis tick labels, etc.
+    ax.set_ylabel('Time (seconds)')
+    ax.set_title(f'Station Time Comparison: {competitor_name} vs. {similarFinishers_df.shape[0]} Similar Finishers (+/- {rl_data.TIME_SIMILARITY_PERCENTAGE*100:.0f}% Net Time)')
+    ax.set_xticks(x)
+    ax.set_xticklabels(station_names, rotation=45, ha="right") # Rotate for readability
+    ax.legend()
+
+    # Function to add labels on top of bars
+    def autolabel(rects):
+        for rect in rects:
+            height = rect.get_height()
+            if not np.isnan(height) and height > 0: # Only label if height is valid and positive
+                ax.annotate(f'{height:.0f}s',
+                            xy=(rect.get_x() + rect.get_width() / 2, height),
+                            xytext=(0, 3),  # 3 points vertical offset
+                            textcoords="offset points",
+                            ha='center', va='bottom', fontsize=8)
+
+    autolabel(rects1)
+    autolabel(rects2)
+
+    fig.tight_layout() # Adjust layout to make room for labels
+
+    # Set Y-axis limit slightly above the max plotted value
+    all_plotted_times = [t for t in competitor_event_times + plotable_similar_times if not np.isnan(t)]
+    if all_plotted_times:
+        ax.set_ylim(0, max(all_plotted_times) * 1.15) # Add 15% padding
+    else:
+        ax.set_ylim(0,100) # Default if no data
+
+    if config.get('pltPngOut', False):
+        plt.savefig(filepath, bbox_inches='tight', pad_inches=0.2)
+        #print(f"Saved chart to {filepath}")
+    if config.get('pltShow', False):
+        plt.show()
+    
+    # Always close the plot after saving/showing to free up memory
+    plt.close(fig)
+
+    session['runtime'] = runtimeVars # Save runtimeVars back to session
+
+
+def ShowCumulativeTimeComparison(df, competitorIndex=-1):
+    if competitorIndex == -1:
+        print("Error: ShowCumulativeTimeComparison requires a valid competitorIndex.")
+        return
+
+    runtimeVars = session.get('runtime', {})
+    config = session.get('config', {})
+
+    competitor_name = df.loc[competitorIndex, 'Name']
+    competitor_name_for_file = competitor_name.replace(" ", "_").replace(",", "").replace("'", "")
+    event_name_for_file = runtimeVars['eventDataList'][0].replace(" ", "_").replace("/", "_")
+    filename = f"{event_name_for_file}_{competitor_name_for_file}CumulTime.png"
+    filepath = Path(rl_data.PNG_COMP_DIR) / Path(filename)
+    
+    if 'pngStrings' not in runtimeVars: runtimeVars['pngStrings'] = []
+    if 'pngList' not in runtimeVars: runtimeVars['pngList'] = []
+    # Ensure you have a unique string for this chart type if needed for your framework
+    runtimeVars['pngStrings'].append(rl_data.pngStringEventCumulativeChartCompetitor) 
+    runtimeVars['pngList'].append(str(filepath))
+    session['runtime'] = runtimeVars
+
+    if os.path.isfile(filepath) and not config.get('forcePng', False):
+        print(f"File {filepath} already exists. Skipping generation.")
+        return
+        
+    #print(f"Generating Cumulative Time Chart for {competitor_name} at {filepath}")
+
+    station_names = runtimeVars['EventList']
+    competitor_event_times = [df.loc[competitorIndex, event] for event in station_names]
+
+    # --- Get Similar Finishers' Average Station Times ---
+    competitor_net_time = df.loc[competitorIndex, 'Net Time']
+    lower_bound_time = competitor_net_time * (1 - rl_data.TIME_SIMILARITY_PERCENTAGE)
+    upper_bound_time = competitor_net_time * (1 + rl_data.TIME_SIMILARITY_PERCENTAGE)
+    similarFinishers_df = df[
+        (df['Net Time'] >= lower_bound_time) & 
+        (df['Net Time'] <= upper_bound_time) &
+        (df.index != competitorIndex)
+    ].copy()
+
+    similar_finishers_avg_station_times = []
+    if not similarFinishers_df.empty:
+        for event in station_names:
+            valid_times = similarFinishers_df[event].dropna()
+            if not valid_times.empty:
+                similar_finishers_avg_station_times.append(valid_times.mean())
+            else:
+                competitor_event_time_for_fallback = df.loc[competitorIndex, event]
+                similar_finishers_avg_station_times.append(competitor_event_time_for_fallback if not np.isnan(competitor_event_time_for_fallback) else 0)
+    else:
+        print(f"No similar finishers found for {competitor_name}. Using competitor's times for comparison line.")
+        similar_finishers_avg_station_times = [t if not np.isnan(t) else 0 for t in competitor_event_times]
+
+
+    # Calculate cumulative times, prepend 0 for the start
+    competitor_cumulative_times = np.concatenate(([0], np.cumsum(competitor_event_times)))
+    similar_finishers_cumulative_avg = np.concatenate(([0], np.cumsum(similar_finishers_avg_station_times)))
+    
+    x_labels = ['Start'] + station_names
+    x_ticks_positions = np.arange(len(x_labels))
+
+    fig, ax = plt.subplots(figsize=(14, 14)) # Slightly adjusted figsize for labels
+
+    # Plot Competitor Line
+    line1, = ax.plot(x_ticks_positions, competitor_cumulative_times, marker='o', linestyle='-', 
+                     label=f"{competitor_name}", color='dodgerblue', linewidth=2, markersize=5)
+    # Plot Similar Finishers Line
+    line2, = ax.plot(x_ticks_positions, similar_finishers_cumulative_avg, marker='x', linestyle='--', 
+                     label='Avg. Similar Finishers', color='lightcoral', linewidth=2, markersize=5)
+
+    # Add mm:ss labels to each point
+    for i, txt_val in enumerate(competitor_cumulative_times):
+        if i > 0: # Don't label the "Start" at 00:00 unless desired
+            ax.annotate(rl_data.format_time_mm_ss(txt_val), 
+                        (x_ticks_positions[i], competitor_cumulative_times[i]),
+                        textcoords="offset points", xytext=(0,5), ha='center', fontsize=7, color=line1.get_color())
+
+    for i, txt_val in enumerate(similar_finishers_cumulative_avg):
+        if i > 0: # Don't label the "Start"
+            ax.annotate(rl_data.format_time_mm_ss(txt_val), 
+                        (x_ticks_positions[i], similar_finishers_cumulative_avg[i]),
+                        textcoords="offset points", xytext=(0,-12), ha='center', fontsize=7, color=line2.get_color())
+
+
+    # Fill between the lines to show difference
+    ax.fill_between(x_ticks_positions, competitor_cumulative_times, similar_finishers_cumulative_avg, 
+                    where=competitor_cumulative_times >= similar_finishers_cumulative_avg, 
+                    facecolor='lightcoral', alpha=0.2, interpolate=True) # Label removed for cleaner legend
+    ax.fill_between(x_ticks_positions, competitor_cumulative_times, similar_finishers_cumulative_avg, 
+                    where=competitor_cumulative_times < similar_finishers_cumulative_avg, 
+                    facecolor='lightgreen', alpha=0.2, interpolate=True) # Label removed
+
+    ax.set_xlabel("Progression through Stations", fontsize=10)
+    ax.set_ylabel("Cumulative Time (mm:ss)", fontsize=10)
+    ax.set_title(f"Cumulative Race Time: {competitor_name} vs. {similarFinishers_df.shape[0]} Similar Finishers (+/- {rl_data.TIME_SIMILARITY_PERCENTAGE*100:.0f}% Net Time)")
+    
+    ax.set_xticks(x_ticks_positions)
+    ax.set_xticklabels(x_labels, rotation=45, ha="right", fontsize=9)
+    
+    # Format Y-axis ticks as mm:ss
+    # Get current y-ticks, then reformat them
+    def y_fmt(tick_val, pos):
+        return rl_data.format_time_mm_ss(tick_val)
+    
+    from matplotlib.ticker import FuncFormatter
+    ax.yaxis.set_major_formatter(FuncFormatter(y_fmt))
+    ax.tick_params(axis='y', labelsize=9)
+
+    ax.grid(True, linestyle=':', alpha=0.6)
+    
+    # Create legend with just the line plots
+    ax.legend(handles=[line1, line2], loc='upper left', fontsize=9)
+
+    fig.tight_layout(pad=1.0) # Add some padding
+
+    # Determine y-axis limits after plotting everything to ensure labels fit
+    all_cumulative_data = np.concatenate([competitor_cumulative_times, similar_finishers_cumulative_avg])
+    min_data_val = 0
+    max_data_val = np.nanmax(all_cumulative_data) if len(all_cumulative_data[~np.isnan(all_cumulative_data)]) > 0 else 300 # Default max if no data
+    ax.set_ylim(min_data_val, max_data_val * 1.1) # Add 10% padding at the top
+
+    if config.get('pltPngOut', False):
+        plt.savefig(filepath, bbox_inches='tight', pad_inches=0.2)
+        #print(f"Saved cumulative chart with mm:ss labels to {filepath}")
+    if config.get('pltShow', False):
+        plt.show()
+    
+    plt.close(fig)
+    session['runtime'] = runtimeVars
+
+
+def ShowStationTimeDifferenceChart(df, competitorIndex =-1):
+
+    runtimeVars = session.get('runtime', {})
+    config = session.get('config', {})
+
+    if competitorIndex == -1:
+        print("Error: ShowStationTimeDifferenceChart requires a valid competitorIndex.")
+        return
+
+    competitor_name = df.loc[competitorIndex, 'Name']
+    competitor_name_for_file = competitor_name.replace(" ", "_").replace(",", "").replace("'", "")
+    event_name_for_file = runtimeVars['eventDataList'][0].replace(" ", "_").replace("/", "_")
+    filename = f"{event_name_for_file}_{competitor_name_for_file}StationTimeDiff.png"
+    filepath = Path(rl_data.PNG_COMP_DIR) / Path(filename) # Assuming a directory
+
+    if 'pngStrings' not in runtimeVars: runtimeVars['pngStrings'] = []
+    if 'pngList' not in runtimeVars: runtimeVars['pngList'] = []
+    # Add appropriate pngString for this new chart type
+    runtimeVars['pngStrings'].append(rl_data.pngStringEventStationDiffChartCompetitor) 
+    runtimeVars['pngList'].append(str(filepath))
+    session['runtime'] = runtimeVars
+
+    if os.path.isfile(filepath) and not config.get('forcePng', False):
+        print(f"File {filepath} already exists. Skipping generation.")
+        return
+        
+    #print(f"Generating Station Time Difference Chart for {competitor_name} at {filepath}")
+
+    station_names = runtimeVars['EventList']
+    competitor_event_times = np.array([df.loc[competitorIndex, event] for event in station_names])
+
+    # --- Get Similar Finishers' Average Station Times ---
+    competitor_net_time = df.loc[competitorIndex, 'Net Time']
+    lower_bound_time = competitor_net_time * (1 - rl_data.TIME_SIMILARITY_PERCENTAGE)
+    upper_bound_time = competitor_net_time * (1 + rl_data.TIME_SIMILARITY_PERCENTAGE)
+    similarFinishers_df = df[
+        (df['Net Time'] >= lower_bound_time) & 
+        (df['Net Time'] <= upper_bound_time) &
+        (df.index != competitorIndex)
+    ].copy()
+
+    similar_finishers_avg_station_times = []
+    if not similarFinishers_df.empty:
+        for event in station_names:
+            valid_times = similarFinishers_df[event].dropna()
+            if not valid_times.empty:
+                similar_finishers_avg_station_times.append(valid_times.mean())
+            else:
+                # Fallback: if no similar finishers have data, use competitor's time (so difference is 0)
+                similar_finishers_avg_station_times.append(df.loc[competitorIndex, event])
+    else:
+        print(f"No similar finishers found for {competitor_name}. Differences will be zero.")
+        similar_finishers_avg_station_times = competitor_event_times.copy() # Difference will be 0
+    
+    similar_finishers_avg_station_times = np.array(similar_finishers_avg_station_times)
+
+    # Calculate time differences (Competitor Time - Avg Similar Time)
+    # Negative = Competitor was faster
+    # Positive = Competitor was slower
+    time_differences = competitor_event_times - similar_finishers_avg_station_times
+    
+    # Handle potential NaNs if any avg_time was NaN and not caught by fallback
+    time_differences = np.nan_to_num(time_differences, nan=0.0)
+
+
+    fig, ax = plt.subplots(figsize=(12, 12))
+    
+    # Colors for bars: green if faster (negative diff), red if slower (positive diff)
+    colors = ['mediumseagreen' if diff <= 0 else 'salmon' for diff in time_differences]
+    
+    bars = ax.bar(station_names, time_differences, color=colors)
+
+    ax.axhline(0, color='grey', linewidth=0.8) # Add a horizontal line at y=0
+
+    ax.set_xlabel("Workout Station")
+    ax.set_ylabel("Time Difference (seconds)\n[Negative = Competitor Faster]")
+    ax.set_title(f'Station Time Difference: {competitor_name} vs. {similarFinishers_df.shape[0]} Similar Finishers (+/- {rl_data.TIME_SIMILARITY_PERCENTAGE*100:.0f}% Net Time)')
+    
+    plt.xticks(rotation=45, ha="right")
+
+    # Add labels on top/bottom of bars
+    for bar_idx, bar in enumerate(bars):
+        yval = bar.get_height()
+        # For labels, show absolute difference but keep sign for direction
+        label_text = f"{yval:.0f}s"
+        if yval < 0:
+            # Place label below the bar for negative values
+            ax.text(bar.get_x() + bar.get_width()/2.0, yval, label_text, 
+                    va='top', ha='center', fontsize=8, color='darkgreen')
+        elif yval > 0:
+            # Place label above the bar for positive values
+            ax.text(bar.get_x() + bar.get_width()/2.0, yval, label_text, 
+                    va='bottom', ha='center', fontsize=8, color='darkred')
+        # Optionally, don't label if yval is 0 or very close to 0
+
+    # Adjust y-limits for better visualization of differences
+    if len(time_differences) > 0:
+        max_abs_diff = np.nanmax(np.abs(time_differences))
+        if max_abs_diff == 0 : max_abs_diff = 10 # Default if all diffs are zero
+        ax.set_ylim(-max_abs_diff * 1.2, max_abs_diff * 1.2)
+    else:
+        ax.set_ylim(-50, 50) # Default if no data
+
+    ax.grid(True, axis='y', linestyle=':', alpha=0.7)
+    fig.tight_layout()
+
+    if config.get('pltPngOut', False):
+        plt.savefig(filepath, bbox_inches='tight', pad_inches=0.2)
+        #print(f"Saved station time difference chart to {filepath}")
+    if config.get('pltShow', False):
+        plt.show()
+    
+    plt.close(fig)
+    session['runtime'] = runtimeVars
+
+def ShowCatBarCharts(df):
+    runtimeVars = session.get('runtime', {})
+    config = session.get('config', {})
+
+    # --- Filename Generation ---
+    event_name_for_file = runtimeVars['eventDataList'][0].replace(" ", "_").replace("/", "_")
+    filename = f"{event_name_for_file}_StatByCategory.png"
+    filepath = Path(rl_data.PNG_GENERIC_DIR) / Path(filename)
+    
+    if 'pngStrings' not in runtimeVars: runtimeVars['pngStrings'] = []
+    if 'pngList' not in runtimeVars: runtimeVars['pngList'] = []
+    
+    # Check if 'Category' column exists and if there's more than one unique category
+    if 'Category' not in df.columns:
+        print("Category column not found in DataFrame. Skipping chart generation Skipping for {runtimeVars['eventDataList'][0]}.")
+        return
+
+    unique_categories = sorted(df['Category'].dropna().unique())
+    if len(unique_categories) <= 1:
+        print(f"Not enough categories ({len(unique_categories)}) to generate a comparison chart. Skipping for {runtimeVars['eventDataList'][0]}.")
+        return
+
+    # You might want a new specific pngString for this chart type
+    runtimeVars['pngStrings'].append(rl_data.pngStringEventCatGroupBar) 
+    runtimeVars['pngList'].append(str(filepath))
+    session['runtime'] = runtimeVars
+    
+    # Check if file exists or force generation
+    if os.path.isfile(filepath) and not config.get('forcePng', False):
+        print(f"File {filepath} already exists. Skipping generation for {runtimeVars['eventDataList'][0]}.")
+        return
+
+    #print(f"Generating Average Station Time by Category chart at {filepath}")
+
+    station_names = runtimeVars['EventList']
+    num_stations = len(station_names)
+    num_categories = len(unique_categories)
+
+    # --- Data Preparation: Calculate average time per station for each category ---
+    category_avg_times = {} # Dict to store: {'Category A': [avg_station1, avg_station2,...], ...}
+
+    # Define colors - ensure you have enough for the max number of categories you expect
+    # These are example colors; you can customize them
+    default_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+    category_colors = {cat: default_colors[i % len(default_colors)] for i, cat in enumerate(unique_categories)}
+
+    for category_name in unique_categories:
+        category_df = df[df['Category'] == category_name]
+        avg_times_for_this_category = []
+        for event in station_names:
+            if event in category_df.columns:
+                valid_times = category_df[event].dropna()
+                if not valid_times.empty:
+                    avg_times_for_this_category.append(valid_times.mean())
+                else:
+                    avg_times_for_this_category.append(np.nan) # Or 0 if preferred for missing data
+            else:
+                avg_times_for_this_category.append(np.nan) # Event column doesn't exist for some reason
+        category_avg_times[category_name] = avg_times_for_this_category
+    
+    # --- Plotting ---
+    fig, ax = plt.subplots(figsize=(14, 14)) # Wider figure for more stations/categories
+
+    bar_width = 0.8 / num_categories # Dynamically adjust bar width
+    x_indices = np.arange(num_stations) # Base x positions for stations
+
+    rects_list = [] # To store bar objects for legend
+
+    for i, category_name in enumerate(unique_categories):
+        offsets = (i - (num_categories - 1) / 2.0) * bar_width
+        avg_times = category_avg_times[category_name]
+        # Handle potential NaNs for plotting (e.g., replace with 0)
+        plot_times = [0 if np.isnan(t) else t for t in avg_times] 
+        
+        rects = ax.bar(x_indices + offsets, plot_times, bar_width, 
+                       label=category_name, color=category_colors[category_name])
+        rects_list.append(rects)
+
+        # Optional: Add text labels on top of bars (can get very crowded)
+        # for bar_idx, bar_rect in enumerate(rects):
+        #     height = bar_rect.get_height()
+        #     if height > 0:
+        #         ax.text(bar_rect.get_x() + bar_rect.get_width() / 2., height + 5, # 5s offset
+        #                 f'{int(height)}s', ha='center', va='bottom', fontsize=7, rotation=0)
+
+
+    ax.set_ylabel('Average Time (seconds)', fontsize=10)
+    ax.set_title(f"{runtimeVars['eventDataList'][1]}\nAverage Station Times by Age Category", fontsize=14)
+    ax.set_xticks(x_indices)
+    ax.set_xticklabels(station_names, rotation=45, ha="right", fontsize=9)
+    ax.legend(title="Age Category", fontsize=8, title_fontsize=9, loc='upper center')
+
+    # Determine appropriate y-limit
+    max_avg_time_plotted = 0
+    for cat_times in category_avg_times.values():
+        valid_cat_times = [t for t in cat_times if not np.isnan(t)]
+        if valid_cat_times:
+            max_avg_time_plotted = max(max_avg_time_plotted, max(valid_cat_times))
+    
+    ax.set_ylim(0, max_avg_time_plotted * 1.15 if max_avg_time_plotted > 0 else 100) # Add 15% padding
+
+    ax.grid(True, axis='y', linestyle=':', alpha=0.7)
+    fig.tight_layout()
+
+    if config.get('pltPngOut', False):
+        plt.savefig(filepath, bbox_inches='tight', pad_inches=0.2)
+        #print(f"Saved category bar chart to {filepath}")
+    if config.get('pltShow', False):
+        plt.show()
+    
+    plt.close(fig)
+    session['runtime'] = runtimeVars
 
 #############################
 # Start of redline visuation method
@@ -1102,6 +1925,10 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList, io_pngStr
                 if(config['showPie']): ShowPieChartAverage(df=df,competitorIndex=competitorIndex )
                 if(config['showBar']): ShowBarChartEvent(df=df,competitorIndex=competitorIndex)
                 if(config['showViolin']): ShowViolinChartEvent(df=df,competitorIndex=competitorIndex)
+                if(config['showRadar']): ShowRadar(df=df,competitorIndex=competitorIndex )
+                if(config['showGroupBar']): ShowGroupBarChart(df=df,competitorIndex=competitorIndex )
+                if(config['showCumulTime']): ShowCumulativeTimeComparison(df=df,competitorIndex=competitorIndex)
+                if(config['showTimeDiff']): ShowStationTimeDifferenceChart(df=df,competitorIndex=competitorIndex)
                 if(config['showCorr']): ShowCorrInfo(df=df,competitorIndex=competitorIndex )
 
                 dataOutputThisLoop=True
@@ -1122,8 +1949,13 @@ def redline_vis_generate(competitorDetails, io_stringHtml, io_pngList, io_pngStr
             if(config['showPie']): ShowPieChartAverage(df=df)
             if(config['showBar']): ShowBarChartEvent(df=df)
             if(config['showViolin']): ShowViolinChartEvent(df=df)
+            if(config['showRadar']): ShowRadar(df=df)
+            if(config['showCatBar']): ShowCatBarCharts(df)
             if(config['showCorr']): ShowCorrInfo(df=df)
             if(config['showCutOffBar']): ShowBarChartCutOffEvent(df=df)
+
+
+            
 
             dataOutputThisLoop=True
 
@@ -1222,13 +2054,23 @@ def redline_vis_competitor_html(competitorDetails, io_stringHtml, io_pngList, io
         "pltPngOut" : True,
         "createPdf" : False,
         "competitorAnalysis" : True,
+        #generic & Competitor.
+        "showPie" : True,
         "showBar" : True,
         "showViolin" : True,
+        "showRadar" : True,
+        "showCorr" : True,
+
+        #generic only
         "showCutOffBar" : False,
         "showHist" : False,
-        "showPie" : True,
-        "showCorr" : True,
-        "showHeat" : False
+        "showHeat" : False,
+        "showCatBar": False, 
+
+        #competitor only
+        "showGroupBar"  : True, 
+        "showCumulTime" : True,
+        'showTimeDiff' :  True,   
     }
 
     # Store config in session
@@ -1265,13 +2107,23 @@ def redline_vis_competitor_pdf(competitorDetails, io_stringHtml, io_pngList, io_
         "pltPngOut" : True,
         "createPdf" : True,
         "competitorAnalysis" : True,
+        #generic & Competitor.
+        "showPie" : True,
         "showBar" : True,
         "showViolin" : True,
+        "showRadar" : True,
+        "showCorr" : True,
+
+        #generic only
         "showCutOffBar" : False,
         "showHist" : False,
-        "showPie" : True,
-        "showCorr" : True,
-        "showHeat" : False
+        "showHeat" : False,
+        "showCatBar": False, 
+
+        #competitor only
+        "showGroupBar"  : True, 
+        "showCumulTime" : True,
+        'showTimeDiff' :  True,
     }
 
     # Store config in session
@@ -1309,13 +2161,23 @@ def redline_vis_generic():
         "pltPngOut" : True,
         "createPdf" : True,
         "competitorAnalysis" : False,
+        #generic & Competitor.
+        "showPie" : True,
         "showBar" : True,
         "showViolin" : True,
+        "showRadar" : True,
+        "showCorr" : True,
+
+        #generic only
         "showCutOffBar" : True,
         "showHist" : True,
-        "showPie" : True,
-        "showCorr" : True,
-        "showHeat" : True
+        "showHeat" : True,
+        "showCatBar": True, 
+
+        #competitor only
+        "showGroupBar"  : False, 
+        "showCumulTime" : False,
+        'showTimeDiff' :  False,
     }
 
     # Store config in session
@@ -1360,13 +2222,23 @@ def redline_vis_generic_eventpdf(details, io_stringHtml, io_pngList, io_pngStrin
         "pltPngOut" : True,
         "createPdf" : True,
         "competitorAnalysis" : False,
+        #generic & Competitor.
+        "showPie" : True,
         "showBar" : True,
         "showViolin" : True,
+        "showRadar" : True,
+        "showCorr" : True,
+
+        #generic only
         "showCutOffBar" : True,
         "showHist" : True,
-        "showPie" : True,
-        "showCorr" : True,
-        "showHeat" : True
+        "showHeat" : True,
+        "showCatBar": True, 
+
+        #competitor only
+        "showGroupBar"  : False, 
+        "showCumulTime" : False,
+        'showTimeDiff' :  False,
     }
 
     # Store config in session
@@ -1405,13 +2277,24 @@ def redline_vis_generic_eventhtml(details, io_stringHtml, io_pngList, io_pngStri
         "pltPngOut" : True,
         "createPdf" : False,
         "competitorAnalysis" : False,
+
+        #generic & Competitor.
+        "showPie" : True,
         "showBar" : True,
         "showViolin" : True,
+        "showRadar" : True,
+        "showCorr" : True,
+
+        #generic only
         "showCutOffBar" : True,
         "showHist" : True,
-        "showPie" : True,
-        "showCorr" : True,
-        "showHeat" : True
+        "showHeat" : True,
+        "showCatBar": True, 
+
+        #competitor only
+        "showGroupBar"  : False, 
+        "showCumulTime" : False,
+        'showTimeDiff' :  False,
     }
 
     # Store session config dictionary
@@ -1419,3 +2302,77 @@ def redline_vis_generic_eventhtml(details, io_stringHtml, io_pngList, io_pngStri
 
     #competitor details set to False
     return redline_vis_generate(details, io_stringHtml, io_pngList, io_pngStrings)
+
+
+def redline_vis_developer():
+
+    logger = rl_data.get_logger()
+    logger.info(f"redline_vis_developer")
+
+    # Value always initialised as below but will be updated in function
+    runtime = {
+        "EventCutOffCount": [0,0,0,0,0,0,0,0,0,0, 0,0],  #Count number of partipants who reach 7 minutes per event. Corresponds to EventList Entries
+        "pngList": [],
+        "pngStrings": [],
+        "stringPdf": " ",
+        "EventList": [],
+        "EventListStart": [],
+        "eventDataList": [],
+        "competitorName": " ",
+        "competitorRaceNo": " "
+    }
+   
+    session['runtime'] = runtime
+
+     # session configuration variable
+    config = {
+        "pltShow" : False,
+        "allScatter" : True,
+        "csvDfOut" : True,
+        "csvDurationOut" :     True,
+        "pltPngOut" :          True,
+        "createPdf" : False,
+        
+        "competitorAnalysis" : True,
+
+        #generic & Competitor.
+        "showPie" : True,
+        "showBar" : True,
+        "showViolin" : True,
+        "showRadar" : True,
+        "showCorr" : True,
+
+        #generic only
+        "showCutOffBar" : True,
+        "showHist" : True,
+        "showHeat" : True,
+        "showCatBar": True, 
+
+        #competitor only
+        "showGroupBar"  : True, 
+        "showCumulTime" : True,
+        'showTimeDiff' : True,
+
+    }
+
+    # Store config in session
+    session['config'] = config
+
+    #local variables
+    local_htmlString = " "
+    local_pngList = []
+    local_pngStrings = []
+
+    #details = {'competitor': "STEPHANIE STEPHEN",  'race_no': "330", 'event': "WomensSinglesCompetitive2024"}
+
+    #details = { 'competitor': 'STEPHEN ANTHONY CLEARY', 'race_no': '425', 'event': 'MensSinglesCompetitive2024'}
+
+    #details = {'competitor': 'DENNIS OH', 'race_no': '1387', 'event': 'MensDoubles2024'}
+
+    #details = {'competitor': 'DENNIS OH', 'race_no': '1387', 'event': 'MensDoubles2024'}
+
+    #details =  {'competitor': 'JAMIE BARNETT', 'race_no': 'G1759', 'event': 'MensSinglesOpen2024'}
+    details =  {'competitor': 'ANGIE LEK', 'race_no': '95', 'event': 'WomensSinglesOpen2024'}
+
+    #competitor details set to False
+    return redline_vis_generate(details, local_htmlString, local_pngList,  local_pngStrings)

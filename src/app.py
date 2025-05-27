@@ -31,7 +31,7 @@ import json
 from rl.rl_search import find_competitor
 import rl.rl_data as rl_data 
 from rl.rl_config import get_config 
-from rl.rl_vis import redline_vis_competitor_html, redline_vis_competitor_pdf, redline_vis_generic, redline_vis_generic_eventpdf, redline_vis_generic_eventhtml
+from rl.rl_vis import redline_vis_competitor_html, redline_vis_competitor_pdf, redline_vis_generic, redline_vis_generic_eventpdf, redline_vis_generic_eventhtml, redline_vis_developer
 
 def create_app():
     """Create and configure the Flask application."""
@@ -369,6 +369,16 @@ def about():
 @app.route('/feedback', methods=['GET', 'POST'])
 def feedback():
     app.logger.debug(f"/feedback received {request}")
+
+    ##############################################
+    # DEVELOPMENT HACK Code to be executed before the first request
+    ##############################################
+    #print(f"Before redline_vis_developer() call...")    
+    #redline_vis_developer()
+    #DEVELOPMENT print(f"After redline_vis_developer() call...") 
+    ##############################################
+    # HACK Code to be executed before the first request
+    ##############################################
 
     if request.method == 'POST':
 
@@ -1178,7 +1188,9 @@ def new_blog_post():
                 flash(f'Image {idx+1} ("{image_file_to_save.filename}") has an invalid file type. Not saved.', 'warning')
                 continue
 
-            unique_base_name_no_ext = f"img_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{idx}"
+            #unique_base_name_no_ext = f"img_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{idx}"
+            unique_base_name_no_ext, ext = os.path.splitext(image_file_to_save.filename)
+            
             saved_basename_ext = None
 
             image_file_to_save.seek(0)
@@ -1429,9 +1441,13 @@ def edit_blog_post(slug):
                     flash(f'New Image (slot {i+1}) "{image_file.filename}" has an invalid file type. Not saved.', 'warning')
                     continue
 
-                unique_base_name = f"img_edit_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{i}"
+                #want to stick with the original filename
+                #unique_base_name = f"img_edit_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{i}"
+                unique_base_name, ext = os.path.splitext(image_file.filename)
                 saved_image_basename = None
                 image_file.seek(0) # Reset stream just in case
+
+                app.logger.debug(f"new image {image_file.filename} -> image_basename: {unique_base_name} ext: {ext}")
 
                 if env_mode == 'deploy':
                     saved_image_basename = rl_data.save_uploaded_image_and_thumbnail_to_gcs(
@@ -1581,7 +1597,6 @@ def sync_blogs_to_gcs_route():
 
 ##############################
 
-
 #One line of code cut our Flask page load times by 60%
 #https://medium.com/building-socratic/the-one-weird-trick-that-cut-our-flask-page-load-time-by-70-87145335f679
 #https://www.reddit.com/r/programming/comments/2er5nj/one_line_of_code_cut_our_flask_page_load_times_by/
@@ -1598,3 +1613,5 @@ if __name__ == "__main__":
         app.run('0.0.0.0', port, debug=debug_mode)
     else:
         print(f"Not starting Flask server directly as USE_DOCKER={config_class.USE_DOCKER}")
+
+   

@@ -16,13 +16,13 @@ import math
 from datetime import datetime, timedelta, timezone
 from PIL import Image # Import Pillow
 from io import BytesIO
+import numpy as np
 
 # In your rl_data_gcs.py or rl_data.py
-from google.cloud import storage
+
 from google.auth import iam as google_auth_iam # Alias to avoid confusion with any 'iam' variable
 import google.auth
 import google.auth.transport.requests
-import inspect
 
 # file sturcture 'constants'
 # static - csv 	- input
@@ -62,7 +62,7 @@ BLOG_CONFIG_FILE = 'blog_config.json'
 BLOG_CONFIG_FILE_PATH = BLOG_DATA_DIR / BLOG_CONFIG_FILE # Path to your config file
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-MAX_IMAGES_PER_POST = 6
+MAX_IMAGES_PER_POST = 7
 THUMBNAIL_SIZE = (500, 500) # Max width, max height for thumbnails
 THUMBNAIL_PREFIX = "thumb_" # Prepended to original filename for thumbnail
 
@@ -78,6 +78,8 @@ FEEDBACK_BLOB_DIR = Path('feedback')
 FEEDBACK_BLOB_FILEPATH = FEEDBACK_BLOB_DIR / FEEDBACK_FILENAME
 
 SERVICE_ACCOUNT_EMAIL = "default@email.com"
+
+TIME_SIMILARITY_PERCENTAGE = 0.05  # e.g., +/- 5% of competitor's net time
 
 #Here are the different logging levels 
 # DEBUG 
@@ -139,12 +141,17 @@ pngStringEventViolinChart = "Below is a Violin Chart, which is a fancy graph tha
 pngStringEventBarChartCutoff = "Below is a a Bar Chart, which shows how many people miss the 7 minute event cut off mark."
 pngStringEventPieChart = "Below is a Pie Chart, which is a circle divided into slices to show parts of a whole, like a pizza showing how much each friend ate."
 pngStringEventScatterPlot = "Below is a scatter chart, which is a graph with dots that show where two things happen together, here we  put a dot for each competitors overall postion and their statation finish time."
+pngStringEventRadarChart = 'Below is a Radial Spider chart,Imagine a spiderweb showing how fast the average person finishes each station; the further out a point is on a web strand, the quicker the average time for that station!'
+pngStringEventCatGroupBar = "Below is a Catagory Group Bar Chart, which is a bar chart that compares how many people finish each challenge between certain times using different colours to indicate different category."
 
 pngStringEventBarChartCompetitor = "Below is a Competitor stacked bar chart, which is a bar chart where each bar is split into colored sections to show parts of a whole, here we show how many people finish each challenge between certain times using different colours. Note the competitor is highlighted."
 pngStringEventViolinChartCompetitor = "Below is a Competitor Violin Chart, which is a fancy graph that looks like a stretched-out violin and shows how data is spread out, like showing how long challenges take, with the wide parts meaning that most people finished at that time. Note the competitor is highlighted."
 pngStringEventPieChartCompetitor = "Below is a Competitor Pie Chart, which is a circle divided into slices to show parts of a whole, like a pizza showing how much each friend ate. "
 pngStringEventScatterPlotCompetitor = "Below is a Competitor scatter chart, which is a graph with dots that show where two things happen together, here we  put a dot for each competitors overall postion and their statation finish time."
-
+pngStringEventRadarChartCompetitor  = "Below is a Competitor Radial Spider chart, This spiderweb shows how much better you did than other people in each game; if your line is further out on a strand, you were in a higher percentile, meaning you beat more people at that station!"
+pngStringEventGroupBarChartCompetitor = "Below is a Competitor Group Bar chart, a bar chart that compares competitor station times compared to those who finished the event with simliar times."
+pngStringEventCumulativeChartCompetitor = "Below is a Competitor Cumulative Time chart, a bar chart that compares competitor cumulative times compared to those who finished the event with simliar times."
+pngStringEventStationDiffChartCompetitor = "Below is a Competitor Station Diff chart, a bar chart that shows the differnet  between competitor station times and those who finished the event with simliar times."
 
 # Generate a unique worker ID that persists for this worker process
 WORKER_ID = str(uuid.uuid4())[:8]
@@ -549,6 +556,18 @@ def format_seconds(seconds):
     minutes = int(seconds // 60)
     sec = round(seconds % 60, 1)
     return f"{minutes}m {sec:.1f}s"
+
+
+# Helper function to format seconds to mm:ss
+def format_time_mm_ss(seconds_total):
+    if np.isnan(seconds_total):
+        return "N/A"
+    seconds_total = int(round(seconds_total)) # Round to nearest second
+    minutes = seconds_total // 60
+    seconds = seconds_total % 60
+    return f"{minutes:02d}:{seconds:02d}"
+
+
 
 def convert_to_standard_time(time_str):
     """
