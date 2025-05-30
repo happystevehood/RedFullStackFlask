@@ -548,16 +548,6 @@ def handle_rm_error(function, path, excinfo):
 # Helper function to convert seconds to minutes.
 #############################
 
-def format_seconds(seconds):
-    
-    logger = get_logger()
-
-    #logger.debug("format_seconds>")
-    minutes = int(seconds // 60)
-    sec = round(seconds % 60, 1)
-    return f"{minutes}m {sec:.1f}s"
-
-
 # Helper function to format seconds to mm:ss
 def format_time_mm_ss(seconds_total):
     if np.isnan(seconds_total):
@@ -566,7 +556,6 @@ def format_time_mm_ss(seconds_total):
     minutes = seconds_total // 60
     seconds = seconds_total % 60
     return f"{minutes:02d}:{seconds:02d}"
-
 
 
 def convert_to_standard_time(time_str):
@@ -649,7 +638,7 @@ def load_global_blog_config():
     Reads from GCS if ENV_MODE is 'deploy', otherwise from local file.
     Returns default config if not found or error.
     """
-    logger = app.logger
+    logger = get_logger()
     env_mode = os.environ.get('ENV_MODE', 'development').lower()
     default_config = {"max_featured_posts_on_home": 6} # Example defaults
 
@@ -1002,7 +991,7 @@ def get_post_config_from_gcs(slug):
 
 def save_post_config_to_gcs(slug, post_data):
     """Saves the post_data dictionary ascontent.json for a slug in GCS."""
-    logger = app.logger
+    logger = get_logger()
     log_prefix = "GCS_SAVE_POST_CONFIG_V1"
     # ... (similar bucket setup as above) ...
     blog_bucket_name = BLOG_BUCKET_NAME
@@ -1531,11 +1520,6 @@ def delete_blog_image_from_gcs(slug, filename):
             logger.error(f"Error deleting image {path_to_delete} from GCS for post {slug}: {e}")
     return deleted_any
 
-import os
-import json
-from pathlib import Path # For consistency if LOCAL_BLOG_DATA_DIR is Path
-from google.cloud import storage # Only if you intend to initialize client here, otherwise not needed
-from flask import current_app as app # Or your get_logger and how you access config
 
 def sync_local_blogs_to_gcs():
     """

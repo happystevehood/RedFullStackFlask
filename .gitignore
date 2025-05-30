@@ -15,3 +15,4 @@ src/static/csv/generic/duration*.csv
 src/static/csv/generic/durationMensSinglesCompetitive2023.csv
 src/static/csv/generic/durationWomensSinglesOpen2023.csv
 src/static/csv/generic/PacingTable*.csv
+src/static/pdf/comp/*.html

@@ -21,7 +21,7 @@
     }     
     .dtfc-fixed-left {
         background-color: white;
-        z-index: 2;
+        z-index: 2; /* Ensure fixed column stays on top */
     }
 
    .dataTable td {
@@ -30,10 +30,9 @@
     /* Adjust navbar items on mobile */
     @media (max-width: 768px) {
         .dataTable td:first-child {
-            white-space: wrap;
+            white-space: wrap; /* Changed to 'normal' or 'wrap' if you want wrapping */
             max-width: 180px; /* Adjust this value based on your needs */
         }   
-    
     }
 
 </style>
@@ -53,35 +52,32 @@
                 {% for row in data %}
                     <tr>
                         {% for header in headers %}
-                            {% if 'Name' in header %}
-                                <td>
-                                    {% set value = row[header] %}
-                                    <strong>{{ value }}</strong>
-                                </td>                           
+                            {# Add a data attribute for easy targeting if the header contains 'Rank' #}
+                            <td {% if ' Rank' in header %}data-is-rank-column="true"{% endif %}>
+                            {% if 'Name' in header or 'Team' in header %} {# Added 'Team' for bolding team names too #}
+                                {% set value = row[header] %}
+                                <strong>{{ value }}</strong>
                             {% else %}
-                                <td>
-                             {% set value = row[header] %}
-                            {% if value is defined and value is not none %}
-                                {% if value is number %}
-                                    {{ "%.1f"|format(value) }}
-                                {% else %}
+                                {% set value = row[header] %}
+                                {% if value is defined and value is not none %}
                                     {% set val_str = value|string|trim %}
-                                    {% if val_str != '' %}
-                                        {% set converted = val_str|float(none) %}
-                                        {% if converted is not none %}
-                                            {{ "%.1f"|format(converted) }}
+                                    {% if val_str and val_str != 'nan' and val_str != 'NaN' %} {# Handle NaN strings #}
+                                        {# Try to convert to float for formatting, if not, display as is #}
+                                        {% set num_val = val_str|float(none) %}
+                                        {% if num_val is not none %}
+                                            {{ "%.1f"|format(num_val) }}
                                         {% else %}
-                                            {{ value }}
+                                            {{ value }} {# Display original if not floatable #}
                                         {% endif %}
+                                    {% elif val_str == 'nan' or val_str == 'NaN' %}
+                                        {{ '' }} {# Display empty for NaN strings #}
                                     {% else %}
-                                        {{ value }}
+                                        {{ value }} {# Display original value if it's empty string or other non-NaN non-floatable #}
                                     {% endif %}
+                                {% else %}
+                                    {{ '' }} {# Display empty for None or undefined #}
                                 {% endif %}
-                            {% else %}
-                                {{ '' }}
-                            {% endif %}
-
-                                </td>
+                            </td>
                             {% endif %}
                         {% endfor %}
                     </tr>
@@ -89,6 +85,9 @@
             </tbody>
         </table>
     </div>
+</div>
+<div>
+        {{ htmlString | safe }}
 </div>
 {% endblock %}
 
@@ -101,58 +100,136 @@
 <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
 <script src="https://cdn.datatables.net/fixedcolumns/4.3.0/js/dataTables.fixedColumns.min.js"></script>
 
-<script  nonce="{{ csp_nonce() }}">
+<script nonce="{{ csp_nonce() }}">
 $(document).ready(function() {
-
-    // Function to detect mobile devices
     function isMobileDevice() {
         return (window.innerWidth <= 768);
     }
     
-    // Add custom sorting method for numbers with empty values at bottom
     $.fn.dataTable.ext.type.order['numbers-empty-last-pre'] = function(data) {
-        // Check if the data can be converted to a number
-        if ($.isNumeric(data)) {
-            // Return number for sorting
-            return parseFloat(data);
+        if (data === null || data === "" || data.toString().toLowerCase() === 'nan') {
+            return Number.MAX_SAFE_INTEGER;
         }
-        // Return a very large number to push non-numeric values to the end
-        return Number.MAX_SAFE_INTEGER;
+        var num = parseFloat(data);
+        return isNaN(num) ? Number.MAX_SAFE_INTEGER : num;
     };
 
     var table = $('#dataTable').DataTable({
         scrollX: true,
         scrollCollapse: true,
         pageLength: 25,
-        // Default ordering: column 1 (index starts at 0) in ascending order
-        order: [[1, 'asc']],
-        ordering: true,  // Ensures users can click column headers to sort
-        orderCellsTop: true,  // For header cells to be orderable
- 
+        order: [[1, 'asc']], // Default order by first sortable column (usually 'Pos')
+        ordering: true, 
+        orderCellsTop: true,
         fixedHeader: {
             header: true,
-            headerOffset: 56
+            headerOffset: $('nav.navbar').outerHeight() || 56 // Dynamically get navbar height or default
         },
         fixedColumns: {
-            left: 1, // Fix leftmost columns
+            left: 1, 
             right: 0
         },
-        // Define column-specific sorting
         columnDefs: [
             {
-                // Apply to column index 1
-                targets: 1,
-                // Use our custom sorting type
+                // Apply to all columns that should use this sorting, identify by class or index
+                // Example: if your 'Pos' column is the second (index 1)
+                targets: [1], // Adjust if your 'Pos' or main rank column is different
                 type: 'numbers-empty-last'
             }
-        ]
+            // Add more columnDefs if other columns need specific sorting
+        ],
+        "drawCallback": function( settings ) {
+            applyHeatmapToRankColumns(this.api()); // Pass DataTables API instance
+        }
     });
 
-    // Mobile-specific enhancements
-    if (isMobileDevice()) {
-        // Add meta viewport tag to allow zooming on mobile (both in and out)
-        $('meta[name=viewport]').attr('content', 'width=device-width, initial-scale=0.8, user-scalable=yes, minimum-scale=0.5, maximum-scale=5.0');
+function getHeatmapColorAndText(value, minVal, maxVal) {
+        // 10-Step PASTEL Color Scale: Lower rank (better/cooler) to Higher rank (worse/warmer)
+        const colors = [
+            '#e0f3f8', // 0 (Best Ranks) - Palest Blue/Aqua
+            '#ccece6', // 1 - Light Mint
+            '#a6d8b0', // 2 - Soft Green
+            '#d0f0c0', // 3 - Lighter Tea Green
+            '#ffffcc', // 4 - Pale Yellow (Mid-Point Good)
+            '#ffeda0', // 5 - Light Yellow/Peach (Mid-Point Worse)
+            '#fed9a6', // 6 - Soft Orange/Peach
+            '#fcc5c0', // 7 - Soft Pink/Light Coral
+            '#fdae9c', // 8 - Light Coral/Salmon
+            '#f79b94'  // 9 (Worst Ranks) - Muted Dusty Rose
+        ];
 
+        // Consistent dark text color for good contrast on all pastels
+        const textColors = [
+            '#black', '#black', '#black', '#black', '#black', 
+            '#black', '#black', '#black', '#black', '#black'
+        ]; // Dark Slate Gray
+
+        if (isNaN(value) || minVal === maxVal) {
+            return { bgColor: 'transparent', textColor: 'inherit' }; // Default/No range
+        }
+
+        // Normalize value (0 for minVal (best rank), 1 for maxVal (worst rank))
+        // Ensure that value doesn't go outside minVal/maxVal due to JS float issues if data isn't perfectly clean
+        const clampedValue = Math.min(Math.max(value, minVal), maxVal);
+        const normalized = (clampedValue - minVal) / (maxVal - minVal);
+        
+        // Ensure normalized is strictly between 0 and 1 for index calculation
+        // Handle edge case where normalized might be exactly 1 due to value == maxVal
+        let colorIndex = Math.floor(normalized * colors.length);
+        if (normalized === 1.0) {
+             colorIndex = colors.length - 1; // Ensure it gets the last color
+        }
+        colorIndex = Math.min(colors.length - 1, Math.max(0, colorIndex)); // Clamp index again just in case
+
+        return { bgColor: colors[colorIndex], textColor: textColors[colorIndex] };
+    }
+
+
+    function applyHeatmapToRankColumns(dtApi) {
+        dtApi.columns().every(function () {
+            const header = $(this.header()); // Get the header cell for this column
+            const columnIndex = this.index();
+
+            if (header.text().includes(' Rank')) {
+                let columnValues = [];
+                // Get data ONLY from the current page for min/max calculation
+                // If you want min/max over ALL data, you'd need:
+                // this.data().toArray().forEach(val => { ... });
+                this.nodes().each(function (cell, i) { // .nodes() gives DOM elements for visible cells
+                    let cellData = $(cell).text().trim();
+                    let numericVal = parseFloat(cellData);
+                    if (!isNaN(numericVal)) {
+                        columnValues.push(numericVal);
+                    }
+                });
+
+                if (columnValues.length === 0) return;
+
+                const minVal = Math.min(...columnValues);
+                const maxVal = Math.max(...columnValues);
+
+                this.nodes().each(function (cellNode, i) { // Iterate again to apply styles
+                    let cellData = $(cellNode).text().trim();
+                    let value = parseFloat(cellData);
+                    
+                    const { bgColor, textColor } = getHeatmapColorAndText(value, minVal, maxVal);
+                    $(cellNode).css('background-color', bgColor);
+                    $(cellNode).css('color', textColor);
+                });
+            } else {
+                // Optional: Reset style for non-rank columns if needed from previous draws
+                this.nodes().each(function (cellNode, i) {
+                     $(cellNode).css('background-color', '');
+                     $(cellNode).css('color', '');
+                });
+            }
+        });
+    }
+
+    // Initial heatmap application will be done by the first drawCallback
+
+    if (isMobileDevice()) {
+        $('meta[name=viewport]').attr('content', 'width=device-width, initial-scale=0.8, user-scalable=yes, minimum-scale=0.5, maximum-scale=5.0');
     }
 });
 </script>

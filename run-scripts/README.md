@@ -26,3 +26,11 @@ Use the `.sh` files:
 ./run-scripts/build-deploy-prod.sh
 ./run-scripts/push-run-deploy-prod.sh
 ./run-scripts/gcloud-setup
+
+## Useful commands
+
+These commands came in handy when setting up gcloud / gcr.io, Needed if issue with gcr.io permissions
+- gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin https://gcr.io
+- gcloud auth configure-docker gcr.io
+
+

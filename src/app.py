@@ -373,9 +373,9 @@ def feedback():
     ##############################################
     # DEVELOPMENT HACK Code to be executed before the first request
     ##############################################
-    #print(f"Before redline_vis_developer() call...")    
-    #redline_vis_developer()
-    #print(f"After redline_vis_developer() call...") 
+    print(f"Before redline_vis_developer() call...")    
+    redline_vis_developer()
+    print(f"After redline_vis_developer() call...") 
     ##############################################
     # HACK Code to be executed before the first request
     ##############################################
@@ -565,7 +565,7 @@ def postdisplayEvent():
     if selected_view == "pacing_table" and selected_format == "html":
 
         filepath = Path(rl_data.CSV_GENERIC_DIR) / Path("PacingTable" + rl_data.EVENT_DATA_LIST[index][0] + ".csv")
-        title = rl_data.EVENT_DATA_LIST[index][1] + " Pacing Chart"
+        title = rl_data.EVENT_DATA_LIST[index][1] + " Actual 'Pacing' Chart"
 
         # Load CSV file into a DataFrame
         df = pd.read_csv(filepath, na_filter=False)
@@ -575,7 +575,12 @@ def postdisplayEvent():
         data = df.to_dict(orient='records')
         headers = df.columns.tolist()
 
-        return render_template('table.html', headers=headers, data=data, title=title)
+        tableHtmlString = "<h5> Disclaimer </h5> <p> The above table is based on actual athlete times and is not an exact representation of a pacing chart. " \
+        "If you consider the Top 30% row, this was calculatd based on the average station time of the athletes within the Top 25%-35% Positions." \
+        " e.g. Upon studying the table you may see there are times in the Top 40% column which are faster than 30% column counterpart. This counter intutitve analysis is just a quirk of the data.  </p>"  \
+        "<br> If you have any comments are suggestions, you can do so via the <a href='/feedback' target='_blank' >Feedback form</a> form tab <br>"
+
+        return render_template('table.html', headers=headers, data=data, title=title, htmlString=tableHtmlString)
                    
     if selected_view == "visualization" and selected_format == "file":
 
