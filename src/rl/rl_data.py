@@ -32,6 +32,9 @@ import google.auth.transport.requests
 #		 - png	- generic
 #				- comp
 
+#APP_ROOT = Path(__file__).resolve().parent.parent # Goes up two levels if rl_data.py is in app/rl/
+#APP_STATIC_FOLDER = APP_ROOT / 'static'
+
 CSV_INPUT_DIR    = Path('static') / 'csv' / 'input'
 CSV_GENERIC_DIR  = Path('static') / 'csv' / 'generic' 
 PDF_COMP_DIR     = Path('static') / 'pdf' / 'comp' 
@@ -39,6 +42,7 @@ PDF_GENERIC_DIR  = Path('static') / 'pdf' / 'generic'
 PNG_COMP_DIR     = Path('static') / 'png' / 'comp'
 PNG_GENERIC_DIR  = Path('static') / 'png' / 'generic' 
 PNG_HTML_DIR     = Path('static') / 'png' / 'html' 
+
 
 TEMPLATE_FOLDER = Path('templates')
 
@@ -100,12 +104,12 @@ DEFAULT_LOG_FILE_LEVEL = logging.DEBUG #INFO # This level or higher will be writ
 DEFAULT_LOG_CONSOLE_LEVEL = logging.DEBUG #ERROR # This level or higher will be written to the console/terminal
 
 #The 2023 Events Lists
-EVENTLIST23 =      [         'Run','Bike','Sandbag Gauntlet','Battle Rope Pull','Farmer\'s Carry','Row','Deadball Burpee','Sled Push','Pendulum Shots','Agility Climber','Ski','The Mule']
-EVENTLISTSTART23 = ['Start', 'Run','Bike','Sandbag Gauntlet','Battle Rope Pull','Farmer\'s Carry','Row','Deadball Burpee','Sled Push','Pendulum Shots','Agility Climber','Ski','The Mule']
+STATIONLIST23 =      [         'Run','Bike','Sandbag Gauntlet','Battle Rope Pull','Farmer\'s Carry','Row','Deadball Burpee','Sled Push','Pendulum Shots','Agility Climber','Ski','The Mule']
+STATIONLISTSTART23 = ['Start', 'Run','Bike','Sandbag Gauntlet','Battle Rope Pull','Farmer\'s Carry','Row','Deadball Burpee','Sled Push','Pendulum Shots','Agility Climber','Ski','The Mule']
 
 #The 2024 Events Lists
-EVENTLIST24 =      [         'Run', 'Row', 'Deadball Burpee', 'Pendulum Shots', 'Bike', 'Sandbag Gauntlet', 'Battle Whip', 'Farmer\'s Carry', 'Agility Chamber', 'Ski', 'Mule', 'Sled Push Pull']
-EVENTLISTSTART24 = ['Start', 'Run', 'Row', 'Deadball Burpee', 'Pendulum Shots', 'Bike', 'Sandbag Gauntlet', 'Battle Whip', 'Farmer\'s Carry', 'Agility Chamber', 'Ski', 'Mule', 'Sled Push Pull']
+STATIONLIST24 =      [         'Run', 'Row', 'Deadball Burpee', 'Pendulum Shots', 'Bike', 'Sandbag Gauntlet', 'Battle Whip', 'Farmer\'s Carry', 'Agility Chamber', 'Ski', 'Mule', 'Sled Push Pull']
+STATIONLISTSTART24 = ['Start', 'Run', 'Row', 'Deadball Burpee', 'Pendulum Shots', 'Bike', 'Sandbag Gauntlet', 'Battle Whip', 'Farmer\'s Carry', 'Agility Chamber', 'Ski', 'Mule', 'Sled Push Pull']
 
 # Your data for filtering purposes
 EVENT_DATA_LIST = [
@@ -549,7 +553,7 @@ def handle_rm_error(function, path, excinfo):
 #############################
 
 # Helper function to format seconds to mm:ss
-def format_time_mm_ss(seconds_total):
+def format_time_mm_ss(seconds_total, pos=None): # pos is required by FuncFormatter
     if np.isnan(seconds_total):
         return "N/A"
     seconds_total = int(round(seconds_total)) # Round to nearest second

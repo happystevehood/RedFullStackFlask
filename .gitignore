@@ -11,8 +11,5 @@ run-scripts/gcloud-env.sh
 run-scripts/gcloud-setup.sh
 src/static/png/comp/*
 src/static/png/generic/*
-src/static/csv/generic/duration*.csv
-src/static/csv/generic/durationMensSinglesCompetitive2023.csv
-src/static/csv/generic/durationWomensSinglesOpen2023.csv
-src/static/csv/generic/PacingTable*.csv
 src/static/pdf/comp/*.html
+src/static/csv/generic/*.csv

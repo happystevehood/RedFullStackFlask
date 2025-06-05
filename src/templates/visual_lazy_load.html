@@ -1,0 +1,357 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} | Redline Results{% endblock %}
+
+{% block head %}
+    {{ super() }} {# Includes CSS from base.html (like Bootstrap) #}
+    <!-- DataTables CSS - Add these if your 'ready_content_list' might contain DataTables for main results -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap4.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.bootstrap4.min.css">
+    
+    <style nonce="{{ csp_nonce() }}">
+        body {
+            background-color: #f4f7f6; 
+        }
+        .page-main-title {
+            color: #2c3e50;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #1abc9c; 
+            display: inline-block; 
+            margin-bottom: 2rem;
+        }
+        .section-title { 
+            color: #34495e;
+            margin-top: 2rem;
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+        }
+        .ready-content-item .card,
+        .chart-container {
+            margin-bottom: 25px;
+            padding: 20px;
+            border: 1px solid #dee2e6;
+            border-radius: 0.5rem; 
+            background-color: #ffffff; 
+            box-shadow: 0 3px 8px rgba(0,0,0,0.07);
+            transition: transform 0.2s ease-in-out;
+        }
+        .chart-container:hover {
+            transform: translateY(-3px);
+        }
+        .ready-content-item h4, 
+        .chart-container h4 {
+            font-size: 1.15rem; 
+            color: #333333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eaeaea;
+        }
+        .image-placeholder {
+            min-height: 280px; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: #f8f9fa;
+            border: 2px dashed #e0e0e0; 
+            border-radius: 6px;
+            text-align: center;
+            padding: 20px;
+            transition: background-color 0.3s ease;
+        }
+        .image-placeholder img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 4px;
+        }
+        .chart-description {
+            margin-top: 15px;
+            font-size: 0.875em; 
+            color: #5a5a5a;
+            line-height: 1.6;
+        }
+        .spinner-text {
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+        #mainResultsTableContainer {
+            margin-bottom: 2rem;
+        }
+        .dataTables_scrollHeadInner, .dataTable thead th {
+             background-color: #f8f9fa;
+        }
+        .ready-content-item .card-body table.table { 
+            margin-bottom: 1rem; 
+            font-size: 0.9em; 
+        }
+        .ready-content-item .card-body table.table th[scope="row"] { 
+            background-color: #f8f9fa;
+            width: 35%; 
+            font-weight: 600; 
+        }
+        .ready-content-item .card-body table.table td,
+        .ready-content-item .card-body table.table th {
+            padding: 0.5rem 0.75rem; 
+            vertical-align: middle;
+        }
+        .ready-content-item .card-body table.dataframe th:first-child {
+            text-align: left;
+            font-weight: 600;
+        }
+        .ready-content-item .card-body table.dataframe td {
+            text-align: left; 
+        }
+        .ready-content-item .card-body table.dataframe td:first-child {
+            text-align: left; /* If station names become data cells */
+        }
+        @media (max-width: 768px) {
+            #mainDataTable td:first-child {
+                white-space: normal; 
+                max-width: 150px; 
+                overflow-wrap: break-word;
+            }
+             .page-main-title { font-size: 1.5rem; }
+            .section-title { font-size: 1.25rem; }
+            .ready-content-item h4, .chart-container h4 { font-size: 1.05rem; }
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4 mb-5">
+    <h1 class="mb-4 page-main-title">{{ title }}</h1>
+
+    {% if main_table_headers and main_table_data %}
+    <div id="mainResultsTableContainer" class="mb-5">
+        <h3 class="section-title">Full Event Results</h3>
+        <div class="table-responsive">
+            <table id="mainDataTable" class="table table-striped table-bordered" style="width:100%">
+                <thead>
+                    <tr>
+                        {% for header in main_table_headers %}<th>{{ header }}</th>{% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in main_table_data %}
+                        <tr>
+                            {% for header in main_table_headers %}<td>{{ row[header] }}</td>{% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <hr class="my-5">
+    {% endif %}
+
+    {% if ready_content_list %}
+        <h3 class="section-title">Summary & Downloads</h3>
+        {% for content_item in ready_content_list %}
+            <div class="ready-content-item mb-4" id="ready_{{ content_item.id }}">
+                {% if content_item.name %}<h4 class="mb-3">{{ content_item.name }}</h4>{% endif %}
+                <div class="card">
+                    <div class="card-body">
+                        {# This is where the PDF link with id="pdfDownloadContainer" would be rendered if part of ready_content_list #}
+                        {{ content_item.html | safe }}
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+        <hr class="my-5"> 
+    {% endif %}
+
+    {% if pending_image_tasks %}
+        <h3 class="section-title">Detailed Visualizations</h3>
+        <div class="row">
+        {% for task in pending_image_tasks %}
+            {#<div class="col-12 col-md-6 col-lg-6 col-xl-4 mb-4">#}
+            <div class="col-12 col-md-6 mb-4"> 
+                <div class="chart-container">
+                    <h4>{{ task.display_name }}</h4>
+                    <div id="{{ task.placeholder_id }}" class="image-placeholder" 
+                         data-output-id="{{ task.generation_params.output_id }}"
+                         data-event-name="{{ task.generation_params.event_name_actual }}"
+                         data-competitor-name="{{ task.generation_params.competitor_name_actual or '' }}"
+                         data-competitor-race-no="{{ task.generation_params.competitor_race_no_actual or '' }}"
+                         data-station-name="{{ task.generation_params.station_name_actual or '' }}"
+                         data-target-filename="{{ task.generation_params.target_filename }}"
+                         data-expected-url="{{ task.expected_image_url }}"
+                         data-display-name="{{ task.display_name }}">
+                        
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="spinner-text">Preparing {{ task.display_name }}...</p>
+                    </div>
+                    {% if task.html_description %}
+                        <div class="chart-description">
+                            {{ task.html_description | safe }}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+        </div>
+    {% else %}
+        {% if competitorDetails and competitorDetails.name %} 
+            <p class="mt-3">No specific visualizations are currently enabled or available for {{ competitorDetails.name }} in the event: {{ event_name }}.</p>
+        {% elif not competitorDetails and not ready_content_list %} 
+            <p class="mt-3">No visualizations or data outputs configured to display for the event: {{ event_name }}.</p>
+        {% endif %}
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block script %}
+    {{ super() }} 
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap4.min.js"></script>
+    <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
+
+    <script nonce="{{ csp_nonce() }}">
+        const pendingImageTasks = {{ pending_image_tasks | tojson | safe if pending_image_tasks is defined else '[]' }};
+        const generateImageUrlEndpoint = "{{ url_for('generate_image_async_route') }}"; 
+
+        let imagesToLoadCount = pendingImageTasks ? pendingImageTasks.length : 0;
+        let imagesLoadedCount = 0;
+        const pdfContainer = $('#pdfDownloadContainer');
+
+        function tryShowPdfLink() {
+            if (imagesLoadedCount >= imagesToLoadCount) {
+                if (pdfContainer.length) {
+                    pdfContainer.fadeIn(); 
+                }
+            }
+        }
+
+        function markImageAsProcessed() {
+            imagesLoadedCount++;
+            tryShowPdfLink();
+        }
+
+        function loadImageViaAjax(task, placeholderElement, ajaxCompletionCallback) {
+            const $placeholder = $(placeholderElement); 
+            $placeholder.html('<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="spinner-text">Loading ' + task.display_name + '...</p>');
+            
+            $.ajax({
+                url: generateImageUrlEndpoint, 
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(task.generation_params),
+                dataType: 'json',
+                timeout: 120000, 
+                success: function(response) {
+                    if (response.success) {
+                        $placeholder.html(
+                            '<img src="' + response.image_url + '?t=' + new Date().getTime() + '" alt="' + task.display_name + '" class="img-fluid">'
+                        );
+                    } else {
+                        $placeholder.html('<p class="text-danger">Error: ' + (response.error || 'Server error') + '</p>');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $placeholder.html('<p class="text-danger">Could not load ' + task.display_name + '. Error.</p>');
+                },
+                complete: function() {
+                    markImageAsProcessed(); // Always mark as processed for PDF link logic
+                    if (typeof ajaxCompletionCallback === 'function') {
+                        ajaxCompletionCallback(); // This will call processNext for sequential loading
+                    }
+                }
+            });
+        }
+        
+        function loadTasksSequentially(tasks) {
+            let taskQueue = [...tasks];
+            function processNext() {
+                if (taskQueue.length === 0) {
+                    // All tasks in queue initiated. checkAllImagesProcessed via markImageAsProcessed will handle PDF link.
+                    return;
+                }
+                let task = taskQueue.shift();
+                const placeholder = $('#' + task.placeholder_id);
+                if (placeholder.length === 0) {
+                    console.warn("Sequential: Placeholder DIV not found for task ID:", task.placeholder_id);
+                    markImageAsProcessed(); // Still count it
+                    processNext(); 
+                    return; 
+                }
+                // The third argument to loadImageViaAjax is its own completion callback.
+                // For sequential, the completion callback is to process the *next* item in the queue.
+                loadImageViaAjax(task, placeholder, processNext); 
+            }
+            processNext(); // Start processing the first task
+        }
+
+        $(document).ready(function() {
+            if ($('#mainDataTable').length) {
+                $('#mainDataTable').DataTable({ /* ... your DataTable options ... */ });
+            }
+
+            if (pdfContainer.length) {
+                pdfContainer.hide(); 
+            }
+
+            if (imagesToLoadCount === 0) {
+                tryShowPdfLink(); 
+                return; 
+            }
+
+            // --- CHOOSE LOADING STRATEGY ---
+            // Option 1: Sequential Loading (DEFAULT for debugging as requested)
+            console.log("Using Sequential AJAX loading strategy.");
+            loadTasksSequentially(pendingImageTasks);
+
+            // Option 2: Intersection Observer (Commented out - enable for production if desired)
+            /*
+            console.log("Using Intersection Observer loading strategy.");
+            if (typeof IntersectionObserver !== 'undefined') {
+                const observerOptions = {
+                    root: null, 
+                    rootMargin: '100px 0px 100px 0px', 
+                    threshold: 0.01 
+                };
+
+                const imageObserver = new IntersectionObserver((entries, observer) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            const placeholderDiv = entry.target;
+                            const placeholder = $(placeholderDiv);
+                            
+                            if (placeholder.data('loading-initiated')) {
+                                return; 
+                            }
+                            placeholder.data('loading-initiated', true);
+
+                            const taskData = {
+                                output_id: placeholder.data('output-id'),
+                                event_name_actual: placeholder.data('event-name'),
+                                competitor_name_actual: placeholder.data('competitor-name') || null,
+                                competitor_race_no_actual: placeholder.data('competitor-race-no') || null,
+                                station_name_actual: placeholder.data('station-name') || null,
+                                target_filename: placeholder.data('target-filename')
+                            };
+                            const displayName = placeholder.data('display-name');
+                            
+                            // For Intersection Observer, the primary goal of loadImageViaAjax's complete callback
+                            // is to call markImageAsProcessed for the PDF link logic.
+                            loadImageViaAjax({ generation_params: taskData, display_name: displayName }, placeholder, markImageAsProcessed);
+                            
+                            observer.unobserve(placeholderDiv);
+                        }
+                    });
+                }, observerOptions);
+
+                $('.image-placeholder').each(function() {
+                    imageObserver.observe(this);
+                });
+            } else { 
+                console.warn("IntersectionObserver not supported. Falling back to loading all images sequentially via AJAX.");
+                loadTasksSequentially(pendingImageTasks); // Fallback if IO not supported
+            }
+            */
+        });
+    </script>
+{% endblock %}

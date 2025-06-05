@@ -1,46 +1,62 @@
 {% extends "base.html" %}
 
-{% block title %}Table | Redline Results{% endblock %}
+{% block title %}{{ title }} | Redline Results{% endblock %}
 
 {% block head %}
-<!-- Bootstrap & DataTables CSS -->
-<link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap4.min.css">
-<link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.bootstrap4.min.css">
-<link rel="stylesheet" href="https://cdn.datatables.net/fixedcolumns/4.3.0/css/fixedColumns.dataTables.min.css">
+    {{ super() }}
+    <!-- Bootstrap & DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap4.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.bootstrap4.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/fixedcolumns/4.3.0/css/fixedColumns.dataTables.min.css">
+    <style nonce="{{ csp_nonce() }}">
+        .full-width-wrapper {
+            width: 100%;
+        }
+        .overflow {
+            overflow-x: auto;
+        }     
+        .dtfc-fixed-left {
+            background-color: white !important; /* Ensure fixed column background stays white */
+            z-index: 1; /* Default z-index for fixed columns, might need adjustment if overlapping */
+        }
+        .dtfc-fixed-left.sorting_1 { /* If DataTables adds sorting class to fixed column */
+            background-color: white !important; 
+        }
 
+       .dataTable td {
+            white-space: nowrap;
+        }
+        /* Adjust first column on mobile for better readability */
+        @media (max-width: 768px) {
+            .dataTable td:first-child {
+                white-space: normal; /* Allow wrapping */
+                max-width: 150px; 
+                overflow-wrap: break-word;
+            }   
+        }
+        /* Ensure fixed header has a background if it becomes transparent due to other styles */
+        .dataTables_scrollHeadInner, .dataTable thead th {
+             background-color: #f8f9fa; /* Light grey like Bootstrap table head */
+        }
+        /* Fix for heatmap colors potentially being overridden by striped tables */
+        table.dataTable.table-striped tbody tr:nth-of-type(odd) td.heatmap-cell {
+            background-color: var(--heatmap-bg-color) !important;
+        }
+        table.dataTable.table-striped tbody tr:nth-of-type(even) td.heatmap-cell {
+            background-color: var(--heatmap-bg-color) !important;
+        }
+        td.heatmap-cell {
+             color: var(--heatmap-text-color) !important;
+        }
+
+    </style>
 {% endblock %}
 
 {% block content %}
-
-<style nonce="{{ csp_nonce() }}">
-    .full-width-wrapper {
-        width: 100%;
-    }
-    .overflow {
-        overflow-x: auto;
-    }     
-    .dtfc-fixed-left {
-        background-color: white;
-        z-index: 2; /* Ensure fixed column stays on top */
-    }
-
-   .dataTable td {
-        white-space: nowrap;
-    }
-    /* Adjust navbar items on mobile */
-    @media (max-width: 768px) {
-        .dataTable td:first-child {
-            white-space: wrap; /* Changed to 'normal' or 'wrap' if you want wrapping */
-            max-width: 180px; /* Adjust this value based on your needs */
-        }   
-    }
-
-</style>
-
 <div class="full-width-wrapper my-4">
     <h2 class="mb-4">{{ title }}</h2>
-    <div class="table-responsive ">
-        <table id="dataTable" class="table table-striped table-bordered ">
+    <div class="table-responsive overflow">
+        <table id="dataTable" class="table table-striped table-bordered" style="width:100%;">
             <thead>
                 <tr>
                     {% for header in headers %}
@@ -52,30 +68,28 @@
                 {% for row in data %}
                     <tr>
                         {% for header in headers %}
-                            {# Add a data attribute for easy targeting if the header contains 'Rank' #}
-                            <td {% if ' Rank' in header %}data-is-rank-column="true"{% endif %}>
-                            {% if 'Name' in header or 'Team' in header %} {# Added 'Team' for bolding team names too #}
+                            <td>
+                            {% if header == 'Name' or header == 'Team' %} {# More specific for Name/Team #}
                                 {% set value = row[header] %}
-                                <strong>{{ value }}</strong>
+                                <strong>{{ value if value is defined and value is not none else '' }}</strong>
                             {% else %}
                                 {% set value = row[header] %}
                                 {% if value is defined and value is not none %}
                                     {% set val_str = value|string|trim %}
-                                    {% if val_str and val_str != 'nan' and val_str != 'NaN' %} {# Handle NaN strings #}
-                                        {# Try to convert to float for formatting, if not, display as is #}
+                                    {% if val_str and val_str|lower not in ['nan', 'na', 'n/a'] %}
                                         {% set num_val = val_str|float(none) %}
                                         {% if num_val is not none %}
                                             {{ "%.1f"|format(num_val) }}
                                         {% else %}
-                                            {{ value }} {# Display original if not floatable #}
+                                            {{ value }}
                                         {% endif %}
-                                    {% elif val_str == 'nan' or val_str == 'NaN' %}
-                                        {{ '' }} {# Display empty for NaN strings #}
+                                    {% elif val_str|lower in ['nan', 'na', 'n/a'] %}
+                                        {{ '' }}
                                     {% else %}
-                                        {{ value }} {# Display original value if it's empty string or other non-NaN non-floatable #}
+                                        {{ value }}
                                     {% endif %}
                                 {% else %}
-                                    {{ '' }} {# Display empty for None or undefined #}
+                                    {{ '' }}
                                 {% endif %}
                             </td>
                             {% endif %}
@@ -86,9 +100,14 @@
         </table>
     </div>
 </div>
-<div>
-        {{ htmlString | safe }}
+
+{# Display htmlString if it's passed from Flask #}
+{% if htmlString %}
+<div class="container my-4">
+    {{ htmlString | safe }}
 </div>
+{% endif %}
+
 {% endblock %}
 
 {% block script %}
@@ -102,102 +121,146 @@
 
 <script nonce="{{ csp_nonce() }}">
 $(document).ready(function() {
+    // --- Parameters passed from Flask/Jinja2 ---
+    const enableHeatmap = {{ enable_heatmap | default(false) | tojson | safe }};
+    const heatmapSpecificColumns = {{ heatmap_specific_columns | default([]) | tojson | safe }};
+    // console.log("Enable Heatmap:", enableHeatmap);
+    // console.log("Heatmap Specific Columns:", heatmapSpecificColumns);
+
     function isMobileDevice() {
         return (window.innerWidth <= 768);
     }
     
     $.fn.dataTable.ext.type.order['numbers-empty-last-pre'] = function(data) {
-        if (data === null || data === "" || data.toString().toLowerCase() === 'nan') {
-            return Number.MAX_SAFE_INTEGER;
+        if (data === null || data === "" || data.toString().trim().toLowerCase() === 'nan' || data.toString().trim().toLowerCase() === 'n/a') {
+            return Number.MAX_SAFE_INTEGER; // Push to bottom for ascending
         }
         var num = parseFloat(data);
         return isNaN(num) ? Number.MAX_SAFE_INTEGER : num;
     };
+     // For descending sort, NaNs/empty should go to the top if that's desired
+    $.fn.dataTable.ext.type.order['numbers-empty-last-desc'] = function(data) {
+        if (data === null || data === "" || data.toString().trim().toLowerCase() === 'nan' || data.toString().trim().toLowerCase() === 'n/a') {
+            return Number.MIN_SAFE_INTEGER; // Push to top for descending
+        }
+        var num = parseFloat(data);
+        return isNaN(num) ? Number.MIN_SAFE_INTEGER : num * -1; // Multiply by -1 for descending
+    };
+
+
+    let numericSortColumnIndices = [];
+    let tableHeadersText = []; // Store all header texts for the heatmap function
+
+    $('#dataTable thead th').each(function(index) {
+        let headerText = $(this).text().trim();
+        tableHeadersText.push(headerText);
+        
+        // Identify columns for numeric sorting
+        if (headerText.includes(' Rank') || 
+            (heatmapSpecificColumns && heatmapSpecificColumns.includes(headerText)) ||
+            headerText === 'Pos' || headerText === 'Cat Pos' || 
+            headerText === 'Net Time' || headerText === 'Calc Time' || headerText === 'Time Adj' 
+            /* Add any other known numeric headers here */
+            ) {
+            numericSortColumnIndices.push(index);
+        }
+    });
+    console.log("Numeric Sort Column Indices:", numericSortColumnIndices);
+
 
     var table = $('#dataTable').DataTable({
         scrollX: true,
         scrollCollapse: true,
         pageLength: 25,
-        order: [[1, 'asc']], // Default order by first sortable column (usually 'Pos')
+        order: [], // NEW LINE: No initial sorting
         ordering: true, 
         orderCellsTop: true,
         fixedHeader: {
             header: true,
-            headerOffset: $('nav.navbar').outerHeight() || 56 // Dynamically get navbar height or default
+            headerOffset: ($('nav.navbar').outerHeight() || 56) // Get navbar height dynamically
         },
         fixedColumns: {
-            left: 1, 
+            left: 1, // Fix the first column (usually 'Name' or 'Team')
             right: 0
         },
         columnDefs: [
             {
-                // Apply to all columns that should use this sorting, identify by class or index
-                // Example: if your 'Pos' column is the second (index 1)
-                targets: [1], // Adjust if your 'Pos' or main rank column is different
-                type: 'numbers-empty-last'
+                targets: numericSortColumnIndices, // Apply custom sorting to all identified numeric columns
+                type: 'numbers-empty-last' // Uses both -pre, -asc, -desc definitions
+            },
+            {
+                targets: 0, // Assuming the first column ('Name' or 'Team') is always text
+                type: 'string' 
             }
-            // Add more columnDefs if other columns need specific sorting
+            //Add other columnDefs for specific non-numeric columns if needed
         ],
         "drawCallback": function( settings ) {
-            applyHeatmapToRankColumns(this.api()); // Pass DataTables API instance
+            if (enableHeatmap) {
+                // Pass the pre-collected headersText and the specific columns list
+                applyHeatmap(this.api(), tableHeadersText, heatmapSpecificColumns); 
+            }
         }
     });
 
-function getHeatmapColorAndText(value, minVal, maxVal) {
-        // 10-Step PASTEL Color Scale: Lower rank (better/cooler) to Higher rank (worse/warmer)
+    function getHeatmapColorAndText(value, minVal, maxVal, isRankColumn) {
+        // 10-Step PASTEL Color Scale
         const colors = [
-            '#e0f3f8', // 0 (Best Ranks) - Palest Blue/Aqua
-            '#ccece6', // 1 - Light Mint
-            '#a6d8b0', // 2 - Soft Green
-            '#d0f0c0', // 3 - Lighter Tea Green
-            '#ffffcc', // 4 - Pale Yellow (Mid-Point Good)
-            '#ffeda0', // 5 - Light Yellow/Peach (Mid-Point Worse)
-            '#fed9a6', // 6 - Soft Orange/Peach
-            '#fcc5c0', // 7 - Soft Pink/Light Coral
-            '#fdae9c', // 8 - Light Coral/Salmon
-            '#f79b94'  // 9 (Worst Ranks) - Muted Dusty Rose
+            '#e0f3f8', '#ccece6', '#b3e2cd', '#99d8c9', '#ffffcc', // Cooler for better
+            '#ffeda0', '#fed9a6', '#fcc5c0', '#fdae9c', '#f79b94'  // Warmer for worse
         ];
-
-        // Consistent dark text color for good contrast on all pastels
-        const textColors = [
-            '#black', '#black', '#black', '#black', '#black', 
-            '#black', '#black', '#black', '#black', '#black'
-        ]; // Dark Slate Gray
+        const textColors = Array(10).fill('#2F4F4F'); // Dark Slate Gray for all pastels
 
         if (isNaN(value) || minVal === maxVal) {
-            return { bgColor: 'transparent', textColor: 'inherit' }; // Default/No range
+            return { bgColor: 'transparent', textColor: 'inherit' };
         }
 
-        // Normalize value (0 for minVal (best rank), 1 for maxVal (worst rank))
-        // Ensure that value doesn't go outside minVal/maxVal due to JS float issues if data isn't perfectly clean
         const clampedValue = Math.min(Math.max(value, minVal), maxVal);
-        const normalized = (clampedValue - minVal) / (maxVal - minVal);
+        // For ranks, lower is better. For times, lower is better.
+        // So, we want lower values (better performance) to map to lower indices of the 'colors' array
+        // (assuming colors[0] is the "best" color).
+        const normalized = (maxVal - minVal === 0) ? 0 : (clampedValue - minVal) / (maxVal - minVal);
         
-        // Ensure normalized is strictly between 0 and 1 for index calculation
-        // Handle edge case where normalized might be exactly 1 due to value == maxVal
         let colorIndex = Math.floor(normalized * colors.length);
-        if (normalized === 1.0) {
-             colorIndex = colors.length - 1; // Ensure it gets the last color
+        if (normalized >= 1.0) { // Value is maxVal or greater (worst)
+             colorIndex = colors.length - 1; 
         }
-        colorIndex = Math.min(colors.length - 1, Math.max(0, colorIndex)); // Clamp index again just in case
+        colorIndex = Math.min(colors.length - 1, Math.max(0, colorIndex)); // Clamp index
 
         return { bgColor: colors[colorIndex], textColor: textColors[colorIndex] };
     }
 
-
-    function applyHeatmapToRankColumns(dtApi) {
+    function applyHeatmap(dtApi, allHeadersText, specificColumnsForHeatmap) {
         dtApi.columns().every(function () {
-            const header = $(this.header()); // Get the header cell for this column
             const columnIndex = this.index();
+            const headerText = allHeadersText[columnIndex]; // Use passed headers array
+            
+            let applyHeatmapToThisColumn = false;
+            let isThisARankColumn = false; // Not strictly used by current getHeatmapColorAndText but good to know
 
-            if (header.text().includes(' Rank')) {
+            if (headerText.includes(' Rank')) {
+                applyHeatmapToThisColumn = true;
+                isThisARankColumn = true;
+            } else if (specificColumnsForHeatmap && specificColumnsForHeatmap.includes(headerText)) {
+                applyHeatmapToThisColumn = true;
+                isThisARankColumn = false; 
+            }
+
+            // Clear previous heatmap styles first
+            this.nodes().each(function (cellNode) {
+                $(cellNode).css({
+                    'background-color': '', 
+                    'color': '',
+                    '--heatmap-bg-color': '', /* Clear CSS variables if used */
+                    '--heatmap-text-color': ''
+                }).removeClass('heatmap-cell');
+            });
+
+            if (applyHeatmapToThisColumn) {
                 let columnValues = [];
-                // Get data ONLY from the current page for min/max calculation
-                // If you want min/max over ALL data, you'd need:
-                // this.data().toArray().forEach(val => { ... });
-                this.nodes().each(function (cell, i) { // .nodes() gives DOM elements for visible cells
-                    let cellData = $(cell).text().trim();
-                    let numericVal = parseFloat(cellData);
+                // Use dtApi.column().data() to get all data for scaling, not just visible nodes
+                // This makes the heatmap consistent across pages/filters for that column.
+                dtApi.column(columnIndex).data().each(function (cellDataStr, i) {
+                    let numericVal = parseFloat(String(cellDataStr).trim()); // Ensure string before trim
                     if (!isNaN(numericVal)) {
                         columnValues.push(numericVal);
                     }
@@ -208,25 +271,22 @@ function getHeatmapColorAndText(value, minVal, maxVal) {
                 const minVal = Math.min(...columnValues);
                 const maxVal = Math.max(...columnValues);
 
-                this.nodes().each(function (cellNode, i) { // Iterate again to apply styles
+                // Apply styles to visible nodes
+                this.nodes().each(function (cellNode, i) {
                     let cellData = $(cellNode).text().trim();
                     let value = parseFloat(cellData);
                     
-                    const { bgColor, textColor } = getHeatmapColorAndText(value, minVal, maxVal);
-                    $(cellNode).css('background-color', bgColor);
-                    $(cellNode).css('color', textColor);
-                });
-            } else {
-                // Optional: Reset style for non-rank columns if needed from previous draws
-                this.nodes().each(function (cellNode, i) {
-                     $(cellNode).css('background-color', '');
-                     $(cellNode).css('color', '');
+                    const { bgColor, textColor } = getHeatmapColorAndText(value, minVal, maxVal, isThisARankColumn);
+                    
+                    // Use CSS variables for !important override with striped tables
+                    $(cellNode).css({
+                        '--heatmap-bg-color': bgColor,
+                        '--heatmap-text-color': textColor
+                    }).addClass('heatmap-cell');
                 });
             }
         });
     }
-
-    // Initial heatmap application will be done by the first drawCallback
 
     if (isMobileDevice()) {
         $('meta[name=viewport]').attr('content', 'width=device-width, initial-scale=0.8, user-scalable=yes, minimum-scale=0.5, maximum-scale=5.0');

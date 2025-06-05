@@ -30,8 +30,12 @@ import json
 # local inclusion.
 from rl.rl_search import find_competitor
 import rl.rl_data as rl_data 
+from rl.rl_dict import OUTPUT_CONFIGS
 from rl.rl_config import get_config 
-from rl.rl_vis import redline_vis_competitor_html, redline_vis_competitor_pdf, redline_vis_generic, redline_vis_generic_eventpdf, redline_vis_generic_eventhtml, redline_vis_developer
+from rl.rl_vis import redline_vis_generate_generic, redline_vis_generate_generic_init, \
+    prepare_competitor_visualization_page, redline_vis_generate_competitor_init, \
+    generate_single_output_file, \
+    MakeFullPdfReport, prepare_visualization_data_for_template
 
 def create_app():
     """Create and configure the Flask application."""
@@ -62,7 +66,7 @@ def create_app():
     #To prevent abuse (e.g., bots spamming the search box), need to review if limits are appropriate
     limiter = Limiter(app=app,
         key_func=get_remote_address,
-        default_limits=["50 per minute", "500 per hour", "2000 per day"],
+        default_limits=["100 per minute", "500 per hour", "2000 per day"],
         storage_uri="memory://")    # Use in-memory storage for now, memcache seems like an alternative.
 
     #protect against Cross-Site Request Forgery:
@@ -244,8 +248,12 @@ def gethome():
 
     app.logger.debug(f"/ GET received {request}")
 
-    #clear the search results.
+    #clear the session to keep fresh
     session.pop('search_results', None)
+    session.pop('outputList', None)
+    session.pop('runtime', None)
+    session.pop('output_config', None)
+    session.pop('async_runtime_vars_snapshot', None)
 
     global_config = rl_data.load_global_blog_config()
     max_home_featured = global_config.get('max_featured_posts_on_home', 3)
@@ -290,7 +298,6 @@ def sitemap():
             'changefreq': route_info['changefreq'],
             'lastmod': lastmod_val
         })    
-
 
     # Dynamic Blog Posts from rl_data.BLOG_DATA_DIR
     # Ensure rl_data.BLOG_DATA_DIR is the correct path to the directory containing post subfolders
@@ -369,16 +376,6 @@ def about():
 @app.route('/feedback', methods=['GET', 'POST'])
 def feedback():
     app.logger.debug(f"/feedback received {request}")
-
-    ##############################################
-    # DEVELOPMENT HACK Code to be executed before the first request
-    ##############################################
-    print(f"Before redline_vis_developer() call...")    
-    redline_vis_developer()
-    print(f"After redline_vis_developer() call...") 
-    ##############################################
-    # HACK Code to be executed before the first request
-    ##############################################
 
     if request.method == 'POST':
 
@@ -514,26 +511,37 @@ def postdisplayEvent():
     if selected_view == "visualization" and selected_format == "html":
 
         details = {
-            'competitor': None, 
-            'race_no': None,
-            'event': rl_data.EVENT_DATA_LIST[index][0]
-        }
+                'competitor': None, 
+                'race_no': None,
+                'event': rl_data.EVENT_DATA_LIST[index][0]
+            }
 
-        htmlString = ""
-        io_pngList = []
-        io_pngStrings=[]
+        #initialising the session - need to change name.
+        redline_vis_generate_generic_init()
 
-        htmlString, io_pngList, io_pngStrings = redline_vis_generic_eventhtml(details, htmlString, io_pngList, io_pngStrings)
- 
-        return render_template('visual.html', description=rl_data.EVENT_DATA_LIST[index][1], png_files=io_pngList, png_strings=io_pngStrings)
-    
+        #Preparte to display generic event results
+        template_context = prepare_visualization_data_for_template(competitorDetails=details)
+        
+        if isinstance(template_context, str): # Error occurred
+            return template_context 
+
+        return render_template('visual_lazy_load.html', **template_context)
+
     if selected_view == "table" and selected_format == "html":
 
-        filepath = Path(rl_data.CSV_GENERIC_DIR) / Path('duration' + rl_data.EVENT_DATA_LIST[index][0] + ".csv")
+        event_name_slug = slugify(rl_data.EVENT_DATA_LIST[index][0])
+        #find cvsfile.
+        df_conf = next((item for item in OUTPUT_CONFIGS if item['id'] == 'duration_csv_generic'), None)
+        df_filename = df_conf['filename_template'].format( 
+                EVENT_NAME_SLUG=event_name_slug,
+                ).replace("__", "_").replace("_.", ".")
+        df_dir_path_obj = Path(getattr(rl_data, df_conf['output_dir_const']))
+        df_filename = df_dir_path_obj / Path(df_filename)
+
         title = rl_data.EVENT_DATA_LIST[index][1]
 
         # Load CSV file into a DataFrame
-        df = pd.read_csv(filepath, na_filter=False)
+        df = pd.read_csv(df_filename, na_filter=False)
 
         name_column = df.pop('Name')  # Remove the Name column and store it
         df.insert(0, 'Name', name_column)  # Insert it at position 0(leftmost)
@@ -541,8 +549,17 @@ def postdisplayEvent():
         # Convert DataFrame to list of dicts (records) for Jinja2
         data = df.to_dict(orient='records')
         headers = df.columns.tolist()
-
-        return render_template('table.html', headers=headers, data=data, title=title)
+        
+        #configure for 2023 format or 2024 format
+        if (rl_data.EVENT_DATA_LIST[index][2]=="2023"):
+            heatmap_specific_columns = rl_data.STATIONLISTSTART23
+        else:
+            heatmap_specific_columns = rl_data.STATIONLISTSTART24
+            
+        #add the time column to the heatmap_specific_columns list
+        heatmap_specific_columns.append('Time Adj')
+        
+        return render_template('table.html', headers=headers, data=data, title=title, enable_heatmap=True, heatmap_specific_columns=heatmap_specific_columns)
 
     if selected_view == "orig_table" and selected_format == "html":
 
@@ -560,27 +577,32 @@ def postdisplayEvent():
         data = df.to_dict(orient='records')
         headers = df.columns.tolist()
 
-        return render_template('table.html', headers=headers, data=data, title=title)
+        return render_template('table.html', headers=headers, data=data, title=title, enable_heatmap=False)
 
     if selected_view == "pacing_table" and selected_format == "html":
 
-        filepath = Path(rl_data.CSV_GENERIC_DIR) / Path("PacingTable" + rl_data.EVENT_DATA_LIST[index][0] + ".csv")
+        #filepath = Path(rl_data.CSV_GENERIC_DIR) / Path("PacingTable" + rl_data.EVENT_DATA_LIST[index][0] + ".csv")
         title = rl_data.EVENT_DATA_LIST[index][1] + " Actual 'Pacing' Chart"
 
+        event_name_slug = slugify(rl_data.EVENT_DATA_LIST[index][0])
+        #find cvsfile.
+        pacing_conf = next((item for item in OUTPUT_CONFIGS if item['id'] == 'pacing_table_csv_generic'), None)
+        pace_filename = pacing_conf['filename_template'].format( 
+                EVENT_NAME_SLUG=event_name_slug,
+                ).replace("__", "_").replace("_.", ".")
+        pace_dir_path_obj = Path(getattr(rl_data, pacing_conf['output_dir_const']))
+        pace_filename = pace_dir_path_obj / Path(pace_filename)
+
         # Load CSV file into a DataFrame
-        df = pd.read_csv(filepath, na_filter=False)
+        df = pd.read_csv(pace_filename, na_filter=False)
      
         # Convert DataFrame to list of dicts (records) for Jinja2
         # This naturally excludes the index
         data = df.to_dict(orient='records')
         headers = df.columns.tolist()
 
-        tableHtmlString = "<h5> Disclaimer </h5> <p> The above table is based on actual athlete times and is not an exact representation of a pacing chart. " \
-        "If you consider the Top 30% row, this was calculatd based on the average station time of the athletes within the Top 25%-35% Positions." \
-        " e.g. Upon studying the table you may see there are times in the Top 40% column which are faster than 30% column counterpart. This counter intutitve analysis is just a quirk of the data.  </p>"  \
-        "<br> If you have any comments are suggestions, you can do so via the <a href='/feedback' target='_blank' >Feedback form</a> form tab <br>"
-
-        return render_template('table.html', headers=headers, data=data, title=title, htmlString=tableHtmlString)
+        tableHtmlString = pacing_conf['html_string_template']
+        return render_template('table.html', headers=headers, data=data, title=title, htmlString=tableHtmlString, enable_heatmap=False)
                    
     if selected_view == "visualization" and selected_format == "file":
 
@@ -595,15 +617,32 @@ def postdisplayEvent():
         io_pngStrings=[]
 
         # get the file path
-        filepath = Path(rl_data.PDF_GENERIC_DIR) / Path(rl_data.EVENT_DATA_LIST[index][0] + ".pdf")
 
-        # check if file exists
-        if (os.path.isfile(filepath) == False):
-            htmlString, io_pngList, io_pngStrings = redline_vis_generic_eventpdf(details, htmlString, io_pngList, io_pngStrings)
+        event_name_slug = slugify(rl_data.EVENT_DATA_LIST[index][0])
+        #find cvsfile.
+        pdf_conf = next((item for item in OUTPUT_CONFIGS if item['id'] == 'pdf_report_generic'), None)
+        pdf_filename = pdf_conf['filename_template'].format( 
+                EVENT_NAME_SLUG=event_name_slug,
+                ).replace("__", "_").replace("_.", ".")
+        pdf_dir_path_obj = Path(getattr(rl_data, pdf_conf['output_dir_const']))
+        pace_filename = pdf_dir_path_obj / Path(pdf_filename)
+
+        # get the file path
+        filepath = pace_filename
 
     if selected_view == "table" and selected_format == "file":
+        
+        event_name_slug = slugify(rl_data.EVENT_DATA_LIST[index][0])
+        #find cvsfile.
+        df_conf = next((item for item in OUTPUT_CONFIGS if item['id'] == 'duration_csv_generic'), None)
+        df_filename = df_conf['filename_template'].format( 
+                EVENT_NAME_SLUG=event_name_slug,
+                ).replace("__", "_").replace("_.", ".")
+        df_dir_path_obj = Path(getattr(rl_data, df_conf['output_dir_const']))
+        df_filename = df_dir_path_obj / Path(df_filename)
+        
         # get the file path
-        filepath = Path(rl_data.CSV_GENERIC_DIR) / Path('duration' + rl_data.EVENT_DATA_LIST[index][0] + ".csv")
+        filepath = df_filename
 
     if selected_view == "orig_table" and selected_format == "file":
         # get the file path
@@ -611,12 +650,23 @@ def postdisplayEvent():
 
     if selected_view == "pacing_table" and selected_format == "file":
 
-        filepath = Path(rl_data.CSV_GENERIC_DIR) / Path("PacingTable" + rl_data.EVENT_DATA_LIST[index][0] + ".csv")
+        event_name_slug = slugify(rl_data.EVENT_DATA_LIST[index][0])
+        #find cvsfile.
+        pacing_conf = next((item for item in OUTPUT_CONFIGS if item['id'] == 'pacing_table_csv_generic'), None)
+        pace_filename = pacing_conf['filename_template'].format( 
+                EVENT_NAME_SLUG=event_name_slug,
+                ).replace("__", "_").replace("_.", ".")
+        pace_dir_path_obj = Path(getattr(rl_data, pacing_conf['output_dir_const']))
+        pace_filename = pace_dir_path_obj / Path(pace_filename)
+
+        filepath = pace_filename
 
     # dowload the file
     response = send_file(filepath, as_attachment=True)
     response.headers["Content-Disposition"] = f"attachment; filename={os.path.basename(filepath)}"
     return response
+
+
 
 @app.route('/api/search', methods=['GET'])
 def get_search_results():
@@ -673,86 +723,158 @@ def new_search():
 
     return jsonify({'status': 'ok', 'data': matches})
 
-
-@app.route('/display_vis', methods=['GET'])
-def get_display_vis():
-        app.logger.debug(f"/display_vis GET received {request}")
-
-        #clear the search results.
-        session.pop('search_results', None)
-
-        competitor = request.args.get('competitor').title()
-        race_no = request.args.get('race_no')
-        event = request.args.get('event')
-
-        #find index  of eventid in rl_data.EVENT_DATA_LIST[0]
-        index = next((i for i, item in enumerate(rl_data.EVENT_DATA_LIST) if item[0] == event), None)
-        description=rl_data.EVENT_DATA_LIST[index][1]
-
-        #get the link to the race results page
-        link = "/display?eventname=" + event
-
-        try:
-            return render_template('display_vis.html', competitor=competitor, race_no=race_no, description=description, link=link)
-        except Exception as e:
-            app.logger.error(f"Template render error: {e}")
-            return abort(500)
-
-
-@app.route('/display_vis', methods=['POST'])
-def post_display_vis():
-        
-        htmlString = " "
-        io_pngList = []
-        io_pngStrings = []
-
-        app.logger.debug(f"/display_vis POST received {request}")
-
-        selected_format = request.form.get('output_format')
+# Your existing route might look something like this, or it's the one calling redline_vis_competitor_html
+@app.route('/display_competitor_visuals', methods=['GET', 'POST']) # Or whatever your route is
+def display_competitor_visuals_route():
+    # Get competitorDetails from request.form, request.args, or session
+    if request.method == 'POST':
+        competitor = request.form.get('competitor')
+        race_no = request.form.get('race_no')
+        event = request.form.get('event_name')
+    else: # GET request
         competitor = request.args.get('competitor')
         race_no = request.args.get('race_no')
         event = request.args.get('event')
 
-        app.logger.info(f"selected_format: {selected_format}, competitor: {competitor}, race_no: {race_no}, event: {event}")
+    if not all([competitor, race_no, event]):
+        return "Missing parameters (competitor, race_no, event)", 400
 
-        #find index  of eventid in rl_data.EVENT_DATA_LIST[0]
-        index = next((i for i, item in enumerate(rl_data.EVENT_DATA_LIST) if item[0] == event), None)
+    competitorDetails = {
+        'competitor': competitor,
+        'race_no': race_no,
+        'event': event
+    }
 
-        description=rl_data.EVENT_DATA_LIST[index][1]
+    # --- Initialize session variables if not present ---
+    redline_vis_generate_competitor_init()
 
-        details = {
-            'competitor': competitor, 
-            'race_no': race_no,
-            'event': event
-        }
+    # Call your new preparation function
+    # This function will return render_template(...)
+    return prepare_competitor_visualization_page(competitorDetails)
 
-        if selected_format == "html":
-            htmlString, io_pngList, io_pngStrings = redline_vis_competitor_html(details, htmlString, io_pngList, io_pngStrings)
 
-            #get the link to the race results page
-            link = "/display?eventname=" + event
+@app.route('/generate_image_async', methods=['POST'])
+def generate_image_async_route():
+    if not request.is_json:
+        return jsonify({"success": False, "error": "Invalid request, JSON expected"}), 400
+    
+    params = request.get_json()
+    #print(params)
+    
+    # You might need to pass df or reload it here.
+    # For simplicity in this example, assume generate_single_output_file can handle it
+    # by reloading or if 'df' could be serialized/passed (not recommended for large df).
+    # Best approach: generate_single_output_file reloads df based on params.get('event_name_actual')
 
-            try:
-                return render_template('display_vis.html', selected_format = selected_format, competitor=competitor.title(),  race_no=race_no, description=description, htmlString=htmlString, png_files=io_pngList, png_strings=io_pngStrings, link=link)
-            except Exception as e:
-                app.logger.error(f"Template render error: {e}")
-                return abort(500)
+    # Restore minimal necessary runtime context for the single image generation
+    # The 'async_runtime_vars_snapshot' should have been saved in prepare_competitor_visualization_page
+    # This assumes that prepare_competitor_visualization_page has already been called for the session
+    # and has populated the session with 'async_runtime_vars_snapshot' and 'output_config'.
+    
+    # Critical: Ensure that session variables used by generate_single_output_file are correctly
+    # set up or passed. If generate_single_output_file reloads everything based on params,
+    # it's more robust.
 
-        if selected_format == "file":
+    # Let's assume generate_single_output_file handles its own session/df loading based on params
+    result = generate_single_output_file(params) # df_override can be used for testing
+    
+    if(result['success'] == True):
 
-            # get the file path
-            filepath = Path(rl_data.PDF_COMP_DIR) / Path(event + competitor + ".pdf")
+        outputList = session.get("outputList",[])
 
-            # check if file exists
-            if (os.path.isfile(filepath) == False):
-                redline_vis_competitor_pdf(details, htmlString, io_pngList, io_pngStrings)
+        config_item = next((item for item in OUTPUT_CONFIGS if item['id'] == params['output_id']), None)
+        output_dir = getattr(rl_data, config_item["output_dir_const"])
+        filepath =  Path(output_dir) / Path(params['target_filename'])
+
+        # Update outputList
+        outputList['filename'].append(str(filepath))
+        outputList['id'].append(params['output_id'])
+    
+    return jsonify(result)
+
+# Optional: Route for PDF generation and download
+@app.route('/download_pdf', methods=['GET'])
+def generate_and_download_pdf_route():
+    
+    output_id = request.args.get('output_id')
+    event_name_actual = request.args.get('event_name_actual')
+    competitor_name_actual = request.args.get('competitor_name_actual')
+    competitor_race_no_actual = request.args.get('competitor_race_no_actual')
+
+    runtimeVars = session.get("runtime", {}) # Get from session for this example
+    outputVars = session.get("output_config", {})
+    outputList = session.get("outputList",[])
+
+    pdf_config_item = next((item for item in OUTPUT_CONFIGS if item['id'] == output_id), None)
+    if not pdf_config_item:
+        return "Invalid PDF type requested", 400
+    
+    html_config_item = next((item for item in OUTPUT_CONFIGS if item['id'] == 'html_info_comp'), None)
+    if not html_config_item:
+        return "Invalid HTML Not found", 400   
+    
+    if pdf_config_item['is_competitor_specific']:
+        runtimeVars['competitorName'] = competitor_name_actual
+        runtimeVars['competitorRaceNo'] = competitor_race_no_actual
+        
+    # Check if this type of output is enabled in general_config
+    if( outputVars.get(pdf_config_item['id'], False) == False ):
+        app.logger.info(f"Output type not enabled: {pdf_config_item['id']}")
+        return "Invalid PDF type requested", 400
+
+    # Skip if mode doesn't match (e.g., trying to generate generic in competitor mode, or vice-versa)
+    if pdf_config_item['id'] == 'pdf_report_comp' and pdf_config_item['is_competitor_specific'] == False:
+        app.logger.info(f"CompetitorAnalysis mode does not match output mode: {pdf_config_item['pdf_report_comp']} {pdf_config_item['is_competitor_specific']}")
+        return "Invalid PDF type requested", 400
+    
+    # Skip if competitor is required but not found
+    if pdf_config_item['id'] == 'pdf_report_generic' and pdf_config_item['is_competitor_specific'] == True:
+        app.logger.info(f"Generic PDF mode does not match output mode: {pdf_config_item['pdf_report_generic']} {pdf_config_item['is_competitor_specific']}")
+        return "Invalid PDF type requested", 400
+
+    # --- Assume PNGs are all ready and available  ---
+    if outputList['filename']: # Only if PNGs were generated
+        #app.logger.debug(f"foutputList['filename']: {outputList['filename']}")
+
+        event_name_slug = slugify(event_name_actual)
+        if outputVars['competitorAnalysis'] and outputVars['pdf_report_comp']:
+            pdf_config_item = next((item for item in OUTPUT_CONFIGS if item['id'] == 'pdf_report_comp'), None)
+            competitor_name_slug = slugify(runtimeVars['competitorName']) 
+            pdf_filename = pdf_config_item['filename_template'].format(
+                EVENT_NAME_SLUG=event_name_slug,
+                COMPETITOR_NAME_SLUG=competitor_name_slug
+            )
             
-            # dowload the file
-            response = send_file(filepath, as_attachment=True)
-            response.headers["Content-Disposition"] = f"attachment; filename={os.path.basename(filepath)}"
+            html_info_comp_filepaths = html_config_item['filename_template'].format(
+                COMPETITOR_NAME_SLUG=competitor_name_slug)
+            html_output_dir = getattr(rl_data, html_config_item["output_dir_const"])            
+            html_info_comp_filepaths = Path(html_output_dir) / Path(html_info_comp_filepaths)           
+            
+        elif outputVars['competitorAnalysis'] == False and outputVars['pdf_report_generic']:
+            pdf_config_item = next((item for item in OUTPUT_CONFIGS if item['id'] == 'pdf_report_generic'), None)
+            pdf_filename = pdf_config_item['filename_template'].format(
+                EVENT_NAME_SLUG=event_name_slug)
+            html_info_comp_filepaths = None
+            
+        else:
+            app.logger.warning(f"No PDF configuration found for {outputVars['pdf_report_generic']} and {outputVars['pdf_report_comp']}")
 
-            app.logger.info(f"File downloaded: {response}")
-            return response
+        #app.logger.warning(f"PDF filename {pdf_filename} and pdf_config_item {pdf_config_item}")
+
+        if pdf_config_item:
+
+            pdf_output_dir = getattr(rl_data, pdf_config_item["output_dir_const"])
+            pdf_filepath = Path(pdf_output_dir) / Path(pdf_filename)
+
+            if(MakeFullPdfReport(filepath=pdf_filepath,  outputList=outputList, html_filepath=html_info_comp_filepaths, competitorAnalysis=outputVars['competitorAnalysis'])==True):
+                #app.logger.warning(f"PDF done {pdf_filename} and pdf_config_item {pdf_config_item}")
+
+                return send_file(pdf_filepath, as_attachment=True, mimetype='application/pdf')
+            
+        else:
+            app.logger.warning(f"No PDF configuration found for {outputVars['pdf_report_generic']} and {outputVars['pdf_report_comp']}")
+    else:
+        app.logger.warning(f"No PDF configuration found for {outputVars['pdf_report_generic']}, {outputVars['pdf_report_comp']} and {outputList['filename']} is empty")
 
 
 # 3. User: View blog index (list of posts, searchable)
@@ -848,6 +970,9 @@ def login():
         #app.logger.debug(f"Login attempt with password: {'*' * len(password)}")
         
         if password == config_class.ADMIN_PASSWORD:
+            
+            app.logger.warning(f"Session Keys: {list(session.keys())}")
+            
             # Clear any existing session data first
             session.clear()
             
@@ -884,6 +1009,12 @@ def logout():
 def admin():
 
     app.logger.debug(f"/admin received {request}")
+    
+    app.logger.warning(f"Session Keys: {list(session.keys())}")
+    
+    for key in list(session.keys()):
+        if not key.startswith('_'):
+            app.logger.warning(f"Session Keys: {key}: {session[key]}")
     
     #clear the search results.
     session.pop('search_results', None)
@@ -930,8 +1061,7 @@ def postadmin():
 
     elif regenerate:
         app.logger.debug(f"Regenerate output")
- 
-        redline_vis_generic()
+        redline_vis_generate_generic()
 
     level1 = rl_data.get_log_levels()
     level2 = session.get('log_levels')
@@ -1231,7 +1361,7 @@ def new_blog_post():
             if saved_basename_ext:
                 # MODIFIED: Append a dictionary to uploaded_images_data
                 uploaded_images_data.append({
-                    "filename": saved_basename_ext,
+                    'filename': saved_basename_ext,
                     "caption": caption_text,
                     "show_in_gallery": show_in_gallery 
                 })
@@ -1359,7 +1489,7 @@ def edit_blog_post(slug):
         captions = post_for_processing.get('image_captions', [])
         for i, filename_item in enumerate(filenames):
             images_list.append({
-                "filename": filename_item,
+                'filename': filename_item,
                 "caption": captions[i] if i < len(captions) else "",
                 "show_in_gallery": True # Default for old data
             })
@@ -1374,7 +1504,7 @@ def edit_blog_post(slug):
     normalized_images_temp = []
     for img_data in post_for_processing.get('images', []): # Iterate over the potentially modified list
         normalized_images_temp.append({
-            "filename": img_data.get("filename"), # Should always exist if img_data itself exists
+            'filename': img_data.get('filename'), # Should always exist if img_data itself exists
             "caption": img_data.get("caption", ""),
             "show_in_gallery": img_data.get("show_in_gallery", True) # Default to True if missing
         })
@@ -1412,14 +1542,14 @@ def edit_blog_post(slug):
             captions_orig = post_data_from_storage.get('image_captions', [])
             for i, fn_orig in enumerate(filenames_orig):
                 initial_images_for_processing.append({
-                    "filename": fn_orig,
+                    'filename': fn_orig,
                     "caption": captions_orig[i] if i < len(captions_orig) else "",
                     "show_in_gallery": True
                 })
         elif 'images' in post_data_from_storage:
             for img_d in post_data_from_storage.get('images', []):
                  initial_images_for_processing.append({
-                    "filename": img_d.get("filename"),
+                    'filename': img_d.get('filename'),
                     "caption": img_d.get("caption", ""),
                     "show_in_gallery": img_d.get("show_in_gallery", True)
                 })
@@ -1443,7 +1573,7 @@ def edit_blog_post(slug):
                 updated_show_in_gallery = f'current_show_in_gallery_{i}' in request.form
                 
                 final_images_data.append({
-                    "filename": existing_filename,
+                    'filename': existing_filename,
                     "caption": updated_caption,
                     "show_in_gallery": updated_show_in_gallery
                 })
@@ -1484,7 +1614,7 @@ def edit_blog_post(slug):
 
                 if saved_image_basename:
                     final_images_data.append({
-                        "filename": saved_image_basename,
+                        'filename': saved_image_basename,
                         "caption": new_caption_text,
                         "show_in_gallery": new_show_in_gallery
                     })

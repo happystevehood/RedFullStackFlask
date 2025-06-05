@@ -30,13 +30,14 @@ from datetime import datetime, timedelta
 import os, pymupdf
 from pathlib import Path
 import re
-from flask import session
+from flask import session, url_for, render_template, jsonify
 
 from slugify import slugify 
 
 # local inclusion.
 import rl.rl_data as rl_data
 from rl.rl_dict import OUTPUT_CONFIGS
+
 
 # Otherwise get this warning - UserWarning: Starting a Matplotlib GUI outside of the main thread will likely fail
 mpl.use('agg')
@@ -84,19 +85,18 @@ def tidyTheData(df, filename):
     df.insert(len(df.columns), 'Calc Time', 0.0)
 
     #Reset the CutOffEvent count value to 0
-    runtimeVars["EventCutOffCount"][:] = [0 for _ in runtimeVars["EventCutOffCount"]]
+    #runtimeVars['StationCutOffCount'][:] = [0 for _ in runtimeVars['StationCutOffCount']]
 
     # Index to last item
-    MyIndex = len(runtimeVars["EventListStart"]) - 1
+    MyIndex = len(runtimeVars['StationListStart']) - 1
 
     #iterate the event list in reverse order
-    for event in runtimeVars["EventListStart"][::-1]:
-
-        #Note Event = runtimeVars["EventListStart"][MyIndex] below, may be tidier ways to write
+    for event in runtimeVars['StationListStart'][::-1]:
+        #Note Event = runtimeVars['StationListStart'][MyIndex] below, may be tidier ways to write
 
         #reorganise data such that each event a duration in reverse format
         for x in df.index:
-
+            
             # do not write to start time
             if MyIndex != 0:
 
@@ -104,11 +104,11 @@ def tidyTheData(df, filename):
                 try:
 
                     df.loc[x,event] = timedelta.total_seconds(datetime.strptime(rl_data.convert_to_standard_time(df.loc[x,event]                                   ) ,"%H:%M:%S.%f") 
-                                                            - datetime.strptime(rl_data.convert_to_standard_time(df.loc[x,runtimeVars["EventListStart"][MyIndex-1]]) ,"%H:%M:%S.%f"))
+                                                            - datetime.strptime(rl_data.convert_to_standard_time(df.loc[x,runtimeVars['StationListStart'][MyIndex-1]]) ,"%H:%M:%S.%f"))
  
-                    # was originally 10 seconds, changeing to 45 seconds.....
-                    #if value less than 45 seconds, then somthing wrong, data not trust worthy so want to drop the row.
-                    if df.loc[x,event] < 45.0:
+                    # was originally 10 seconds, changeing to 25 seconds.....
+                    #if value less than 20 seconds, Mens Team Relay Farmers CArry 22seconds.
+                    if df.loc[x,event] < 20.0:
                         #print data...
                         if(OutputInfo == True): logger.info(f"Removed Low value {filename} {x} {event} {df.loc[x,event]} {df.loc[x,'Pos']}")
                                                 
@@ -118,38 +118,38 @@ def tidyTheData(df, filename):
                     # else if event is greater than 7 minutes
                     elif (df.loc[x,event] > 420.0):
                         
-                        #Increment the CutOff event counter (minus 1 due the diff in lists EventListStart and EventCutOffCount)
-                        runtimeVars["EventCutOffCount"][MyIndex-1] = runtimeVars["EventCutOffCount"][MyIndex-1] + 1
+                        #Increment the CutOff event counter (minus 1 due the diff in lists StationListStart and StationCutOffCount)
+                        runtimeVars['StationCutOffCount'][MyIndex-1] = runtimeVars['StationCutOffCount'][MyIndex-1] + 1
 
                 except (ValueError):
                         #One of the values in not a string so write NaN to the value.
-                        #print('ValueError', df.loc[x,event], df.loc[x,EventListStart[MyIndex-1]])
+                        #print('ValueError', df.loc[x,event], df.loc[x,StationListStart[MyIndex-1]])
                         df.loc[x,event] = float("nan")
 
                 except (TypeError):
                         #One of the values in not a string so write NaN to the value.
-                        #print('TypeError', df.loc[x,event], df.loc[x,EventListStart[MyIndex-1]])
+                        #print('TypeError', df.loc[x,event], df.loc[x,StationListStart[MyIndex-1]])
                         df.loc[x,event] = float("nan")
                         
         MyIndex = MyIndex - 1
 
 
     #Now I want to get the mean time of each event duration in seconds, so can create a ratio of 2 event times
-    meanEventList = []
+    meanStationList = []
    
     # get the median time for each event.
-    for event in runtimeVars["EventList"]:
-        meanEventList.append(df[event].mean())
+    for event in runtimeVars['StationList']:
+        meanStationList.append(df[event].mean())
 
     # now I need to search for 2 NaN"s side by side.
 
     # Index to last item
-    MyIndex = len(runtimeVars["EventListStart"]) - 1
+    MyIndex = len(runtimeVars['StationListStart']) - 1
 
     #iterate the event list in reverse order
-    for event in runtimeVars["EventListStart"][::-1]:
+    for event in runtimeVars['StationListStart'][::-1]:
 
-        #Note Event = runtimeVars["EventListStart"][MyIndex] below, may be tidier ways to write
+        #Note Event = runtimeVars['StationListStart'][MyIndex] below, may be tidier ways to write
 
         #reorganise data such that each event a duration in reverse format
         for x in df.index:
@@ -158,31 +158,31 @@ def tidyTheData(df, filename):
             if MyIndex != 0:
 
                     #if two consecutive are non numbers. 
-                    if (pd.isnull(df.loc[x,runtimeVars["EventListStart"][MyIndex]]) and pd.isnull(df.loc[x,runtimeVars["EventListStart"][MyIndex-1]])):
+                    if (pd.isnull(df.loc[x,runtimeVars['StationListStart'][MyIndex]]) and pd.isnull(df.loc[x,runtimeVars['StationListStart'][MyIndex-1]])):
                         # then need to calculate the duration of two events.
 
                         #if time format wrong, it causes excpetions.
                         try: 
 
                             twoEventDuration = timedelta.total_seconds(datetime.strptime(rl_data.convert_to_standard_time(dforig.loc[x,event]                                   ),"%H:%M:%S.%f") 
-                                                                     - datetime.strptime(rl_data.convert_to_standard_time(dforig.loc[x,runtimeVars["EventListStart"][MyIndex-2]]),"%H:%M:%S.%f"))
+                                                                     - datetime.strptime(rl_data.convert_to_standard_time(dforig.loc[x,runtimeVars['StationListStart'][MyIndex-2]]),"%H:%M:%S.%f"))
                             #change from 60 seconds to 90 seconds
                             if (twoEventDuration < 90.0):
                                 if(OutputInfo == True): logger.info(f"2 EventDurLow {filename} {x} {event} {twoEventDuration}")
                                 #drop the row
                                 df.drop(x, inplace = True)
                             else:        
-                                df.loc[x,runtimeVars["EventListStart"][MyIndex-1]] = (twoEventDuration * meanEventList[MyIndex-2] )/(meanEventList[MyIndex-2] + meanEventList[MyIndex-1])
-                                df.loc[x,runtimeVars["EventListStart"][MyIndex]]  = (twoEventDuration * meanEventList[MyIndex-1] )/(meanEventList[MyIndex-2] + meanEventList[MyIndex-1])
+                                df.loc[x,runtimeVars['StationListStart'][MyIndex-1]] = (twoEventDuration * meanStationList[MyIndex-2] )/(meanStationList[MyIndex-2] + meanStationList[MyIndex-1])
+                                df.loc[x,runtimeVars['StationListStart'][MyIndex]]  = (twoEventDuration * meanStationList[MyIndex-1] )/(meanStationList[MyIndex-2] + meanStationList[MyIndex-1])
 
                         except (ValueError, TypeError):
                                 #This will catch the competitors where NET time is "DNF" etc....
 
                                 #Set Time values to None
-                                df.loc[x,runtimeVars["EventListStart"][MyIndex-1]] = float("nan")
-                                df.loc[x,runtimeVars["EventListStart"][MyIndex]] = float("nan")
+                                df.loc[x,runtimeVars['StationListStart'][MyIndex-1]] = float("nan")
+                                df.loc[x,runtimeVars['StationListStart'][MyIndex]] = float("nan")
 
-                                #print(f"tidyTheData ValueError, TypeError: {x} {event} {MyIndex} {rl_data.convert_to_standard_time(dforig.loc[x,event])} {rl_data.convert_to_standard_time(dforig.loc[x,runtimeVars["EventListStart"][MyIndex-2]])}")
+                                #print(f"tidyTheData ValueError, TypeError: {x} {event} {MyIndex} {rl_data.convert_to_standard_time(dforig.loc[x,event])} {rl_data.convert_to_standard_time(dforig.loc[x,runtimeVars['StationListStart'][MyIndex-2]])}")
 
         MyIndex = MyIndex - 1
 
@@ -206,8 +206,8 @@ def tidyTheData(df, filename):
             else:
                 df.loc[x,'Time Adj'] = 0.0
 
-            #if net time less than 15 minutes (used to be 6 minutes)
-            if ((df.loc[x,'Net Time']) < 900.0):
+            #if net time less than 10 minutes (used to be 6 minutes)
+            if ((df.loc[x,'Net Time']) < 600.0):
                 #print data...
                 if(OutputInfo == True): logger.info(f"Removed Low NetTime {filename} {x} {df.loc[x,'Net Time']} {df.loc[x,'Pos']}")
                 #drop the row
@@ -219,7 +219,7 @@ def tidyTheData(df, filename):
             calculatedNetTime = 0.0
 
             #iterate the event list in reverse order
-            for event in runtimeVars["EventListStart"]:
+            for event in runtimeVars['StationListStart']:
                 #print(f"event in {x} {event}")
                 calculatedNetTime = calculatedNetTime + df.loc[x,event] 
 
@@ -239,7 +239,7 @@ def tidyTheData(df, filename):
                 df.drop(x, inplace = True)
 
     #On a column by colum basis 
-    for event in runtimeVars["EventList"][::1]:
+    for event in runtimeVars['StationList'][::1]:
         #add a rank column per event
         df[event + ' Rank'] = df[event].rank(ascending=True)
 
@@ -250,24 +250,24 @@ def tidyTheData(df, filename):
     for x in df.index:
 
         RankTotal = 0
-        for event in runtimeVars["EventList"][::1]:
+        for event in runtimeVars['StationList'][::1]:
             
             #add a running total of Rank
             RankTotal = RankTotal + df.loc[x, event + ' Rank']
 
         #write the rank average to the df.
-        df.loc[x,'Average Rank'] = RankTotal / len(runtimeVars["EventList"])
+        df.loc[x,'Average Rank'] = RankTotal / len(runtimeVars['StationList'])
 
     session["runtime"] = runtimeVars
     
  ##############################################################
-# Input a df using runtimeVars["competitorRaceNo"] and runtimeVars["competitorName"]
+# Input a df using runtimeVars['competitorRaceNo'] and runtimeVars['competitorName']
 # returns a competitor index
 #############################################################
-def competitorDataOutput(df):
+def getCompetitorIndex(df, runtimeVars_override=None):
 
     runtimeVars = session.get("runtime", {})
-
+    
     #initialise return value to -1
     compIndex = -1
 
@@ -277,15 +277,15 @@ def competitorDataOutput(df):
  
      #if relay 
     if 'Member1' in df.columns:
-        nameMask = df['Name'].str.contains(runtimeVars["competitorName"], na=False, regex=False) 
-        mem1Mask = df['Member1'].str.contains(runtimeVars["competitorName"], na=False, regex=False) 
-        mem2Mask = df['Member2'].str.contains(runtimeVars["competitorName"], na=False, regex=False)
-        mem3Mask = df['Member3'].str.contains(runtimeVars["competitorName"], na=False, regex=False)
-        mem4Mask = df['Member4'].str.contains(runtimeVars["competitorName"], na=False, regex=False)
-        compMask = nameMask | mem1Mask | mem2Mask | mem3Mask | mem4Mask & df['Race No'].astype(str).str.contains(runtimeVars["competitorRaceNo"], na=False, regex=False)
+        nameMask = df['Name'].str.contains(runtimeVars['competitorName'], na=False, regex=False) 
+        mem1Mask = df['Member1'].str.contains(runtimeVars['competitorName'], na=False, regex=False) 
+        mem2Mask = df['Member2'].str.contains(runtimeVars['competitorName'], na=False, regex=False)
+        mem3Mask = df['Member3'].str.contains(runtimeVars['competitorName'], na=False, regex=False)
+        mem4Mask = df['Member4'].str.contains(runtimeVars['competitorName'], na=False, regex=False)
+        compMask = nameMask | mem1Mask | mem2Mask | mem3Mask | mem4Mask & df['Race No'].astype(str).str.contains(runtimeVars['competitorRaceNo'], na=False, regex=False)
 
     else:
-        compMask = df['Name'].str.contains(runtimeVars["competitorName"], regex=False) & df['Race No'].astype(str).str.contains(runtimeVars["competitorRaceNo"], na=False, regex=False)
+        compMask = df['Name'].str.contains(runtimeVars['competitorName'], regex=False) & df['Race No'].astype(str).str.contains(runtimeVars['competitorRaceNo'], na=False, regex=False)
 
     #dataframe with matching competitors and race number
     compDF = df[compMask]
@@ -299,7 +299,8 @@ def competitorDataOutput(df):
     else:
 
         logger = rl_data.get_logger()
-        logger.warning(f"No data for the selected competitor {runtimeVars["competitorName"]} in the selected event {runtimeVars["eventDataList"][0]}")
+        logger.warning(f"No data for the selected competitor {runtimeVars['competitorName']} {runtimeVars['competitorRaceNo']} in the selected event {runtimeVars['eventDataList'][0]}")
+        logger.debug(f"df {df.shape} compDF {compDF.shape}")
 
     return compIndex
 
@@ -310,7 +311,7 @@ def tidyTheDataCorr(df):
     runtimeVars = session.get("runtime", {})
 
     ####Remove Rank columns as dont need anymore
-    for event in runtimeVars["EventList"][::1]:
+    for event in runtimeVars['StationList'][::1]:
         df.drop(event + ' Rank', axis=1, inplace = True)
 
     #Average Rank not needed
@@ -371,10 +372,10 @@ def CreateDfCsv(df, filepath, runtimeVars, competitorIndex=-1 ):
     # Check if file exists or force generation
 
     if os.path.isfile(filepath) :
-        logger.debug(f"File {filepath} already exists. Skipping generation.")
+        #logger.debug(f"File {filepath} already exists. Skipping generation.")
         return True
 
-    #ignore competitorIndex, I guess could return error if not -1, but not today
+    #ignore competitorIndex
 
     df.to_csv(filepath, index=False)
     logger.debug(f"Saved {filepath}")
@@ -383,114 +384,177 @@ def CreateDfCsv(df, filepath, runtimeVars, competitorIndex=-1 ):
  ################################
 # Create a competitor info file.
 ################################
+
 def GenerateCompInfoTable(df, filepath, runtimeVars, competitorIndex=-1 ):
-
     logger = rl_data.get_logger()
-    # Check if file exists or force generation
-    if os.path.isfile(filepath) :
-        logger.debug(f"File {filepath} already exists. Skipping generation.")
-        return True
 
+    if os.path.isfile(filepath) : # Add force check if needed
+        logger.debug(f"File {filepath} already exists. Reading content.")
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                return f.read()
+        except Exception as e:
+            logger.error(f"Error reading existing HTML file {filepath}: {e}")
 
+    if competitorIndex == -1 or competitorIndex not in df.index:
+        message = f"Invalid competitorIndex ({competitorIndex}) or competitor not in DataFrame for event {runtimeVars.get('eventDataList', [None, 'N/A'])[1]}."
+        logger.warning(message)
+        error_html = f"<p class='text-danger'>{message}</p>"
+        try:
+            with open(filepath, "w", encoding='utf-8') as file: file.write(error_html)
+        except Exception as e: logger.error(f"Error writing error HTML to {filepath}: {e}")
+        return error_html
 
-    stringHtml = '<table class="styled-table">'
-
-    #If we have a competitor indx.
-    if (competitorIndex != -1):
+    html_parts = ['<div class="table-responsive">']
+    html_parts.append('<table class="table table-sm table-striped table-bordered mb-4"><tbody>') 
     
-        #if category column exist.
-        if 'Category' in df.columns:
-            compCat = df.loc[competitorIndex, "Category"]
+    competitor_name_title = df.loc[competitorIndex, "Name"].title() if pd.notna(df.loc[competitorIndex, "Name"]) else "N/A"
 
-        if 'Member1' in df.columns:
-
-            stringHtml += '<tr><td><strong>Team Name </strong></td><td>' +  df.loc[competitorIndex, "Name"].title() + "</td></tr>"
-            stringHtml += '<tr><td><strong>Members </strong></td><td>' +  df.loc[competitorIndex, "Member1"].title() +  df.loc[competitorIndex, "Member2"].title() +  df.loc[competitorIndex, "Member3"].title() +  df.loc[competitorIndex, "Member4"].title() + "</td></tr>"
-            
-        else:
-             stringHtml += '<tr><td><strong>Competitor Name </strong></td><td>' +  df.loc[competitorIndex, "Name"].title()  + "</td></tr>"
-
-        stringHtml += '<tr><td><strong>Gender          </strong></td><td>' +  df.loc[competitorIndex, "Gender"]  + "</td></tr>"
-
-        if 'Category' in df.columns:
-            stringHtml += '<tr><td><strong>Category        </strong></td><td>' +  compCat  + "</td></tr>"
-
-        stringHtml += '<tr><td><strong>Event           </strong></td><td>' +  runtimeVars["eventDataList"][1] + "</td></tr>"
-        stringHtml += '<tr><td><strong>Wave            </strong></td><td>' +  df.loc[competitorIndex, "Wave"] + "</td></tr>"
-        stringHtml += '<tr><td><strong>Position        </strong></td><td>' +  str(df.loc[competitorIndex, "Pos"]) + ' of '+ str(len(df.index)) + ' finishers.'+ "</td></tr>"
-
-        #if category column exist.
-        if (('Category' in df.columns) and (compCat != "All Ages")):
-            stringHtml += '<tr><td><strong>Cat Pos         </strong></td><td>' +  str(df.loc[competitorIndex, "Cat Pos"])+ ' of '+ str(df['Category'].value_counts()[compCat]) + ' finishers.' + "</td></tr>"
-            
-        stringHtml += '<tr><td><strong>Calc Time</strong></td><td>' + rl_data.format_time_mm_ss(df.loc[competitorIndex, "Calc Time"]) + "</td></tr>"
-        stringHtml += '<tr><td><strong>Time Adj</strong></td><td>' + rl_data.format_time_mm_ss(df.loc[competitorIndex, "Time Adj"]) + "</td></tr>"
-        stringHtml += '<tr><td><strong>Net Time</strong></td><td>' + rl_data.format_time_mm_ss(df.loc[competitorIndex, "Net Time"]) + "</td></tr>"
-        stringHtml += '<tr><td><strong>Average Event Rank </strong></td><td>{:.1f}'.format(df.loc[competitorIndex, "Average Rank"]) + "</td></tr>"
-
-        #if category column exist.
-        if (('Category' in df.columns) and (compCat != "All Ages")):
-                
-            #filter by category
-            dfcat = df[df['Category']==compCat].copy()
-
-            #On a column by colum basis 
-            for event in runtimeVars["EventList"]:
-                #add a rank column per event
-                dfcat.loc[:, event + ' CatRank'] = dfcat[event].rank(ascending=True)
-
-            #add a Rank Average Column initialised to 0
-            dfcat['Average Cat Rank'] = 0.0
-
-            # Calculate the Average Ranks per competitor
-            for x in dfcat.index:
-                RankTotal = 0
-                for event in runtimeVars["EventList"][::1]:
-                    #add a running total of Rank
-                    RankTotal = RankTotal + dfcat.loc[x, event + ' CatRank']
-
-                #write the rank average to the df.
-                dfcat.loc[x,'Average Cat Rank'] = RankTotal / len(runtimeVars["EventList"])
-
-            stringHtml += '<tr><td><strong>Average Event CatRank </strong></td><td>{:.1f}'.format(dfcat.loc[competitorIndex, "Average Cat Rank"]) + "</td></tr>"
-
-        stringHtml += '</table><br>'
-
-        #if category column exist.
-        if (('Category' in df.columns) and (compCat != "All Ages")):
-            # Create the pandas DataFrame
-            tableDF = pd.DataFrame(index=runtimeVars["EventList"],columns=['Time', 'Rank', 'CatRank'])
-        else:
-            tableDF = pd.DataFrame(index=runtimeVars["EventList"],columns=['Time', 'Rank'])
-
-        for event in runtimeVars["EventList"]:
-            # Format individual float values directly
-            time_val = rl_data.format_time_mm_ss(df.loc[competitorIndex, event])
-            rank_val = df.loc[competitorIndex, f"{event} Rank"]
-
-            tableDF.loc[event, 'Time'] = f"{time_val}" if pd.notnull(time_val) else ''
-            tableDF.loc[event, 'Rank'] = f"{rank_val:.1f}" if pd.notnull(rank_val) else ''
-
-            # Only handle CatRank if needed
-            if ('Category' in df.columns) and (compCat != "All Ages"):
-                catrank_val = dfcat.loc[competitorIndex, f"{event} CatRank"]
-                tableDF.loc[event, 'CatRank'] = f"{catrank_val:.1f}" if pd.notnull(catrank_val) else ''
-
-        #forcibly remove the style attribute from string
-        stringHtml += re.sub( ' style=\"text-align: right;\"','',tableDF.to_html())
-        stringHtml += '<br>'
-
-        with open(filepath, "w") as file:
-            file.write(stringHtml)
-
-        logger.debug(f"Saved {filepath}")
-
+    if 'Member1' in df.columns and pd.notna(df.loc[competitorIndex, "Member1"]):
+        members_list = [df.loc[competitorIndex, f"Member{i}"].title() for i in range(1, 5) if f"Member{i}" in df.columns and pd.notna(df.loc[competitorIndex, f"Member{i}"])]
+        team_members_str = ", ".join(members_list)
+        html_parts.append(f'<tr><th scope="row" style="width: 30%;">Team Name</th><td>{competitor_name_title}</td></tr>')
+        if team_members_str: html_parts.append(f'<tr><th scope="row">Members</th><td>{team_members_str}</td></tr>')
     else:
+        html_parts.append(f'<tr><th scope="row" style="width: 30%;">Competitor Name</th><td>{competitor_name_title}</td></tr>')
 
-        logger.warning(f"No data for the selected competitor {runtimeVars["competitorName"]} in the selected event {runtimeVars["eventDataList"][0]}")
-        return False
+    html_parts.append(f'<tr><th scope="row">Gender</th><td>{df.loc[competitorIndex, "Gender"]}</td></tr>')
 
-    return True
+    compCat = None
+    if 'Category' in df.columns:
+        compCat = df.loc[competitorIndex, "Category"]
+        html_parts.append(f'<tr><th scope="row">Category</th><td>{compCat if pd.notna(compCat) else "N/A"}</td></tr>')
+
+    event_display_name = runtimeVars.get('eventDataList', [None, "N/A"])[1]
+    html_parts.append(f'<tr><th scope="row">Event</th><td>{event_display_name}</td></tr>')
+    html_parts.append(f'<tr><th scope="row">Wave</th><td>{df.loc[competitorIndex, "Wave"]}</td></tr>')
+    
+    total_finishers = len(df.dropna(subset=['Net Time']).index)
+    pos_val = df.loc[competitorIndex, "Pos"]
+    pos_display = f"{int(pos_val)}" if pd.notna(pos_val) else "N/A"
+    html_parts.append(f'<tr><th scope="row">Overall Position</th><td>{pos_display} of {total_finishers}</td></tr>')
+
+    if compCat and compCat != "All Ages" and 'Category' in df.columns and 'Cat Pos' in df.columns:
+        cat_pos_val = df.loc[competitorIndex, "Cat Pos"]
+        cat_pos_display = f"{int(cat_pos_val)}" if pd.notna(cat_pos_val) else "N/A"
+        if compCat in df['Category'].value_counts():
+            cat_finishers = df['Category'].value_counts()[compCat]
+            html_parts.append(f'<tr><th scope="row">Category Position</th><td>{cat_pos_display} of {cat_finishers}</td></tr>')
+        else:
+            html_parts.append(f'<tr><th scope="row">Category Position</th><td>{cat_pos_display} (Category count unavailable)</td></tr>')
+            
+    html_parts.append(f'<tr><th scope="row">Calculated Time</th><td>{rl_data.format_time_mm_ss(df.loc[competitorIndex, "Calc Time"])}</td></tr>')
+    html_parts.append(f'<tr><th scope="row">Time Adjustment</th><td>{rl_data.format_time_mm_ss(df.loc[competitorIndex, "Time Adj"])}</td></tr>')
+    html_parts.append(f'<tr><th scope="row">Net Time</th><td>{rl_data.format_time_mm_ss(df.loc[competitorIndex, "Net Time"])}</td></tr>')
+    
+    avg_rank_val = df.loc[competitorIndex, "Average Rank"]
+    avg_rank_display = f"{avg_rank_val:.1f}" if pd.notna(avg_rank_val) else "N/A"
+    html_parts.append(f'<tr><th scope="row">Average Event Rank</th><td>{avg_rank_display} of {total_finishers}</td></tr>')
+
+    dfcat = None 
+    if compCat and compCat != "All Ages" and 'Category' in df.columns:
+        dfcat = df[df['Category'] == compCat].copy() 
+        if not dfcat.empty and competitorIndex in dfcat.index:
+            current_station_list_for_cat_rank = runtimeVars.get('StationList', []) # Use Stationlist
+            
+            cat_rank_cols_to_avg = []
+            for station in current_station_list_for_cat_rank:
+                if station in dfcat.columns:
+                    dfcat.loc[:, station + ' CatRank'] = pd.to_numeric(dfcat[station], errors='coerce').rank(ascending=True, na_option='bottom')
+                    cat_rank_cols_to_avg.append(station + ' CatRank')
+                else:
+                    dfcat.loc[:, station + ' CatRank'] = np.nan
+
+            if cat_rank_cols_to_avg:
+                 dfcat['Average Cat Rank'] = dfcat[cat_rank_cols_to_avg].mean(axis=1, skipna=True)
+                 avg_cat_rank_val = dfcat.loc[competitorIndex, "Average Cat Rank"] # This should be from dfcat
+                 avg_cat_rank_display = f"{avg_cat_rank_val:.1f}" if pd.notna(avg_cat_rank_val) else "N/A"
+                 html_parts.append(f'<tr><th scope="row">Average Event CatRank</th><td>{avg_cat_rank_display} of {cat_finishers}</td></tr>')
+            else:
+                html_parts.append(f'<tr><th scope="row">Average Event CatRank</th><td>N/A</td></tr>')
+        elif compCat and compCat != "All Ages":
+             html_parts.append(f'<tr><th scope="row">Average Event CatRank</th><td>N/A</td></tr>') # Simpler N/A
+
+    html_parts.append('</tbody></table><br>')
+
+    # --- Station Breakdown Table ---
+    station_breakdown_columns_display = ['Time', 'Rank'] # Display column names
+    station_breakdown_data_keys = ['Time', 'Rank'] # Keys for internal data structure
+
+    if compCat and compCat != "All Ages" and dfcat is not None and not dfcat.empty and competitorIndex in dfcat.index:
+        station_breakdown_columns_display.append('CatRank')
+        station_breakdown_data_keys.append('CatRank') # Internal key matches display
+    
+    current_station_list_for_breakdown = runtimeVars.get('StationList', [])
+    
+    station_table_rows_data = []
+    if not current_station_list_for_breakdown:
+        logger.warning("EventList (for station breakdown) is empty in runtimeVars.")
+    
+    for station in current_station_list_for_breakdown:
+        row_data = {'Station': station} # Add station name to the row data itself
+        
+        time_val = df.loc[competitorIndex, station] if station in df.columns else np.nan
+        rank_col_name = f"{station} Rank"
+        rank_val = df.loc[competitorIndex, rank_col_name] if rank_col_name in df.columns else np.nan
+        
+        #count the number of valide values in the time column
+        #rank_val_count = df[station].count()
+        
+        row_data['Time'] = rl_data.format_time_mm_ss(time_val)
+        row_data['Rank'] = f"{rank_val:.1f} of {total_finishers}" if pd.notna(rank_val) else ''
+
+        if 'CatRank' in station_breakdown_data_keys:
+            catrank_col_name = f"{station} CatRank"
+            if dfcat is not None and catrank_col_name in dfcat.columns and competitorIndex in dfcat.index:
+                #count the number of valid values in the rank column
+                cat_finishers = df['Category'].value_counts()[compCat]
+        
+                catrank_val = dfcat.loc[competitorIndex, catrank_col_name]
+                row_data['CatRank'] = f"{catrank_val:.1f} of {cat_finishers}" if pd.notna(catrank_val) else ''
+            else:
+                 row_data['CatRank'] = '' # Ensure key exists if column should
+        
+        station_table_rows_data.append(row_data)
+
+    if station_table_rows_data:
+        # Create DataFrame directly from list of dictionaries
+        tableDF = pd.DataFrame(station_table_rows_data)
+        # Set 'Station' as the first column if it isn't already, or use it as index
+        if 'Station' in tableDF.columns:
+            tableDF = tableDF.set_index('Station') 
+            # Reorder columns to match display order, if 'Station' was not first
+            # This is not strictly necessary if columns in station_table_rows_data were ordered
+            # tableDF = tableDF[station_breakdown_columns_display] # This line might error if 'Station' is index
+            # If 'Station' is index, columns are just the data columns
+            tableDF = tableDF[station_breakdown_data_keys]
+
+
+        # Convert DataFrame to HTML
+        # index=True to show the "Station" index, index_names=False to hide the "Station" label above the index
+        html_station_table = tableDF.to_html(
+            classes=['table', 'table-sm', 'table-striped', 'table-bordered', 'dataframe'], # Add 'dataframe' for specific styling
+            border=0, 
+            na_rep='',
+            index=True, # Show the 'Station' index
+            index_names=False # Show the index name 'Station' as a header
+        )
+        html_parts.append(html_station_table)
+    else:
+        html_parts.append("<p>No station breakdown data available.</p>")
+
+    html_parts.append('</div>') # Close responsive wrapper
+    final_html = "".join(html_parts)
+
+    try:
+        with open(filepath, "w", encoding='utf-8') as file:
+            file.write(final_html)
+        logger.debug(f"Saved competitor info HTML to {filepath}")
+    except Exception as e:
+        logger.error(f"Error writing HTML file {filepath}: {e}")
+        return f"<p class='text-danger'>Error generating competitor information file: {e}</p>"
+
+    return final_html
     
 
 #############################
@@ -499,13 +563,10 @@ def GenerateCompInfoTable(df, filepath, runtimeVars, competitorIndex=-1 ):
 
 def CreateCorrBar(df, filepath, runtimeVars, competitorIndex=-1):
     logger = rl_data.get_logger()
-
-    #remove category for corralation info
-
-
+  
     # Check if file exists or force generation
     if os.path.isfile(filepath) :
-        logger.debug(f"File {filepath} already exists. Skipping generation.")
+        #logger.debug(f"File {filepath} already exists. Skipping generation.")
         return True
 
     dfcorr = df.copy(deep=True)
@@ -530,7 +591,7 @@ def CreateCorrBar(df, filepath, runtimeVars, competitorIndex=-1):
         plt.xticks(rotation=70)
         plt.ylabel('Total Time')
 
-        heatmap.set_title('Event Correlation V Total Time ' + runtimeVars["eventDataList"][1], fontdict={'fontsize':12}, pad=10);
+        heatmap.set_title('Event Correlation V Total Time ' + runtimeVars['eventDataList'][1], fontdict={'fontsize':12}, pad=10);
 
         # Output/Show depending of global variable setting with pad inches
         plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.5)
@@ -547,7 +608,7 @@ def CreateCorrHeat(df, filepath, runtimeVars, competitorIndex=-1 ):
 
     # Check if file exists or force generation
     if os.path.isfile(filepath) :
-        logger.debug(f"File {filepath} already exists. Skipping generation.")
+        #logger.debug(f"File {filepath} already exists. Skipping generation.")
         return True
     
     #if a competitor is selected dont show correlation bar chart    
@@ -563,7 +624,7 @@ def CreateCorrHeat(df, filepath, runtimeVars, competitorIndex=-1 ):
 
         plt.figure(figsize=(10, 10))
         heatmap = sns.heatmap(corr_matrix, vmin=-0, vmax=1, annot=True, cmap='BrBG')
-        heatmap.set_title('Correlation Heatmap ' + runtimeVars["eventDataList"][1], fontdict={'fontsize':12}, pad=12);
+        heatmap.set_title('Correlation Heatmap ' + runtimeVars['eventDataList'][1], fontdict={'fontsize':12}, pad=12);
 
         # Output/Show depending of global variable setting with pad inches
         plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.5)
@@ -580,10 +641,8 @@ def CreateHistAgeCat(df, filepath, runtimeVars, competitorIndex=-1 ):
 
     # Check if file exists or force generation
     if os.path.isfile(filepath) :
-        logger.debug(f"File {filepath} already exists. Skipping generation.")
+        #logger.debug(f"File {filepath} already exists. Skipping generation.")
         return True
-
-
 
     # set num of categories to be 3 by default
     num_cat        = 3
@@ -591,7 +650,7 @@ def CreateHistAgeCat(df, filepath, runtimeVars, competitorIndex=-1 ):
     plt.figure(figsize=(10, 10))
 
     # do for 2023
-    if (runtimeVars["eventDataList"][2]=="2023"):
+    if (runtimeVars['eventDataList'][2]=="2023"):
 
         #Competitive singles Category columns colours
         Category_order = ["18 - 29", "30 - 39", "40+"]
@@ -625,7 +684,7 @@ def CreateHistAgeCat(df, filepath, runtimeVars, competitorIndex=-1 ):
     if 'Category' in df.columns:
 
         #if 2024 style
-        if (runtimeVars["eventDataList"][2]=="2024"):
+        if (runtimeVars['eventDataList'][2]=="2024"):
 
             #need to setup for singles or teams
             #if single matches exist
@@ -668,7 +727,7 @@ def CreateHistAgeCat(df, filepath, runtimeVars, competitorIndex=-1 ):
     plt.xticks(bins)
     plt.xlabel('Time (Minutes)')
     plt.ylabel('Num. Participants')
-    plt.title(runtimeVars["eventDataList"][1] + ' Time Distrbution')
+    plt.title(runtimeVars['eventDataList'][1] + ' Time Distrbution')
     plt.grid(color ='grey', linestyle ='-.', linewidth = 0.5, alpha = 0.4)
 
     # Output/Show depending of global variable setting.
@@ -684,14 +743,10 @@ def CreateBarChartEvent(df, filepath, runtimeVars, competitorIndex=-1 ):
     logger = rl_data.get_logger()
 
     if os.path.isfile(filepath):
-        logger.debug(f"File {filepath} already exists. Skipping generation.")
+        #logger.debug(f"File {filepath} already exists. Skipping generation.")
         return True
 
-
-
-    #print(f"Generating Bar Chart with Top Legends for event {runtimeVars["eventDataList"][0]} at {filepath}")
-
-    station_names = runtimeVars["EventList"]
+    station_names = runtimeVars['StationList']
     x_positions = np.arange(len(station_names))
 
     percentile_bands_data = {
@@ -771,10 +826,10 @@ def CreateBarChartEvent(df, filepath, runtimeVars, competitorIndex=-1 ):
     # Reduced title padding to bring it closer to the plot
     title_pad = 10 
     if competitorIndex == -1:
-        ax.set_title(f"{runtimeVars["eventDataList"][1]}\nStation Time Distribution", fontsize=13, pad=title_pad)
+        ax.set_title(f"{runtimeVars['eventDataList'][1]}\nStation Time Distribution", fontsize=13, pad=title_pad)
     else:
         competitor_title_name = df.loc[competitorIndex, 'Name'] if 'Name' in df.columns else "Selected Competitor"
-        ax.set_title(f"{runtimeVars["eventDataList"][1]} - {competitor_title_name}\nPerformance vs. Time Percentiles", fontsize=13, pad=title_pad)
+        ax.set_title(f"{runtimeVars['eventDataList'][1]} - {competitor_title_name}\nPerformance vs. Time Percentiles", fontsize=13, pad=title_pad)
     
     # --- Legend Handling: Two separate legends at the top ---
     # Legend 1: Percentile Bands (reversed for visual stacking order)
@@ -816,18 +871,12 @@ def CreateBarChartEvent(df, filepath, runtimeVars, competitorIndex=-1 ):
 def CreateViolinChartEvent(df, filepath, runtimeVars, competitorIndex=-1 ):
     logger = rl_data.get_logger()
 
-
     if os.path.isfile(filepath):
-        logger.debug(f"File {filepath} already exists. Skipping generation.")
+        #logger.debug(f"File {filepath} already exists. Skipping generation.")
         return True
 
-
-    
-
-    #print(f"Generating Violin Chart for event {runtimeVars["eventDataList"][0]} at {filepath}")
-
-    station_data_df = df[runtimeVars["EventList"]].copy()
-    for col in runtimeVars["EventList"]:
+    station_data_df = df[runtimeVars['StationList']].copy()
+    for col in runtimeVars['StationList']:
         station_data_df[col] = pd.to_numeric(station_data_df[col], errors='coerce')
 
     all_station_times_flat = station_data_df.values.flatten()
@@ -838,7 +887,7 @@ def CreateViolinChartEvent(df, filepath, runtimeVars, competitorIndex=-1 ):
         pass 
 
     df_melted = station_data_df.melt(var_name='Station', value_name='Time (s)')
-    df_melted['Station'] = pd.Categorical(df_melted['Station'], categories=runtimeVars["EventList"], ordered=True)
+    df_melted['Station'] = pd.Categorical(df_melted['Station'], categories=runtimeVars['StationList'], ordered=True)
     df_melted_filtered = df_melted[df_melted['Time (s)'] < cutoff_time].dropna(subset=['Time (s)'])
 
     plt.figure(figsize=(12, 12))
@@ -846,7 +895,7 @@ def CreateViolinChartEvent(df, filepath, runtimeVars, competitorIndex=-1 ):
 
     if not df_melted_filtered.empty:
         sns.violinplot(ax=ax, x='Station', y='Time (s)', data=df_melted_filtered, 
-                       order=runtimeVars["EventList"], 
+                       order=runtimeVars['StationList'], 
                        inner='quartile', 
                        cut=1,          
                        hue='Station',         
@@ -856,14 +905,14 @@ def CreateViolinChartEvent(df, filepath, runtimeVars, competitorIndex=-1 ):
                        density_norm='width')
     else:
         print("Warning: All data filtered out by cutoff time. Plotting empty chart structure.")
-        ax.set_xticks(np.arange(len(runtimeVars["EventList"])))
-        ax.set_xticklabels(runtimeVars["EventList"], rotation=90, fontsize=9)
+        ax.set_xticks(np.arange(len(runtimeVars['StationList'])))
+        ax.set_xticklabels(runtimeVars['StationList'], rotation=90, fontsize=9)
 
     if competitorIndex != -1:
         compList_station_times_raw = [] # Store raw times for labeling
         compList_station_times_plot = [] # Store potentially clamped times for plotting marker
 
-        for event in runtimeVars["EventList"]:
+        for event in runtimeVars['StationList']:
             comp_time = df.loc[competitorIndex, event]
             try:
                 comp_time_numeric = float(comp_time)
@@ -875,7 +924,7 @@ def CreateViolinChartEvent(df, filepath, runtimeVars, competitorIndex=-1 ):
                 compList_station_times_raw.append(np.nan)
                 compList_station_times_plot.append(np.nan)
 
-        x_positions = np.arange(len(runtimeVars["EventList"]))
+        x_positions = np.arange(len(runtimeVars['StationList']))
         
         competitor_name_legend = df.loc[competitorIndex, 'Name'] if 'Name' in df.columns else "Competitor"
 
@@ -919,10 +968,10 @@ def CreateViolinChartEvent(df, filepath, runtimeVars, competitorIndex=-1 ):
     plt.grid(True, linestyle=':', color='grey', alpha=0.6)
     
     if competitorIndex == -1:
-        plt.title(f"{runtimeVars["eventDataList"][1]} Station Time Distribution", fontsize=14)
+        plt.title(f"{runtimeVars['eventDataList'][1]} Station Time Distribution", fontsize=14)
     else:
         competitor_title_name = df.loc[competitorIndex, 'Name'] if 'Name' in df.columns else "Selected Competitor"
-        plt.title(f"{runtimeVars["eventDataList"][1]} - {competitor_title_name}\nStation Time vs. Distribution", fontsize=14)
+        plt.title(f"{runtimeVars['eventDataList'][1]} - {competitor_title_name}\nStation Time vs. Distribution", fontsize=14)
     
     plt.tight_layout(pad=1.0)
 
@@ -938,21 +987,21 @@ def CreateBarChartCutOffEvent(df, filepath, runtimeVars, competitorIndex=-1 ):
     logger = rl_data.get_logger()
 
     if os.path.isfile(filepath):
-        logger.debug(f"File {filepath} already exists. Skipping generation.")
+        #logger.debug(f"File {filepath} already exists. Skipping generation.")
         return True
     
     fig, ax = plt.subplots(figsize=(10, 10))
 
     #null list
-    cutOffEventList = []
+    cutOffStationList = []
     MyIndex = 0
 
-    for event in runtimeVars["EventList"][::]:
+    for event in runtimeVars['StationList'][::]:
         #add percentage to list
-        cutOffEventList.append((100*runtimeVars["EventCutOffCount"][MyIndex]) / len(df.index) )
+        cutOffStationList.append((100*runtimeVars['StationCutOffCount'][MyIndex]) / len(df.index) )
         MyIndex = MyIndex + 1
 
-    ax.bar(runtimeVars["EventList"], cutOffEventList,       color='red'   , label='Partipants > 7min')
+    ax.bar(runtimeVars['StationList'], cutOffStationList,       color='red'   , label='Partipants > 7min')
 
     for container in ax.containers:
         ax.bar_label(container,fmt='%.1f%%')
@@ -960,7 +1009,7 @@ def CreateBarChartCutOffEvent(df, filepath, runtimeVars, competitorIndex=-1 ):
     plt.grid(color ='grey', linestyle ='-.', linewidth = 0.5, alpha = 0.4)
     plt.tick_params(axis='x', labelrotation=90)
     plt.ylabel('Num Participants')
-    plt.title(runtimeVars["eventDataList"][1] + ' Station 7 Min Stats')
+    plt.title(runtimeVars['eventDataList'][1] + ' Station 7 Min Stats')
     plt.legend() 
 
     plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.3)
@@ -975,58 +1024,59 @@ def CreatePieChartAverage(df, filepath, runtimeVars, competitorIndex=-1 ):
     logger = rl_data.get_logger()
 
     if os.path.isfile(filepath):
-        logger.debug(f"File {filepath} already exists. Skipping generation.")
+        #logger.debug(f"File {filepath} already exists. Skipping generation.")
         return True
-
-    
-
 
     # Just do Generic pie chart based on mean time per event.
     if(competitorIndex==-1):
 
         plt.figure(figsize=(10, 10))
 
-        meanEventList = []
-        meanEventListLabel = []
+        meanStationList = []
+        meanStationListLabel = []
         totalMeanTime = 0.0
     
         # get the median time for each event.
-        for event in runtimeVars["EventList"]:
-            meanEventList.append(df[event].mean())
+        for event in runtimeVars['StationList']:
+            meanStationList.append(df[event].mean())
             totalMeanTime = totalMeanTime + int(df[event].mean())
 
             eventLabelString = "{}\n{:1d}m {:2d}s".format(event, int(df[event].mean())//60 ,int(df[event].mean())%60)
-            meanEventListLabel.append(eventLabelString)
+            meanStationListLabel.append(eventLabelString)
 
         totalMeanTimeString = "{:1d}m {:2d}s".format(int(totalMeanTime)//60 ,int(totalMeanTime)%60)
-        plt.title(runtimeVars["eventDataList"][1] + ' Average Station Breakdown : ' + totalMeanTimeString )
+        plt.title(runtimeVars['eventDataList'][1] + ' Average Station Breakdown : ' + totalMeanTimeString )
     
         #create pie chart = Use Seaborn's color palette 'Set2'
-        plt.pie(meanEventList, labels = meanEventListLabel, startangle = 0, autopct='%1.1f%%', colors=sns.color_palette('Set2'))
+        plt.pie(meanStationList, labels = meanStationListLabel, startangle = 0, autopct='%1.1f%%', colors=sns.color_palette('Set2'))
         
         plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.3)
         plt.close()
 
     # else do competitor specific pie chart based on actual time per event.
     else:
+        
+        #print(f"Generating Pie Chart for competitor {df.loc[competitorIndex,'Name']} {filepath}")
 
         plt.figure(figsize=(10, 10))
 
-        compEventList = []
-        compEventListLabel = []
+        compStationList = []
+        compStationListLabel = []
 
         # get the median time for each event.
-        for event in runtimeVars["EventList"]:
+        for event in runtimeVars['StationList']:
         
-            compEventList.append(df.loc[competitorIndex,event])
+            compStationList.append(df.loc[competitorIndex,event])
             eventLabelString = "{}\n{:1d}m {:2d}s".format(event, int(df.loc[competitorIndex,event])//60 ,int(df.loc[competitorIndex,event])%60)
-            compEventListLabel.append(eventLabelString)
+            compStationListLabel.append(eventLabelString)
 
         totalCompTimeString = "{:1d}m {:2d}s".format(int(df.loc[competitorIndex,'Calc Time'])//60 ,int(df.loc[competitorIndex,'Calc Time'])%60)
-        plt.title(runtimeVars["eventDataList"][1] + ' ' + df.loc[competitorIndex,'Name'] + ' Stations: ' + totalCompTimeString )
+        plt.title(runtimeVars['eventDataList'][1] + ' ' + df.loc[competitorIndex,'Name'] + ' Stations: ' + totalCompTimeString )
+
+        #print(f"Generating Pie Chart for competitor {compStationList} {compStationListLabel}")
 
         #create pie chart = Use Seaborn's color palette 'Set2'
-        plt.pie(compEventList, labels = compEventListLabel, startangle = 0, autopct='%1.1f%%', colors=sns.color_palette('Set2'))
+        plt.pie(compStationList, labels = compStationListLabel, startangle = 0, autopct='%1.1f%%', colors=sns.color_palette('Set2'))
 
         plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.3)
         plt.close()
@@ -1042,12 +1092,10 @@ def CreateRadar(df, filepath, runtimeVars, competitorIndex=-1 ):
     logger = rl_data.get_logger()
 
     if os.path.isfile(filepath):
-        logger.debug(f"File {filepath} already exists. Skipping generation.")
+        #logger.debug(f"File {filepath} already exists. Skipping generation.")
         return True
-
-
     
-    num_vars = len(runtimeVars["EventList"])
+    num_vars = len(runtimeVars['StationList'])
     angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
     
     fig, ax = plt.subplots(figsize=(9, 9), subplot_kw=dict(polar=True)) # Use consistent larger size
@@ -1059,7 +1107,7 @@ def CreateRadar(df, filepath, runtimeVars, competitorIndex=-1 ):
         median_event_times_actual = []
         station_axis_labels = [] # For station names only on this plot
 
-        for event in runtimeVars["EventList"]:
+        for event in runtimeVars['StationList']:
             median_time = df[event].quantile(0.50)
             median_event_times_actual.append(median_time)
             station_axis_labels.append(event) # Just the event name for axis labels
@@ -1094,14 +1142,14 @@ def CreateRadar(df, filepath, runtimeVars, competitorIndex=-1 ):
         ax.set_xticks(angles) # Use original angles for xticks
         ax.set_xticklabels(station_axis_labels) # Set x-tick labels to event names
         
-        plt.title(f"{runtimeVars["eventDataList"][1]}\nMedian Performance Times (Seconds)", size=14, color='black', y=1.1)
+        plt.title(f"{runtimeVars['eventDataList'][1]}\nMedian Performance Times (Seconds)", size=14, color='black', y=1.1)
         ax.legend(loc='upper right', bbox_to_anchor=(1.15, 1.1)) # Moved legend
 
     else: # competitorIndex != -1 (Individual Competitor Plot - kept as your preferred version)
         compEventPercentiles = []
         compEventLabels = [] 
 
-        for event in runtimeVars["EventList"]:
+        for event in runtimeVars['StationList']:
             raw_rank = df.loc[competitorIndex, event + ' Rank']
             max_rank = df[event + ' Rank'].max() 
             
@@ -1137,7 +1185,7 @@ def CreateRadar(df, filepath, runtimeVars, competitorIndex=-1 ):
         label_padding = -5 # Experiment with this value (e.g., 10, 15, 20, 25) 
         ax.tick_params(axis='x', pad=label_padding)
 
-        plt.title(f"{runtimeVars["eventDataList"][1]}\n{df.loc[competitorIndex,'Name']} Performance Rank Percentile",y=1.12,size=14, color='black')
+        plt.title(f"{runtimeVars['eventDataList'][1]}\n{df.loc[competitorIndex,'Name']} Performance Rank Percentile",y=1.12,size=14, color='black')
         ax.legend(loc='upper right', bbox_to_anchor=(1.25, 1.1)) # Adjusted anchor for more space
 
     # --- Common Styling for Both Plot Types (Mostly for competitor plot now, generic has its own) ---
@@ -1178,7 +1226,6 @@ def CreateRadar(df, filepath, runtimeVars, competitorIndex=-1 ):
                 for text in legend.get_texts():
                     text.set_color('dimgray')
 
-
     plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.3)
     plt.close()
 
@@ -1192,7 +1239,7 @@ def CreateGroupBarChart(df, filepath, runtimeVars, competitorIndex=-1 ):
     logger = rl_data.get_logger()
 
     if os.path.isfile(filepath):
-        logger.debug(f"File {filepath} already exists. Skipping generation.")
+        #logger.debug(f"File {filepath} already exists. Skipping generation.")
         return True
 
     if competitorIndex == -1:
@@ -1201,13 +1248,9 @@ def CreateGroupBarChart(df, filepath, runtimeVars, competitorIndex=-1 ):
 
     competitor_name = df.loc[competitorIndex, 'Name']
 
-
-       
-    #print(f"Generating Group Bar Chart for {competitor_name} at {filepath}")
-
     # 0. Get the competitor's time for each event
     competitor_event_times = []
-    station_names = runtimeVars["EventList"] # Use this for x-axis labels
+    station_names = runtimeVars['StationList'] # Use this for x-axis labels
 
     for event in station_names:
         competitor_event_times.append(df.loc[competitorIndex, event])
@@ -1306,7 +1349,7 @@ def CreateCumulativeTimeComparison(df, filepath, runtimeVars, competitorIndex=-1
     logger = rl_data.get_logger()
 
     if os.path.isfile(filepath) :
-        logger.debug(f"File {filepath} already exists. Skipping generation.")
+        #logger.debug(f"File {filepath} already exists. Skipping generation.")
         return True
         
     if competitorIndex == -1:
@@ -1315,11 +1358,7 @@ def CreateCumulativeTimeComparison(df, filepath, runtimeVars, competitorIndex=-1
 
     competitor_name = df.loc[competitorIndex, 'Name']
 
-
-       
-    #print(f"Generating Cumulative Time Chart for {competitor_name} at {filepath}")
-
-    station_names = runtimeVars["EventList"]
+    station_names = runtimeVars['StationList']
     competitor_event_times = [df.loc[competitorIndex, event] for event in station_names]
 
     # --- Get Similar Finishers' Average Station Times ---
@@ -1423,10 +1462,9 @@ def CreateCumulativeTimeComparison(df, filepath, runtimeVars, competitorIndex=-1
 ##############################
 def CreateStationTimeDifferenceChart(df, filepath, runtimeVars, competitorIndex=-1 ):
     logger = rl_data.get_logger()
-    logger = rl_data.get_logger()
 
     if os.path.isfile(filepath) :
-        logger.debug(f"File {filepath} already exists. Skipping generation.")
+        #logger.debug(f"File {filepath} already exists. Skipping generation.")
         return True
 
     if competitorIndex == -1:
@@ -1435,9 +1473,7 @@ def CreateStationTimeDifferenceChart(df, filepath, runtimeVars, competitorIndex=
 
     competitor_name = df.loc[competitorIndex, 'Name']
         
-    #print(f"Generating Station Time Difference Chart for {competitor_name} at {filepath}")
-
-    station_names = runtimeVars["EventList"]
+    station_names = runtimeVars['StationList']
     competitor_event_times = np.array([df.loc[competitorIndex, event] for event in station_names])
 
     # --- Get Similar Finishers' Average Station Times ---
@@ -1534,17 +1570,17 @@ def CreateCatBarCharts(df, filepath, runtimeVars, competitorIndex=-1 ):
 
     # Check if 'Category' column exists and if there's more than one unique category
     if 'Category' not in df.columns:
-        logger.info('Category column not found in DataFrame. Skipping chart generation Skipping for {runtimeVars["eventDataList"][0]}.')
+        logger.debug(f"Category column not found in DataFrame. Skipping chart generation Skipping for {runtimeVars['eventDataList'][0]}.")
         return False
 
     unique_categories = sorted(df['Category'].dropna().unique())
     if len(unique_categories) <= 1:
-        logger.info(f"Not enough categories ({len(unique_categories)}) to generate a comparison chart. Skipping for {runtimeVars["eventDataList"][0]}.")
+        logger.debug(f"Not enough categories ({len(unique_categories)}) to generate a comparison chart. Skipping for {runtimeVars['eventDataList'][0]}.")
         return False
 
     #print(f"Generating Average Station Time by Category chart at {filepath}")
 
-    station_names = runtimeVars["EventList"]
+    station_names = runtimeVars['StationList']
     num_stations = len(station_names)
     num_categories = len(unique_categories)
 
@@ -1597,7 +1633,7 @@ def CreateCatBarCharts(df, filepath, runtimeVars, competitorIndex=-1 ):
 
 
     ax.set_ylabel('Average Time (seconds)', fontsize=10)
-    ax.set_title(f"{runtimeVars["eventDataList"][1]}\nAverage Station Times by Age Category", fontsize=14)
+    ax.set_title(f"{runtimeVars['eventDataList'][1]}\nAverage Station Times by Age Category", fontsize=14)
     ax.set_xticks(x_indices)
     ax.set_xticklabels(station_names, rotation=45, ha="right", fontsize=9)
     ax.legend(title="Age Category", fontsize=8, title_fontsize=9, loc='upper center')
@@ -1622,21 +1658,20 @@ def CreateCatBarCharts(df, filepath, runtimeVars, competitorIndex=-1 ):
 #############################
 ## CreatePacingTable
 #############################
-
+   
 def CreatePacingTable(df, filepath, runtimeVars, competitorIndex=-1 ):
     logger = rl_data.get_logger()
 
-
     if os.path.isfile(filepath):
-        logger.debug(f"File {filepath} already exists. Skipping generation")
+        #logger.debug(f"File {filepath} already exists. Skipping generation")
         return True
     
-    #print(f"Generating Pacing Table for event {runtimeVars["eventDataList"][0]}")
+    #print(f"Generating Pacing Table for event {runtimeVars['eventDataList'][0]}")
 
-    station_names = runtimeVars["EventList"]
+    station_names = runtimeVars['StationList']
     num_stations = len(station_names)
     if num_stations == 0:
-        print("Error: EventList is empty. Cannot generate pacing table.")
+        print("Error: StationList is empty. Cannot generate pacing table.")
         return False
 
     target_percentiles = np.arange(0.1, 1.0, 0.1) 
@@ -1809,20 +1844,151 @@ def CreatePacingTable(df, filepath, runtimeVars, competitorIndex=-1 ):
 
 ###############################
 #
-# Non Standard output function!
+# Non Standard output function! Non standard because the df is pacing table.
+#
+# CreatePacingPng
+#
+###############################
+
+def CreatePacingPng(df_input_pacing_table, filepath, runtimeVars, competitorIndex=-1 ):
+    logger = rl_data.get_logger()
+    # config = session.get('ouptut_config', {}) # If needed for forcePng
+
+    if os.path.isfile(filepath): # and not config.get('forcePng', False):
+        logger.debug(f"Pacing chart {filepath} already exists. Skipping generation.")
+        return True
+
+    if df_input_pacing_table is None or df_input_pacing_table.empty:
+        logger.warning("Input pacing table DataFrame is empty or None. Cannot generate chart.")
+        return False
+        
+    event_display_name = runtimeVars.get('eventDataList', [None, "Event Unknown"])[1]
+    #logger.debug(f"Generating Pacing PNG for event {event_display_name} at {filepath}")
+
+    df_pacing = df_input_pacing_table.copy()
+
+    if 'Station' in df_pacing.columns:
+        df_pacing.set_index('Station', inplace=True)
+    
+    excluded_summary_rows = ['TARGET NET TIME', 'SUM OF (ADJUSTED) STATION TIMES', 'TARGET TIME']
+    rows_to_drop = [row for row in excluded_summary_rows if row in df_pacing.index]
+    if rows_to_drop:
+        df_pacing.drop(rows_to_drop, inplace=True)
+
+    if df_pacing.empty:
+        # ... (handling for empty plot as before) ...
+        logger.warning("Pacing table is empty after removing summary rows. No stations to plot.")
+        fig, ax = plt.subplots(figsize=(14, 9))
+        ax.text(0.5, 0.5, "No station pacing data available to plot.", 
+                horizontalalignment='center', verticalalignment='center', transform=ax.transAxes)
+        ax.set_title(f"{event_display_name}\nPacing Guide - No Data", fontsize=15, pad=20)
+        try:
+            plt.savefig(filepath, bbox_inches='tight', pad_inches=0.2); plt.close(fig)
+        except Exception as e: logger.error(f"Error saving empty pacing chart {filepath}: {e}"); plt.close(fig)
+        return True
+
+    percentile_columns = [col for col in df_pacing.columns if str(col).startswith('Top ')]
+    if not percentile_columns:
+        logger.error("No percentile columns found in the processed pacing table DataFrame.")
+        return False
+        
+    def time_str_to_seconds(time_str):
+        if pd.isna(time_str) or not isinstance(time_str, str) or str(time_str).lower() == 'n/a': return np.nan
+        try:
+            parts = str(time_str).split(':')
+            if len(parts) == 2: return int(parts[0]) * 60 + int(parts[1])
+            return np.nan 
+        except ValueError: return np.nan
+
+    for col in percentile_columns:
+        df_pacing[col] = df_pacing[col].apply(time_str_to_seconds).astype(float)
+
+    stations_to_plot = df_pacing.index.tolist()
+    
+    fig, ax = plt.subplots(figsize=(14, 10)) # Increased height slightly for labels
+    
+    num_station_lines = len(stations_to_plot)
+    palette = sns.color_palette("husl", num_station_lines) if num_station_lines > 0 else []
+    
+    x_values_numeric = np.arange(len(percentile_columns)) # For positioning text
+
+    for i, station in enumerate(stations_to_plot):
+        if station in df_pacing.index:
+            station_data_seconds = df_pacing.loc[station, percentile_columns]
+            x_values_labels = [str(col).replace('Top ', '').replace('% Pace', '%') for col in percentile_columns] # Shorter labels for x-axis
+            
+            line_color = palette[i % len(palette)] if palette else 'blue' # Default color if palette fails
+
+            if not station_data_seconds.isna().all():
+                line, = ax.plot(x_values_labels, station_data_seconds.values, 
+                                marker='o', markersize=4, linestyle='-', linewidth=1.5, 
+                                label=station, color=line_color) # Store line object if needed for legend
+                
+                # Add direct label to the line
+                # Position label near the last valid data point of the line
+                last_valid_idx = None
+                for k in range(len(station_data_seconds.values) - 1, -1, -1):
+                    if pd.notna(station_data_seconds.values[k]):
+                        last_valid_idx = k
+                        break
+                
+                if last_valid_idx is not None:
+                    x_pos = x_values_numeric[last_valid_idx]
+                    y_pos = station_data_seconds.values[last_valid_idx]
+                    
+                    # Small offset to avoid overlapping the line/marker
+                    # Adjust dx, dy based on line slope or position for better placement
+                    # For simplicity, a small horizontal offset
+                    ax.text(x_pos + 0.1, y_pos, station, fontsize=7.5, color=line_color,
+                            verticalalignment='center', horizontalalignment='left',
+                            bbox=dict(boxstyle='round,pad=0.2', fc='white', ec='none', alpha=0.6))
+
+
+    ax.set_xlabel("Target Finish Percentile", fontsize=11)
+    ax.set_ylabel("Average Station Pace (mm:ss)", fontsize=11)
+    ax.set_title(f"{event_display_name}\nStation Pacing Guide by Target Finish Percentile", fontsize=14, pad=15)
+    
+    ax.yaxis.set_major_formatter(mtick.FuncFormatter(rl_data.format_time_mm_ss))
+    
+    ax.tick_params(axis='x', rotation=30, labelsize=8.5, pad=5)
+    ax.tick_params(axis='y', labelsize=8.5)
+    
+    ax.grid(True, linestyle=':', alpha=0.5)
+    
+    # Legend is now less critical due to direct labels, but can be kept as an option
+    # If kept, make it very subtle or place it well outside. For now, let's disable it
+    # as direct labels are preferred for accessibility.
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=min(6, num_station_lines), fancybox=True, shadow=False, fontsize=7)
+
+    # Adjust layout to make space for direct labels if they go outside plot area
+    # And to ensure title and axis labels are not cramped
+    fig.subplots_adjust(left=0.1, right=0.9, top=0.90, bottom=0.15) # Adjust right to give space for labels
+
+
+    try:
+        plt.savefig(filepath, bbox_inches='tight', pad_inches=0.2)
+        #logger.info(f"Saved pacing chart with direct line labels to {filepath}")
+        plt.close(fig)
+        return True
+    except Exception as e:
+        logger.error(f"Error saving pacing chart {filepath}: {e}")
+        if 'fig' in locals(): plt.close(fig)
+        return False
+
+###############################
+#
+# Non Standard output function! 
 #
 # MakeFullPdfReport
 #
 ###############################
 
-def MakeFullPdfReport(filepath, outputList, html_filepath, competitorIndex=-1 ):
+def MakeFullPdfReport(filepath, outputList, html_filepath, competitorAnalysis ):
 
     logger = rl_data.get_logger()
  
-    #print(f"Generating PDF report at {filepath}")
-
     if os.path.isfile(filepath):
-        logger.debug(f"File {filepath} already exists. Skipping generation")
+        #logger.debug(f"File {filepath} already exists. Skipping generation")
         return True
 
     try:
@@ -1837,7 +2003,7 @@ def MakeFullPdfReport(filepath, outputList, html_filepath, competitorIndex=-1 ):
         rect = (rect_x1, rect_y1, rect_x2, rect_y2)
 
         # if competitor Analysis enabled.
-        if(competitorIndex != -1):
+        if(competitorAnalysis == True):
             page = doc.new_page()
 
             #open html file html_info_comp_filepaths
@@ -1845,7 +2011,7 @@ def MakeFullPdfReport(filepath, outputList, html_filepath, competitorIndex=-1 ):
                 stringHtml = f.read()
             page.insert_htmlbox(rect, stringHtml)
 
-        for i, f_path_str in enumerate(outputList["filename"]):
+        for i, f_path_str in enumerate(outputList['filename']):
             if (".png" in f_path_str): # Check extension case-insensitively
                 #logger.debug(f"Processing image for PDF: {f_path_str}")
                 try:
@@ -1862,7 +2028,8 @@ def MakeFullPdfReport(filepath, outputList, html_filepath, competitorIndex=-1 ):
             
         doc.save(filepath, garbage=4, deflate=True)
         logger.warning(f"Saving PDF {filepath}")
-
+        return True
+    
     except Exception as e:
         logger.error(f"Error creating PDF {filepath}: {e}", exc_info=True)
 
@@ -1875,12 +2042,10 @@ def ShowScatterPlot(df, filepath, runtimeVars, stationName, competitorIndex ):
 
     # Check if file exists or force generation
     if os.path.isfile(filepath) :
-        logger.debug(f"File {filepath} already exists. Skipping generation.")
+        #logger.debug(f"File {filepath} already exists. Skipping generation.")
         return True
 
     #remove category for corralation info
-
-
     dfcorr = df.copy(deep=True)
 
     #next level tidying for correlation
@@ -1944,7 +2109,7 @@ def ShowScatterPlot(df, filepath, runtimeVars, stationName, competitorIndex ):
     if (corr_matrix):
         corrstr = "{:1.2f}".format(corr_matrix)
     
-    plt.title(runtimeVars["eventDataList"][1] + ' ' + stationName + ' Corr. ' + corrstr)
+    plt.title(runtimeVars['eventDataList'][1] + ' ' + stationName + ' Corr. ' + corrstr)
     plt.ylabel("Ovearll Position")
     plt.xlabel("Station Time")
     plt.legend()
@@ -1955,30 +2120,499 @@ def ShowScatterPlot(df, filepath, runtimeVars, stationName, competitorIndex ):
     plt.close()
 
     return True
- 
+
+# Chart creatation above this line.
+#######################################################################################
+
+
 #############################
-# Start of redline visuation method
-# competitorDetails will be search details of one competitor
 #############################
+# This function will now be the primary one to prepare data for any visual page
+# that might use lazy loading (even if images are pre-generated).
+#############################
+#############################
+
+def prepare_visualization_data_for_template( competitorDetails):
+    logger = rl_data.get_logger()
+
+    runtimeVars = session.get("runtime", {})
+    outputVars = session.get("output_config", {}) 
+    
+    pending_image_tasks = []
+    ready_outputs_content = [] # For non-image content like HTML tables, download links
+
+    event_name_slug = slugify(competitorDetails['event'])
+    competitor_name_slug = "generic"
+    
+    for element in rl_data.EVENT_DATA_LIST: 
+        if element[0] == competitorDetails['event']:
+            runtimeVars['eventDataList'] = element
+            break
+
+    if not runtimeVars['eventDataList']:
+        logger.error(f"Event details not found for: {competitorDetails['event']}")
+        return render_template("error.html", message=f"Event configuration for {competitorDetails['event']} not found.")
+
+    # Configure StationList based on year
+    if runtimeVars['eventDataList'][2]=="2023": # Assuming index 2 is year
+        runtimeVars['StationList'] = rl_data.STATIONLIST23
+        runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART23
+    else:
+        runtimeVars['StationList'] = rl_data.STATIONLIST24
+        runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART24
+
+    logger.info(f"Preparing event page: {runtimeVars['eventDataList'][0]}")
+   
+    # --- End of Essential Setup ---
+    # --- Start of Main Processing ---
+
+    # Store minimal snapshot for async calls if needed (though for pre-generated, less critical)
+    session['async_runtime_vars_snapshot'] = {
+        'eventDataList': runtimeVars['eventDataList'],
+        'StationList': runtimeVars['StationList'],
+        'competitorName': None,
+        'competitorRaceNo': None
+    }
+
+    if outputVars.get('competitorAnalysis', False):
+        logger.error("competitorAnalysis is not supported for generic page.")
+        return render_template("error.html", message=f"competitorAnalysis is not supported for generic page.")
+
+    for output_conf in OUTPUT_CONFIGS:
+        
+        # Competitor not supported
+        if  output_conf['is_competitor_specific']:
+            #skip
+            continue
+                
+        # Check if this output type is enabled
+        if not outputVars.get(output_conf['id'], False): 
+            continue
+
+        output_dir_path_obj = Path(getattr(rl_data, output_conf['output_dir_const']))
+        
+        # --- Handle PNGs and PNG Collections for Lazy Loading ---
+        if output_conf['output_type'] == 'png' or output_conf['output_type'] == 'png_collection':
+            items_to_generate_for_this_conf = []
+            # ... (your existing logic for populating items_to_generate_for_this_conf) ...
+            if output_conf['generates_multiple_files']:
+                num_files_key = output_conf.get('num_files_generated_key')
+                iteration_items = runtimeVars.get(num_files_key, []) if num_files_key else ["default_item_for_multi"]
+                for item_name in iteration_items:
+                    items_to_generate_for_this_conf.append({'station_name': item_name if num_files_key else None})
+            else:
+                items_to_generate_for_this_conf.append({'station_name': None})
+
+            for item_params in items_to_generate_for_this_conf:
+                station_name_actual = item_params['station_name']
+                station_name_slug = slugify(station_name_actual) if station_name_actual else ""
+
+                current_filename = output_conf['filename_template'].format(
+                    EVENT_NAME_SLUG=event_name_slug,
+                    STATION_NAME_SLUG=station_name_slug
+                ).replace("__", "_").replace("_.", ".")
+                
+                full_disk_path = output_dir_path_obj / Path(current_filename)
+                final_image_url = url_for('static', filename=str(output_dir_path_obj / Path(current_filename)))
+                placeholder_id = f"ph_{output_conf['id']}_{event_name_slug}_{station_name_slug}".replace("__","_").rstrip('_')
+                
+                display_name = output_conf['name']
+                if station_name_actual: display_name += f" - {station_name_actual}"
+                
+                # CRITICAL: Check if file exists on disk
+                image_exists_on_disk = os.path.isfile(full_disk_path)
+
+                pending_image_tasks.append({
+                    'placeholder_id': placeholder_id,
+                    'display_name': display_name,
+                    'html_description': output_conf['html_string_template'].format(
+                                            EVENT_NAME=runtimeVars['eventDataList'][1]),
+                    'generation_params': { # These are sent to the AJAX endpoint
+                        'output_id': output_conf['id'],
+                        'event_name_actual': runtimeVars['eventDataList'][0],
+                        'competitor_name_actual': runtimeVars.get('competitorName'),
+                        'competitor_race_no_actual': runtimeVars.get('competitorRaceNo'),
+                        'station_name_actual': station_name_actual,
+                        'target_filename': current_filename 
+                    },
+                    'expected_image_url': final_image_url,
+                    'image_already_exists': image_exists_on_disk # This is the key for this variation
+                })
+    
+    # Sort tasks by priority if you have 'load_priority' in OUTPUT_CONFIGS
+    if pending_image_tasks:
+        pending_image_tasks.sort(key=lambda task: task.get('load_priority', 99))
+
+    page_title = runtimeVars['eventDataList'][1]
+
+    return {
+        "title": page_title,
+        "pending_image_tasks": pending_image_tasks,
+        "ready_content_list": ready_outputs_content,
+        "event_name": runtimeVars['eventDataList'][1],
+        "competitorDetails":  None 
+    }
+
+
+#############################
+#############################
+# This is your new main entry point when a user requests a competitor page
+#############################
+
+def prepare_competitor_visualization_page(competitorDetails):
+    logger = rl_data.get_logger()
+    
+    runtimeVars = session.get("runtime", {})
+    outputVars = session.get("output_config", {}) 
+
+    # --- 1. Essential Setup: Event details, DF loading, Competitor Index ---
+    if not outputVars.get('competitorAnalysis'):
+        logger.error("prepare_competitor_visualization_page called without competitorAnalysis True in config.")
+        return render_template("error.html", message="Configuration error.")
+
+    for element in rl_data.EVENT_DATA_LIST: 
+        if element[0] == competitorDetails['event']:
+            runtimeVars['eventDataList'] = element
+            break
+        
+    if not runtimeVars.get('eventDataList'):
+        logger.error(f"Event details not found for: {competitorDetails['event']}")
+        return render_template("error.html", message=f"Event configuration for {competitorDetails['event']} not found.")
+
+    # Configure StationList based on year
+    if runtimeVars['eventDataList'][2]=="2023": # Assuming index 2 is year
+        runtimeVars['StationList'] = rl_data.STATIONLIST23
+        runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART23
+    else:
+        runtimeVars['StationList'] = rl_data.STATIONLIST24
+        runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART24
+
+    logger.info(f"Preparing competitor page for event: {runtimeVars['eventDataList'][0]}")
+    
+    indatafile = Path(rl_data.CSV_INPUT_DIR) / Path(runtimeVars['eventDataList'][0] + '.csv')
+    try:
+        df = pd.read_csv(indatafile)
+        tidyTheData(df=df, filename=indatafile)
+    except FileNotFoundError:
+        logger.error(f"Data file not found: {indatafile}")
+        return render_template("error.html", message=f"Data file not found for {runtimeVars['eventDataList'][0]}.")
+    except Exception as e:
+        logger.error(f"Error tidying data for {indatafile}: {e}", exc_info=True)
+        return render_template("error.html", message="Error processing event data.")
+
+    runtimeVars['competitorName'] = competitorDetails.get('competitor')
+    runtimeVars['competitorRaceNo'] = competitorDetails.get('race_no')
+    
+    competitorIndex = getCompetitorIndex(df=df)
+    if competitorIndex == -1:
+        logger.warning(f"Competitor {runtimeVars['competitorName']} not found in {runtimeVars['eventDataList'][0]}.")
+        return render_template("error.html", message=f"competitor_not_found {runtimeVars['competitorName']}")
+    
+    # --- End of Essential Setup ---
+
+    pending_image_tasks = []
+    ready_outputs_content = [] # For HTML snippets like the info table
+
+    event_name_slug = slugify(runtimeVars['eventDataList'][0])
+    competitor_name_slug = slugify(runtimeVars['competitorName'])
+
+    # Store necessary parts of runtimeVars for the async endpoint
+    # Only store what's absolutely needed to reconstruct context for generating a single image
+    session['async_runtime_vars_snapshot'] = {
+        'eventDataList': runtimeVars['eventDataList'],
+        'StationList': runtimeVars['StationList'],
+        'competitorName': runtimeVars['competitorName'],
+        'competitorRaceNo': runtimeVars['competitorRaceNo']
+        # Avoid storing the large 'df' in session if possible. Reload it in the async endpoint.
+    }
+
+
+    for output_conf in OUTPUT_CONFIGS:
+        if not outputVars.get(output_conf['id'], False): 
+            logger.info(f"Skipping {output_conf['id']} for {runtimeVars['eventDataList'][0]} with {outputVars.get(output_conf['id'], False)}")
+            continue # Skip if not enabled in config
+        else:
+            logger.info(f"Generating {output_conf['id']} for {runtimeVars['eventDataList'][0]} with {outputVars.get(output_conf['id'], False)}")
+        
+        if not output_conf['is_competitor_specific']: 
+            logger.info(f"Skipping {output_conf['id']} competitor {output_conf['is_competitor_specific']}")
+            continue # Only competitor specific items for this route
+        else:
+            logger.info(f"Generating {output_conf['id']} competitor {output_conf['is_competitor_specific']}")
+            
+        # --- Filename and URL Construction ---
+        # This will be used by JavaScript to know the final URL, and by the async endpoint to save the file
+        output_dir_path_obj = Path(getattr(rl_data, output_conf['output_dir_const']))
+
+        if output_conf['id'] == 'html_info_comp':
+            # Generate this HTML snippet directly as it's small and part of initial page
+            # Assuming GenerateCompInfoTable returns the HTML string or saves to a temp file read here
+            # For simplicity, let's assume it can return HTML string.
+            # Filepath here is more for if it *were* to save, but we need the HTML content.
+            temp_html_filename = output_conf['filename_template'].format(COMPETITOR_NAME_SLUG=competitor_name_slug)
+            temp_html_filepath = output_dir_path_obj / temp_html_filename
+            
+            html_content = GenerateCompInfoTable(df=df, filepath=temp_html_filepath, runtimeVars=runtimeVars, competitorIndex=competitorIndex)
+            if html_content: # Assuming GenerateCompInfoTable returns the HTML string
+                ready_outputs_content.append({
+                    'id': output_conf['id'],
+                    'name': output_conf['name'],
+                    'html': html_content
+                })
+            continue # Move to next output_conf
+
+        if output_conf['output_type'] == 'pdf_download':
+            # For PDFs, we'll provide a button/link that triggers generation on click via AJAX
+            pdf_filename = output_conf['filename_template'].format(
+                EVENT_NAME_SLUG=event_name_slug,
+                COMPETITOR_NAME_SLUG=competitor_name_slug
+            )
+            # The FILE_URL will point to an endpoint that generates and serves the PDF
+            # e.g., /download_pdf?type=competitor_pdf_report&event=...&competitor=...
+            pdf_generation_trigger_url = url_for('generate_and_download_pdf_route', 
+                                                 output_id=output_conf['id'],
+                                                 event_name_actual=runtimeVars['eventDataList'][0],
+                                                 competitor_name_actual=runtimeVars['competitorName'],
+                                                 competitor_race_no_actual=runtimeVars['competitorRaceNo']
+                                                 )
+            
+            html_desc = output_conf['html_string_template'].format(
+                FILE_URL=pdf_generation_trigger_url, # This is now a trigger URL
+                EVENT_NAME=runtimeVars['eventDataList'][1],
+                COMPETITOR_NAME=runtimeVars['competitorName']
+            ).replace("{FILE_URL}\" download", f"{pdf_generation_trigger_url}\" target=\"_blank\"") # Open in new tab
+            ready_outputs_content.append({'id': output_conf['id'], 'name': output_conf['name'], 'html': html_desc})
+            continue
+    
+        if output_conf['id'] == 'html_note_comp':
+            html_desc = output_conf['html_string_template'].format(
+                EVENT_DESCRIPTION=runtimeVars['eventDataList'][1],
+                EVENT_LINK=runtimeVars['eventDataList'][0],
+            )
+            ready_outputs_content.append({'id': output_conf['id'], 'name': output_conf['name'], 'html': html_desc})
+            continue
+
+        # Handle PNGs and PNG Collections for lazy loading
+        if output_conf['output_type'] == 'png' or output_conf['output_type'] == 'png_collection':
+            items_to_generate_for_this_conf = []
+            if output_conf['generates_multiple_files']:
+                num_files_key = output_conf.get('num_files_generated_key')
+                iteration_items = runtimeVars.get(num_files_key, []) if num_files_key else ["default"]
+                for item_name in iteration_items:
+                    items_to_generate_for_this_conf.append({'station_name': item_name if num_files_key else None})
+                    #logger.info(f"Generateing {output_conf['id']} item_name: {item_name}")
+            else:
+                items_to_generate_for_this_conf.append({'station_name': None}) # Single file
+            #logger.info(f"Generateing {output_conf['id']} items_to_generate_for_this_conf: {items_to_generate_for_this_conf}")
+         
+            for item_params in items_to_generate_for_this_conf:
+                station_name = item_params['station_name']
+                station_name_slug = slugify(station_name) if station_name else ""
+
+                current_filename = output_conf['filename_template'].format(
+                    EVENT_NAME_SLUG=event_name_slug,
+                    COMPETITOR_NAME_SLUG=competitor_name_slug,
+                    STATION_NAME_SLUG=station_name_slug
+                ).replace("__", "_").replace("_.", ".") # Clean up potential double underscores or trailing if station is empty
+
+                placeholder_id = f"ph_{output_conf['id']}_{event_name_slug}_{competitor_name_slug}_{station_name_slug}".replace("__","_").rstrip('_')
+                
+                # Construct the final URL the image will have once generated
+                # Ensure rl_data.APP_STATIC_FOLDER is defined as the absolute path to your static folder
+                final_image_url = url_for('static', filename=str(output_dir_path_obj / Path(current_filename)))
+                
+                display_name = output_conf['name']
+                if station_name:
+                    display_name += f" - {station_name}"
+                
+                # Check if image already exists to potentially serve it immediately or skip AJAX
+                full_disk_path = Path(output_dir_path_obj) / current_filename
+                image_already_exists = os.path.isfile(full_disk_path)
+
+                #logger.info(f"Generateing {output_conf['id']} full_disk_path: {full_disk_path}")
+                
+                pending_image_tasks.append({
+                    'placeholder_id': placeholder_id,
+                    'display_name': display_name,
+                    'html_description': output_conf['html_string_template'].format(
+                                            EVENT_NAME=runtimeVars['eventDataList'][1],
+                                            COMPETITOR_NAME=runtimeVars['competitorName']),
+                    'generation_params': { # Params for the AJAX POST request
+                        'output_id': output_conf['id'],
+                        'event_name_actual': runtimeVars['eventDataList'][0], # Pass actual event name
+                        'competitor_name_actual': runtimeVars['competitorName'],
+                        'competitor_race_no_actual': runtimeVars['competitorRaceNo'],
+                        'station_name_actual': station_name, # Will be None if not a per-station chart
+                        'target_filename': current_filename # For the server to know what to generate
+                    },
+                    'expected_image_url': final_image_url,
+                    'image_already_exists': image_already_exists, # New flag for JS
+                    'load_priority': output_conf.get('load_priority', 99) # Get priority, default to low if missing
+                })
+                
+                # After populating pending_image_tasks, sort it:
+                if pending_image_tasks:
+                    pending_image_tasks.sort(key=lambda task: task.get('load_priority', 99)) 
+                    # Using .get with a default ensures sorting doesn't fail if priority is missing for an item
+    
+    # Save runtimeVars that might have been updated by setup
+    session['runtime'] = runtimeVars 
+    session['output_config'] = outputVars
+
+    page_title = runtimeVars['eventDataList'][1]
+    if runtimeVars.get('competitorName'):
+        page_title += f" - {runtimeVars['competitorName']}"
+
+    return render_template('visual_lazy_load.html', 
+                           title=page_title,
+                           pending_image_tasks=pending_image_tasks,
+                           ready_content_list=ready_outputs_content,
+                           event_name=runtimeVars['eventDataList'][1]
+                           )
+
+# This function will be called via AJAX by the client for each image
+# Or by a background task system
+def generate_single_output_file(params): # df_override for testing or specific cases
+    logger = rl_data.get_logger()
+    # Reload necessary context from session or pass minimally via params
+    # For simplicity, we'll assume session still holds some relevant info if needed,
+    # but ideally, params should be self-sufficient or df reloaded.
+    #runtimeVars = session.get("runtime", {}) # Could be a snapshot stored specifically for async tasks
+    #general_config = session.get("output_config", {})
+    
+    # Get specific output configuration
+    output_id = params.get('output_id')
+    output_conf = next((item for item in OUTPUT_CONFIGS if item['id'] == output_id), None)
+    if not output_conf:
+        logger.error(f"No output configuration found for id: {output_id}")
+        return {"success": False, "error": "Invalid output configuration."}
+
+    # Reconstruct necessary runtime variables (or ensure they are passed/retrieved correctly)
+    # This part is critical: the async task needs the same context as the sync generation
+    event_name_actual = params.get('event_name_actual')
+    
+    # Construct filepath
+    event_name_slug = slugify(event_name_actual)
+    competitor_name_slug = slugify(params.get('competitor_name_actual', 'generic'))
+    #station_name_slug = slugify(params.get('station_name_actual', ''))
+
+    filename = params.get('target_filename') # Use the filename passed from client
+    if not filename: # Fallback if not provided
+        filename = output_conf['filename_template'].format(
+            EVENT_NAME_SLUG=event_name_slug,
+            COMPETITOR_NAME_SLUG=competitor_name_slug,
+            #STATION_NAME_SLUG=station_name_slug
+        ).replace("__", "_").replace("_.", ".")
+        
+    output_dir_path_obj = Path(getattr(rl_data, output_conf['output_dir_const']))
+    target_filepath = output_dir_path_obj / Path(filename)
+
+    # Check if file already exists (double check, JS might have done this)
+    if os.path.isfile(target_filepath):
+        logger.info(f"Image {target_filepath} already exists, serving.")
+        # Construct URL to return
+        image_url = '/' +  str(target_filepath)
+        return {"success": True, "image_url": image_url, "message": "Image already existed."}
+   
+    temp_runtimeVars = {'StationList': []} # Minimal runtimeVars for the single function call
+    event_details_found = False
+    for element in rl_data.EVENT_DATA_LIST:
+        if element[0] == event_name_actual:
+            temp_runtimeVars['eventDataList'] = element # Full eventDataList for context
+            # Set StationList based on year from eventDataList
+            if element[2] == '2023': 
+                temp_runtimeVars['StationList'] = rl_data.STATIONLIST23
+            else: 
+                temp_runtimeVars['StationList'] = rl_data.STATIONLIST24
+            event_details_found = True
+            break
+    if not event_details_found:
+        return {"success": False, "error": f"Event details not found for {event_name_actual} in async."}
+
+    # Load DataFrame 
+    #indatafile = Path(rl_data.CSV_INPUT_DIR) / Path(event_name_actual + '.csv')
+
+    #find cvsfile.
+    in_cvs_conf = next((item for item in OUTPUT_CONFIGS if item['id'] == 'duration_csv_generic'), None)
+    in_cvs_filename = in_cvs_conf['filename_template'].format( 
+            EVENT_NAME_SLUG=event_name_slug,
+            ).replace("__", "_").replace("_.", ".")
+    in_cvs_dir_path_obj = Path(getattr(rl_data, in_cvs_conf['output_dir_const']))
+    in_df_file = in_cvs_dir_path_obj / Path(in_cvs_filename)
+    
+    try:
+        df = pd.read_csv(in_df_file)
+        #tidyTheData(df=df, filename=indatafile) # Requires tidyTheData to be stateless or use temp_runtimeVars
+    except Exception as e:
+        logger.error(f"Error loading/tidying data in async for {event_name_actual}: {e}")
+        return {"success": False, "error": "Data processing failed."}
+
+    competitorIndex = -1
+    if output_conf.get('is_competitor_specific'):
+        temp_runtimeVars['competitorName'] = params.get('competitor_name_actual')
+        temp_runtimeVars['competitorRaceNo'] = params.get('competitor_race_no_actual')
+        # IMPORTANT: getCompetitorIndex needs runtimeVars from session, or pass them explicitly
+        competitorIndex = getCompetitorIndex(df=df, runtimeVars_override=temp_runtimeVars) # Modify func to accept override
+        if competitorIndex == -1:
+            logger.error(f"Competitor not found for async generation. {temp_runtimeVars['competitorName']}")
+            return {"success": False, "error": "Competitor not found for async generation."}
+
+    # Call the specific generation function
+    try:
+        func_to_call = globals().get(output_conf['function_name'])
+        if func_to_call:
+            #logger.info(f"Async calling {output_conf['function_name']} for {target_filepath}")
+            
+            # Prepare arguments for the standardized function signature
+            call_args = {
+                'df': df,
+                'filepath': target_filepath,
+                'runtimeVars': temp_runtimeVars, # Use the minimal, reconstructed runtimeVars
+                'competitorIndex': competitorIndex
+            }
+            # Add station_name only if the function expects it (e.g. ShowScatterPlot)
+            if output_conf['function_name'] == 'ShowScatterPlot':
+                call_args['stationName'] = params.get('station_name_actual')
+            
+            # Call the function
+            success_flag = func_to_call(**call_args) # Pass args as keywords
+
+            if success_flag:
+                image_url = '/' +  str(target_filepath)
+                return {"success": True, "image_url": image_url}
+            else:
+                return {"success": False, "error": f"{output_conf['function_name']} reported failure."}
+        else:
+            logger.error(f"Function {output_conf['function_name']} not found in async worker.")
+            return {"success": False, "error": "Generation function not found."}
+    except Exception as e:
+        logger.error(f"Error during async generation of {output_conf['function_name']}: {e}", exc_info=True)
+        return {"success": False, "error": "Internal server error during image generation."}
+####
+#
+# Only used to generatel when competitor details are none
+# ie used to geneate all generic files.
+#
+####
 def redline_vis_generate(competitorDetails):
 
     logger = rl_data.get_logger()
     
     runtimeVars = session.get("runtime", {})
-    outputVars = session.get("ouptut_config", {})
-    outputList = session["outputList"] 
+    outputVars = session.get("output_config", {})
+    outputList = session.get("outputList", {})
 
     # --- Initial DataFrame Loading and Tidying ---
 
-    if outputVars["competitorAnalysis"]:
+    if outputVars['competitorAnalysis']:
         #then only one event.
         for element in rl_data.EVENT_DATA_LIST: 
             if element[0] == competitorDetails['event']:
-                runtimeVars["eventDataList"] = element
+                runtimeVars['eventDataList'] = element
                 break
         
         #only want one file if competitor Analysis
-        thisFileList = [runtimeVars["eventDataList"]]
+        thisFileList = [runtimeVars['eventDataList']]
 
     elif (competitorDetails != None):
         #then generic analysis of only one event.
@@ -1986,28 +2620,32 @@ def redline_vis_generate(competitorDetails):
 
         for element in rl_data.EVENT_DATA_LIST:
             if (element[0] == details['event']):
-                runtimeVars["eventDataList"] = element
+                runtimeVars['eventDataList'] = element
                 break 
 
         #only want one file if competitor Analysis
-        thisFileList = [runtimeVars["eventDataList"]]
+        thisFileList = [runtimeVars['eventDataList']]
 
     else: # Generic analysis all events
 
         #configure the complete file list for the next loop
         thisFileList = rl_data.EVENT_DATA_LIST
 
+
     #Loop through each file, 
     for eventDataList in thisFileList:
 
+        #make sure up to date for each loop.
+        runtimeVars['eventDataList'] = eventDataList
+
         #configure for 2023 format or 2024 format
         if (eventDataList[2]=="2023"):
-            runtimeVars["EventList"] = rl_data.EVENTLIST23
-            runtimeVars["EventListStart"] = rl_data.EVENTLISTSTART23
+            runtimeVars['StationList'] = rl_data.STATIONLIST23
+            runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART23
 
         else:
-            runtimeVars["EventList"] = rl_data.EVENTLIST24
-            runtimeVars["EventListStart"] = rl_data.EVENTLISTSTART24
+            runtimeVars['StationList'] = rl_data.STATIONLIST24
+            runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART24
 
         logger.debug(f"eventDataList[0] {eventDataList[0]}")
 
@@ -2021,48 +2659,50 @@ def redline_vis_generate(competitorDetails):
 
         # Determine competitorIndex if in competitor analysis mode
         competitorIndex = -1
-        if outputVars["competitorAnalysis"]:
+        if outputVars['competitorAnalysis']:
 
-            runtimeVars["competitorName"]=competitorDetails.get('competitor')
-            runtimeVars["competitorRaceNo"]=competitorDetails.get('race_no')
+            runtimeVars['competitorName']=competitorDetails.get('competitor')
+            runtimeVars['competitorRaceNo']=competitorDetails.get('race_no')
         
-            competitorIndex = competitorDataOutput(df=df) # Your function to find the index
+            competitorIndex = getCompetitorIndex(df=df) # Your function to find the index
             if competitorIndex == -1:
-                logger.warning(f"Competitor not found: {runtimeVars["competitorName"]}")
+                logger.warning(f"Competitor not found: {runtimeVars['competitorName']}")
                 return "Competitor not found." 
     
 
         # --- Loop through OUTPUT_CONFIGS to generate outputs ---
         # Reset lists that will be populated by this generation pass for the current event
-        outputList["filename"] = []
-        outputList["id"] = []
+        outputList['filename'] = []
+        outputList['id'] = []
         html_info_comp_filepaths = ""
 
         for output_conf in OUTPUT_CONFIGS:
 
             # Check if this type of output is Not enabled in general_config
             if( outputVars.get(output_conf['id'], False) == False ):
-                logger.info(f"Output type not enabled: {output_conf['id']}")
+                #logger.info(f"Output type not enabled: {output_conf['id']}")
                 continue
 
             # Skip if mode doesn't match (e.g., trying to generate generic in competitor mode, or vice-versa)
-            if outputVars["competitorAnalysis"] != output_conf['is_competitor_specific']:
-                logger.debug(f"CompetitorAnalysis mode does not match output mode: {outputVars["competitorAnalysis"]} {output_conf['id']}")
+            if outputVars['competitorAnalysis'] != output_conf['is_competitor_specific']:
+                logger.debug(f"CompetitorAnalysis mode does not match output mode: {outputVars['competitorAnalysis']} {output_conf['id']}")
                 continue 
             
             # Skip if competitor is required but not found
             if output_conf['is_competitor_specific'] and competitorIndex == -1:
-                logger.warning(f"Competitor not found: {runtimeVars["competitorName"]}")
+                logger.warning(f"Competitor not found: {runtimeVars['competitorName']}")
                 continue
 
             # --- Filename and Path Construction ---
             event_name_slug = slugify(eventDataList[0])
-            competitor_name_slug = slugify(runtimeVars["competitorName"]) 
+            competitor_name_slug = slugify(runtimeVars['competitorName']) 
             
             # For scatter plots that are per-station
             if output_conf['id'] == 'scatter_generic_collection' :
-                for station_idx, station_name in enumerate(runtimeVars["EventList"]):
+                for station_idx, station_name in enumerate(runtimeVars['StationList']):
+                    
                     #logger.debug(f"Contiinue for {output_conf['id']} {station_idx} {station_name}")
+                    
                     station_name_slug = slugify(station_name)
                     current_filename = output_conf['filename_template'].format(
                         EVENT_NAME_SLUG=event_name_slug,
@@ -2071,11 +2711,11 @@ def redline_vis_generate(competitorDetails):
                     output_dir = getattr(rl_data, output_conf['output_dir_const'])
                     filepath = Path(output_dir) / Path(current_filename)
                     if (ShowScatterPlot(df, filepath, runtimeVars, station_name, competitorIndex) == True):
-                        outputList["filename"].append(str(filepath))
-                        outputList["id"].append(output_conf['id'])
+                        outputList['filename'].append(str(filepath))
+                        outputList['id'].append(output_conf['id'])
 
             elif output_conf['id'] == 'scatter_comp_collection' :
-                for station_idx, station_name in enumerate(runtimeVars["EventList"]):
+                for station_idx, station_name in enumerate(runtimeVars['StationList']):
                     
                     #logger.debug(f"Contiinue for {output_conf['id']} {station_idx} {station_name}")
 
@@ -2088,9 +2728,45 @@ def redline_vis_generate(competitorDetails):
                     output_dir = getattr(rl_data, output_conf['output_dir_const'])
                     filepath = Path(output_dir) / Path(current_filename)
                     if (ShowScatterPlot(df, filepath, runtimeVars, station_name, competitorIndex) == True):
-                        outputList["filename"].append(str(filepath))
-                        outputList["id"].append(output_conf['id'])
+                        outputList['filename'].append(str(filepath))
+                        outputList['id'].append(output_conf['id'])
+                        
+            elif output_conf['function_name'] == 'CreatePacingPng':
+                
+                pacing_table_csv_conf = next((item for item in OUTPUT_CONFIGS if item['id'] == 'pacing_table_csv_generic'), None)
+                
+                #get the filename
+                output_dir = getattr(rl_data, pacing_table_csv_conf['output_dir_const'])
+                pacing_table_csv_file = pacing_table_csv_conf['filename_template'].format(EVENT_NAME_SLUG=event_name_slug)
+                pacing_table_csv_generic = Path(output_dir) / Path(pacing_table_csv_file)
+                
+                try:
+                    df_for_chart = pd.read_csv(pacing_table_csv_generic)
+                except FileNotFoundError:
+                    logger.error(f"Data file not found: {pacing_table_csv_generic}")
+                    return None # Or handle error appropriately
+                
+                #Get the output filename
+                current_filename = output_conf['filename_template'].format(
+                    EVENT_NAME_SLUG=event_name_slug
+                )                        
+                output_dir = getattr(rl_data, output_conf['output_dir_const'])
+                filepath = Path(output_dir) / Path(current_filename)
+                    
+                #df_for_chart = pd.DataFrame(pacing_data_list_of_dicts[1:]) # Skip header
+                #df_for_chart.columns = list(pacing_data_list_of_dicts[0].values()) # Set columns from header
+                df_for_chart.set_index('Station', inplace=True) # Set Station as index
 
+                # Now call CreatePacingPng
+                success_flag = CreatePacingPng(df_input_pacing_table=df_for_chart, 
+                                            filepath=filepath, 
+                                            runtimeVars=runtimeVars, 
+                                            competitorIndex=-1) # competitorIndex is not used by CreatePacingPng
+                if success_flag:
+                    outputList['filename'].append(str(filepath))
+                    outputList['id'].append(output_conf['id'])
+
+                        
             else: # Single file output
                 filename = output_conf['filename_template'].format(
                     EVENT_NAME_SLUG=event_name_slug,
@@ -2107,10 +2783,11 @@ def redline_vis_generate(competitorDetails):
                     if output_conf['function_name'] == 'MakeFullPdfReport':
                         #ensure not called here, as this is a special case
                         # has to be last and has not standard parameter.
-                        logger.debug(f"Speical Case, skipping: {output_conf['id']}")
-                        pass 
+                        #logger.debug(f"Speical Case, no action in this loop: {output_conf['id']}")
+                        pass
+                         
                     elif output_conf['function_name'] == 'GenerateCompInfoTable':
-                        #logger.debug(f"Calling {output_conf['function_name']} for {filepath}")
+                        logger.debug(f"Calling {output_conf['function_name']} for {filepath}")
 
                         # Keep Standardized 
                         func_to_call(df=df,  filepath=filepath, runtimeVars=runtimeVars, competitorIndex=competitorIndex)
@@ -2119,58 +2796,63 @@ def redline_vis_generate(competitorDetails):
                         html_info_comp_filepaths = filepath
 
                     elif func_to_call:
-                        #logger.debug(f"Calling {output_conf['function_name']} for {filepath}")
+                        logger.debug(f"Calling {output_conf['function_name']} for {filepath}")
                         # Adapt arguments as needed for each function
                         # Standardized call might be:
                         if(func_to_call(df=df,  filepath=filepath, runtimeVars=runtimeVars, competitorIndex=competitorIndex)==True):
-                            outputList["filename"].append(str(filepath))
-                            outputList["id"].append(output_conf['id'])
+                            if output_conf['output_type'] == 'png' or output_conf['output_type'] == 'png_collection':
+                                outputList['filename'].append(str(filepath))
+                                outputList['id'].append(output_conf['id'])
 
                     else:
                         logger.warning(f"Function {output_conf['function_name']} not found.")
                 except Exception as e:
                     logger.error(f"Error calling {output_conf['function_name']}: {e}", exc_info=True)
 
-
+       
         # --- PDF Generation (after all relevant PNGs are made for this event) ---
-        if (outputVars["pdf_report_generic"] or outputVars["pdf_report_comp"]) and outputList["filename"]: # Only if PNGs were generated
+        if (outputVars['pdf_report_generic'] or outputVars['pdf_report_comp']) and outputList['filename']: # Only if PNGs were generated
             pdf_config_item = None
 
             event_name_slug = slugify(eventDataList[0])
-            if outputVars["competitorAnalysis"] and outputVars["pdf_report_comp"]:
+            if outputVars['competitorAnalysis'] and outputVars['pdf_report_comp']:
                 pdf_config_item = next((item for item in OUTPUT_CONFIGS if item['id'] == 'pdf_report_comp'), None)
-                competitor_name_slug = slugify(runtimeVars["competitorName"]) 
+                competitor_name_slug = slugify(runtimeVars['competitorName']) 
                 pdf_filename = pdf_config_item['filename_template'].format(
                     EVENT_NAME_SLUG=event_name_slug,
                     COMPETITOR_NAME_SLUG=competitor_name_slug
                 )
-            elif outputVars["competitorAnalysis"] == False and outputVars["pdf_report_generic"]:
+            elif outputVars['competitorAnalysis'] == False and outputVars['pdf_report_generic']:
                 pdf_config_item = next((item for item in OUTPUT_CONFIGS if item['id'] == 'pdf_report_generic'), None)
                 pdf_filename = pdf_config_item['filename_template'].format(
                     EVENT_NAME_SLUG=event_name_slug
                 )
             else:
-                logger.warning(f"No PDF configuration found for {outputVars["pdf_report_generic"]} and {outputVars["pdf_report_comp"]}")
+                logger.warning(f"No PDF configuration found for {outputVars['pdf_report_generic']} and {outputVars['pdf_report_comp']}")
 
             if pdf_config_item:
 
                 pdf_output_dir = getattr(rl_data, pdf_config_item["output_dir_const"])
                 pdf_filepath = Path(pdf_output_dir) / Path(pdf_filename)
 
-                if(MakeFullPdfReport(filepath=pdf_filepath,  outputList=outputList, html_filepath=html_info_comp_filepaths, competitorIndex=competitorIndex)==True):
+                if(MakeFullPdfReport(filepath=pdf_filepath,  outputList=outputList, html_filepath=html_info_comp_filepaths, competitorAnalysis=outputVars['competitorAnalysis'])==True):
                    
                     #Me thinks this is pointless!!!
-                    outputList["filename"].append(str(pdf_filepath))
-                    outputList["id"].append(pdf_config_item["id"])
+                    outputList['filename'].append(str(pdf_filepath))
+                    outputList['id'].append(pdf_config_item['id'])
             else:
                 logger.warning(f"No PDF configuration found for {outputVars['pdf_report_generic']} and {outputVars['pdf_report_comp']}")
         else:
-            logger.warning(f"No PDF configuration found for {outputVars['pdf_report_generic']}, {outputVars['pdf_report_comp']} and {outputList["filename"]} is empty")
+            logger.warning(f"No PDF configuration found for {outputVars['pdf_report_generic']}, {outputVars['pdf_report_comp']} and {outputList['filename']} is empty")
 
 
-    # Save runtimeVars back to session after processing this event
+    # Save data back to session after processing this event
     session["runtime"] = runtimeVars
-    
+    session["outputList"] = outputList
+        
+    print(f"redline_vis_generate: return True")
+
+        
     # This function is now more of a controller for a single event. 
     # The return values might be used by an outer loop if you process multiple events.
     return True       
@@ -2178,407 +2860,165 @@ def redline_vis_generate(competitorDetails):
 #
 # functions below this line are called by external files.
 
-def redline_vis_competitor_html(competitorDetails, io_stringHtml, io_pngList, io_pngStrings):
-    
-    logger = rl_data.get_logger()
-    logger.debug(f"redline_vis_competitor_html {competitorDetails}")
-    
-    ouptut_config = {
- 
-        #competitor or generic switch
-        "competitorAnalysis"  : True, # if analysis is generic of compeitor based.
-        
-        #generic non-png
-        "duration_csv_generic"          : False, 
-        "pacing_table_csv_generic"      : False, 
-        "pdf_report_generic"            : False,
-
-        #generic png
-        "pie_generic"                   : False, 
-        "bar_stacked_dist_generic"      : False,  
-        "violin_generic"                : False,  
-        "radar_median_generic"          : False,  
-        "cutoff_bar_generic"            : False,  
-        "histogram_nettime_generic"     : False,  
-        "catbar_avgtime_generic"        : False,  
-        "correlation_bar_generic"       : False,  
-        "heatmap_correlation_generic"   : False, 
-        "scatter_generic_collection"    : False,
-
-        #Competitor-png
-        "html_info_comp"                : True,
-        "pdf_report_comp"               : False,
-
-        #competitor png
-        "pie_comp"                      : True, 
-        "bar_stacked_dist_comp"         : True, 
-        "violin_comp"                   : True, 
-        "radar_percentile_comp"         : True, 
-        "bar_sim_comp"                  : True, 
-        "cumul_sim_comp"                : True, 
-        "diff_sim_comp"                 : True, 
-        "scatter_comp_collection"       : True,
-    }
-
-    # Value always initialised as below but will be updated in function
-    runtime = {
-        "outputIdList": [],
-        "outputFileList": [],
-        "EventCutOffCount": [0,0,0,0,0,0,0,0,0,0,0,0],  #Count number of partipants who reach 7 minutes per event. Corresponds to EventList Entries
-        "EventList": [],
-        "EventListStart": [],
-        "eventDataList": [],
-        "competitorName": " ",
-        "competitorRaceNo": " "
-    }
-    
-    session["runtime"] = runtime
-
-    # Store config in session
-    session["ouptut_config"] = ouptut_config
-
-    return redline_vis_generate(competitorDetails)
-
-def redline_vis_competitor_pdf(competitorDetails, io_stringHtml, io_pngList, io_pngStrings):
-    
-    logger = rl_data.get_logger()
-    logger.debug(f"redline_vis_competitor_pdf {competitorDetails}")
-
-    ouptut_config = {
- 
-        #competitor or generic switch
-        "competitorAnalysis"  : True, # if analysis is generic of compeitor based.
-        
-        #generic non-png
-        "duration_csv_generic"          : False, 
-        "pacing_table_csv_generic"      : False, 
-        "pdf_report_generic"            : False,
-
-        #generic png
-        "pie_generic"                   : False, 
-        "bar_stacked_dist_generic"      : False,  
-        "violin_generic"                : False,  
-        "radar_median_generic"          : False,  
-        "cutoff_bar_generic"            : False,  
-        "histogram_nettime_generic"     : False,  
-        "catbar_avgtime_generic"        : False,  
-        "correlation_bar_generic"       : False,  
-        "heatmap_correlation_generic"   : False, 
-        "scatter_generic_collection"    : False,
-
-        #Competitor-png
-        "html_info_comp"                : True,
-        "pdf_report_comp"               : True,
-
-        #competitor png
-        "pie_comp"                      : True, 
-        "bar_stacked_dist_comp"         : True, 
-        "violin_comp"                   : True, 
-        "radar_percentile_comp"         : True, 
-        "bar_sim_comp"                  : True, 
-        "cumul_sim_comp"                : True, 
-        "diff_sim_comp"                 : True, 
-        "scatter_comp_collection"       : True,
-    }
-
-    # Value always initialised as below but will be updated in function
-    runtime = {
-        "EventCutOffCount": [0,0,0,0,0,0,0,0,0,0,0,0],  #Count number of partipants who reach 7 minutes per event. Corresponds to EventList Entries
-        "EventList": [],
-        "EventListStart": [],
-        "eventDataList": [],
-        "competitorName": " ",
-        "competitorRaceNo": " "
-    }
-    
-    # Creating updated file list.
-    outputList = {
-        "id": [],
-        "filename": [],
-    }
-
-    session["outputList"] = outputList
-    session["runtime"] = runtime
-    session["ouptut_config"] = ouptut_config
-
-    return redline_vis_generate(competitorDetails)
-  
-
-    
-
 # used when regenerating all generic output for all events.
-def redline_vis_generic():
+def redline_vis_generate_generic():
 
     logger = rl_data.get_logger()
-    logger.debug(f"redline_vis_generic")
+    logger.debug(f"redline_vis_generate_generic")
 
-    ouptut_config = {
- 
-        #competitor or generic switch
-        "competitorAnalysis"  : False, # if analysis is generic of compeitor based.
-        
-        #generic non-png
-        "duration_csv_generic"          : True, 
-        "pacing_table_csv_generic"      : True, 
-        "pdf_report_generic"            : True,
-
-        #generic png
-        "pie_generic"                   : True, 
-        "bar_stacked_dist_generic"      : True,  
-        "violin_generic"                : True,  
-        "radar_median_generic"          : True,  
-        "cutoff_bar_generic"            : True,  
-        "histogram_nettime_generic"     : True,  
-        "catbar_avgtime_generic"        : True,  
-        "correlation_bar_generic"       : True,  
-        "heatmap_correlation_generic"   : True, 
-        "scatter_generic_collection"    : True,
-
-        #Competitor-png
-        "html_info_comp"                : False,
-        "pdf_report_comp"               : False,
-
-        #competitor png
-        "pie_comp"                      : False, 
-        "bar_stacked_dist_comp"         : False, 
-        "violin_comp"                   : False, 
-        "radar_percentile_comp"         : False, 
-        "bar_sim_comp"                  : False, 
-        "cumul_sim_comp"                : False, 
-        "diff_sim_comp"                 : False, 
-        "scatter_comp_collection"       : False,
-    }
-
-    # Value always initialised as below but will be updated in function
-    runtime = {
-        "EventCutOffCount": [0,0,0,0,0,0,0,0,0,0,0,0],  #Count number of partipants who reach 7 minutes per event. Corresponds to EventList Entries
-        "EventList": [],
-        "EventListStart": [],
-        "eventDataList": [],
-        "competitorName": " ",
-        "competitorRaceNo": " "
-    }
-    
-    # Creating updated file list.
-    outputList = {
-        "id": [],
-        "filename": [],
-    }
-
-    session["outputList"] = outputList
-    session["runtime"] = runtime
-    session["ouptut_config"] = ouptut_config
+    # --- Initialize session variables ---
+    redline_vis_generate_generic_init()
   
-    return redline_vis_generate(None)
+    #Generate generic documnets.
+    return redline_vis_generate(competitorDetails = None)
 
 
-# used when generating generic pdf (if not already generated)
-def redline_vis_generic_eventpdf(details):
-
-    logger = rl_data.get_logger()
-    logger.debug(f"redline_vis_generic_eventpdf {details}")
-
-    ouptut_config = {
- 
-        #competitor or generic switch
-        "competitorAnalysis"  : False, # if analysis is generic of compeitor based.
-        
-        #generic non-png
-        "duration_csv_generic"          : False, 
-        "pacing_table_csv_generic"      : False, 
-        "pdf_report_generic"            : True,
-
-        #generic png
-        "pie_generic"                   : True, 
-        "bar_stacked_dist_generic"      : True,  
-        "violin_generic"                : True,  
-        "radar_median_generic"          : True,  
-        "cutoff_bar_generic"            : True,  
-        "histogram_nettime_generic"     : True,  
-        "catbar_avgtime_generic"        : True,  
-        "correlation_bar_generic"       : True,  
-        "heatmap_correlation_generic"   : True, 
-        "scatter_generic_collection"    : True,
-
-        #Competitor-png
-        "html_info_comp"                : False,
-        "pdf_report_comp"               : False,
-
-        #competitor png
-        "pie_comp"                      : False, 
-        "bar_stacked_dist_comp"         : False, 
-        "violin_comp"                   : False, 
-        "radar_percentile_comp"         : False, 
-        "bar_sim_comp"                  : False, 
-        "cumul_sim_comp"                : False, 
-        "diff_sim_comp"                 : False, 
-        "scatter_comp_collection"       : False,
-    }
-
-    # Value always initialised as below but will be updated in function
-    runtime = {
-        "EventCutOffCount": [0,0,0,0,0,0,0,0,0,0,0,0],  #Count number of partipants who reach 7 minutes per event. Corresponds to EventList Entries
-        "EventList": [],
-        "EventListStart": [],
-        "eventDataList": [],
-        "competitorName": " ",
-        "competitorRaceNo": " "
-    }
-    
-    # Creating updated file list.
-    outputList = {
-        "id": [],
-        "filename": [],
-    }
-
-    session["outputList"] = outputList
-    session["runtime"] = runtime
-    session["ouptut_config"] = ouptut_config
-
-    return redline_vis_generate(details)
- 
 
 # used when generating generic event html 
-def redline_vis_generic_eventhtml(details, io_stringHtml, io_pngList, io_pngStrings):
+def redline_vis_generate_generic_init():
 
     logger = rl_data.get_logger()
-    logger.debug(f"redline_vis_generic_eventhtml {details}")
+    logger.debug(f"redline_vis_generate_generic_eventhtml")
 
-    ouptut_config = {
-
+   # session configuration variable
+    output_config = {
         #competitor or generic switch
-        "competitorAnalysis"  : False, # if analysis is generic of compeitor based.
-        
-        #generic non-png
-        "duration_csv_generic"          : False, 
-        "pacing_table_csv_generic"      : False, 
-        "pdf_report_generic"            : False,
+        'competitorAnalysis'  : False, # if analysis is generic of compeitor based.
 
         #generic png
-        "pie_generic"                   : True, 
-        "bar_stacked_dist_generic"      : True,  
-        "violin_generic"                : True,  
-        "radar_median_generic"          : True,  
-        "cutoff_bar_generic"            : True,  
-        "histogram_nettime_generic"     : True,  
-        "catbar_avgtime_generic"        : True,  
-        "correlation_bar_generic"       : True,  
-        "heatmap_correlation_generic"   : True, 
-        "scatter_generic_collection"    : True,
+        'pie_generic'                   : True, 
+        'bar_stacked_dist_generic'      : True,  
+        'violin_generic'                : True,  
+        'radar_median_generic'          : True,  
+        'cutoff_bar_generic'            : True,  
+        'histogram_nettime_generic'     : True,  
+        'catbar_avgtime_generic'        : True,  
+        'correlation_bar_generic'       : True,  
+        'heatmap_correlation_generic'   : True, 
+        'scatter_generic_collection'    : True,
+        'pacing_chart_png_generic'      : True,
+        
+        #generic non-png
+        'duration_csv_generic'          : True, 
+        'pacing_table_csv_generic'      : True, 
+        'pdf_report_generic'            : True,
+        
+        #competitor png
+        #'pie_comp'                      : False, 
+        #'bar_stacked_dist_comp'         : False, 
+        #'violin_comp'                   : False, 
+        #'radar_percentile_comp'         : False, 
+        #'bar_sim_comp'                  : False, 
+        #'cumul_sim_comp'                : False, 
+        #'diff_sim_comp'                 : False, 
+        #'scatter_comp_collection'       : False,
 
         #Competitor-png
-        "html_info_comp"                : False,
-        "pdf_report_comp"               : False,
-
-        #competitor png
-        "pie_comp"                      : False, 
-        "bar_stacked_dist_comp"         : False, 
-        "violin_comp"                   : False, 
-        "radar_percentile_comp"         : False, 
-        "bar_sim_comp"                  : False, 
-        "cumul_sim_comp"                : False, 
-        "diff_sim_comp"                 : False, 
-        "scatter_comp_collection"       : False,
+        #'html_info_comp'                : False,
+        #'pdf_report_comp'               : False,
+        #'html_note_comp'                : False,
+        
     }
-
+    
     # Value always initialised as below but will be updated in function
     runtime = {
-        "EventCutOffCount": [0,0,0,0,0,0,0,0,0,0,0,0],  #Count number of partipants who reach 7 minutes per event. Corresponds to EventList Entries
-        "EventList": [],
-        "EventListStart": [],
-        "eventDataList": [],
-        "competitorName": " ",
-        "competitorRaceNo": " "
+        'StationCutOffCount': [0,0,0,0,0,0,0,0,0,0,0,0],  #Count number of partipants who reach 7 minutes per event. Corresponds to StationList Entries
+        'StationList': [],
+        'StationListStart': [],
+        'eventDataList': [],
+        'competitorName': " ",
+        'competitorRaceNo': " "
     }
     
     # Creating updated file list.
     outputList = {
-        "id": [],
-        "filename": [],
+        'id': [],
+        'filename': [],
     }
 
+    #clear the search results - not sure if this is needed.
+    session.pop('outputList', None)
+    session.pop('runtime', None)
+    session.pop('output_config', None)
+    session.pop('async_runtime_vars_snapshot', None)
+    
+    #re-assign    
     session["outputList"] = outputList
     session["runtime"] = runtime
-    session["ouptut_config"] = ouptut_config
-  
-    return redline_vis_generate(details)
+    session["output_config"] = output_config
+ 
+    return True
 
-def redline_vis_developer():
+# used when generating generic event html 
+def redline_vis_generate_competitor_init():
 
     logger = rl_data.get_logger()
-    logger.debug(f"redline_vis_developer")
+    logger.debug(f"def redline_vis_generate_competitor_init()")
 
-    # session configuration variable
-    ouptut_config = {
+# session configuration variable
+    output_config = {
         #competitor or generic switch
-        "competitorAnalysis"  : True, # if analysis is generic of compeitor based.
-
+        'competitorAnalysis'  : True,
+        
         #generic png
-        "pie_generic"                   : True, 
-        "bar_stacked_dist_generic"      : True,  
-        "violin_generic"                : True,  
-        "radar_median_generic"          : True,  
-        "cutoff_bar_generic"            : True,  
-        "histogram_nettime_generic"     : True,  
-        "catbar_avgtime_generic"        : True,  
-        "correlation_bar_generic"       : True,  
-        "heatmap_correlation_generic"   : True, 
-        "scatter_generic_collection"    : True,
+        #'pie_generic'                   : False, 
+        #'bar_stacked_dist_generic'      : False,  
+        #'violin_generic'                : False,  
+        #'radar_median_generic'          : False,  
+        #'cutoff_bar_generic'            : False,  
+        #'histogram_nettime_generic'     : False,  
+        #'catbar_avgtime_generic'        : False,  
+        #'correlation_bar_generic'       : False,  
+        #'heatmap_correlation_generic'   : False, 
+        #'scatter_generic_collection'    : False,
         
         #generic non-png
-        "duration_csv_generic"          : True, 
-        "pacing_table_csv_generic"      : True, 
-        "pdf_report_generic"            : True,
-
+        #'duration_csv_generic'          : False, 
+        #'pacing_table_csv_generic'      : False, 
+        #'pdf_report_generic'            : False,
+        #'pacing_chart_png_generic'      : False,
+        
         #competitor png
-        "pie_comp"                      : True, 
-        "bar_stacked_dist_comp"         : True, 
-        "violin_comp"                   : True, 
-        "radar_percentile_comp"         : True, 
-        "bar_sim_comp"                  : True, 
-        "cumul_sim_comp"                : True, 
-        "diff_sim_comp"                 : True, 
-        "scatter_comp_collection"       : True,
+        'bar_stacked_dist_comp'         : True, 
+        'pie_comp'                      : True, 
+        'violin_comp'                   : True, 
+        'radar_percentile_comp'         : True, 
+        'bar_sim_comp'                  : True, 
+        'cumul_sim_comp'                : True, 
+        'diff_sim_comp'                 : True, 
+        'scatter_comp_collection'       : True,
 
         #Competitor-png
-        "html_info_comp"                : True,
-        "pdf_report_comp"               : True,
+        'html_info_comp'                : True,
+        'pdf_report_comp'               : True,
+        'html_note_comp'                : True,
     }
 
     # Value always initialised as below but will be updated in function
     runtime = {
-        "EventCutOffCount": [0,0,0,0,0,0,0,0,0,0,0,0],  #Count number of partipants who reach 7 minutes per event. Corresponds to EventList Entries
-        "EventList": [],
-        "EventListStart": [],
-        "eventDataList": [],
-        "competitorName": " ",
-        "competitorRaceNo": " "
+        'StationCutOffCount': [0,0,0,0,0,0,0,0,0,0,0,0],  #Count number of partipants who reach 7 minutes per event. Corresponds to StationList Entries
+        'StationList': [],
+        'StationListStart': [],
+        'eventDataList': [],
+        'competitorName': " ",
+        'competitorRaceNo': " "
     }
     
     # Creating updated file list.
     outputList = {
-        "id": [],
-        "filename": [],
+        'id': [],
+        'filename': [],
     }
 
+    #clear the search results - not sure if this is needed.
+    session.pop('outputList', None)
+    session.pop('runtime', None)
+    session.pop('output_config', None)
+    session.pop('async_runtime_vars_snapshot', None)
+    
+    #re-assign    
     session["outputList"] = outputList
     session["runtime"] = runtime
-    session["ouptut_config"] = ouptut_config
-
-
-    #details = {"competitor": "STEPHANIE STEPHEN",  "race_no": "330", "event": "WomensSinglesCompetitive2024"}
-
-    details = { "competitor": "STEPHEN ANTHONY CLEARY", "race_no": "425", "event": "MensSinglesCompetitive2024"}
-
-    #details = {"competitor": "DENNIS OH", "race_no": "1387", "event": "MensDoubles2024"}
-
-    #details = {"competitor": "DENNIS OH", "race_no": "1387", "event": "MensDoubles2024"}
-
-    #details =  {"competitor": "JAMIE BARNETT", "race_no": "G1759", "event": "MensSinglesOpen2024"}
-    #details =  {"competitor": "ANGIE LEK", "race_no": "95", "event": "WomensSinglesOpen2024"}
-
-    #details =  {"competitor": None, "race_no": None, "event": "WomensSinglesOpen2024"}
-
-
-    #competitor details set to False
-    return redline_vis_generate(details)
+    session["output_config"] = output_config
+ 
+    return True

@@ -21,8 +21,8 @@ def find_competitor(competitor, callback):
         try:
             with open(filepath, newline='', encoding='utf-8') as csvfile:
                 reader = csv.DictReader(csvfile)
-
                 for row in reader:
+                    found = False
                     # Check if the name field has a partial match with competitor (case insensitive)
                     if competitor.upper() in row['Name'].upper():
 
@@ -35,12 +35,35 @@ def find_competitor(competitor, callback):
                         logger.debug(f"found a match {match}")
                         matches.append(match)
                         matchcount += 1
+                        found=True
 
                         if matchcount >= 50:
                             #leave early
                             #logger.debug(f'reached {matchcount} matches' )
                             callback(competitor, matches)
                             return 
+                        
+                    #within same file should be be checking both names and members.
+                    #if row called 'Member1 exists.
+                    if found == False and 'Member1' in row:
+                        if competitor.upper() in row['Member1'].upper() or competitor.upper() in row['Member2'].upper() or competitor.upper() in row['Member3'].upper() or competitor.upper() in row['Member4'].upper():
+                            match = {
+                                'competitor': row['Name'],
+                                'description': element[1],  
+                                'race_no': row['Race No'],
+                                'event': element[0]  # could be extracted from filename
+                            }
+                            logger.debug(f"found a match {match}")
+                            matches.append(match)
+                            matchcount += 1
+
+                            if matchcount >= 50:
+                                #leave early
+                                #logger.debug(f'reached {matchcount} matches' )
+                                callback(competitor, matches)
+                                return 
+                    
+
                            
 
         except Exception as e:
