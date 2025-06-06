@@ -218,7 +218,7 @@ def teardown_request_logging(exception=None):
         delattr(rl_data.thread_local, 'request_id')
     
     if exception:
-        app.logger.error(f"Request failed: {str(exception)}")
+        app.logger.critical(f"Request failed: {str(exception)}")
 
 @app.before_request
 def make_session_permanent():
@@ -246,7 +246,7 @@ def format_datetime_filter(value, format='%Y-%m-%d %H:%M'):
 @app.route('/', methods=["GET"])
 def gethome():
 
-    app.logger.debug(f"/ GET received {request}")
+    app.logger.warning(f"/ GET received {request}")
 
     #clear the session to keep fresh
     session.pop('search_results', None)
@@ -274,7 +274,7 @@ def gethome():
 
 @app.route("/sitemap.xml")
 def sitemap():
-    app.logger.info("Sitemap.xml route handler was called (dynamic).")
+    app.logger.warning("Sitemap.xml route handler was called (dynamic).")
     pages = []
 
     # Static pages
@@ -306,7 +306,7 @@ def sitemap():
     #app.logger.info(f"Scanning for blog posts in: {blog_data_path}")
 
     if not os.path.exists(blog_data_path) or not os.path.isdir(blog_data_path):
-        app.logger.error(f"Blog data directory not found or not a directory: {blog_data_path}")
+        app.logger.critical(f"Blog data directory not found or not a directory: {blog_data_path}")
     else:
         for post_folder_name in os.listdir(blog_data_path):
             post_folder_path = os.path.join(blog_data_path, post_folder_name)
@@ -327,14 +327,14 @@ def sitemap():
                         elif not post_content.get('is_published', False):
                             app.logger.debug(f"Skipping unpublished post: {post_content.get('slug', post_folder_name)}")
                         else:
-                            app.logger.warning(f"Skipping post in {post_folder_name} due to missing slug or updated_at in content.json")
+                            app.logger.error(f"Skipping post in {post_folder_name} due to missing slug or updated_at in content.json")
 
                     except json.JSONDecodeError:
-                        app.logger.error(f"Error decoding JSON for post in {post_folder_name}/content.json")
+                        app.logger.critical(f"Error decoding JSON for post in {post_folder_name}/content.json")
                     except Exception as e:
-                        app.logger.error(f"Error processing post {post_folder_name}: {e}")
+                        app.logger.critical(f"Error processing post {post_folder_name}: {e}")
                 else:
-                    app.logger.warning(f"No content.json found in blog post folder: {post_folder_path}")
+                    app.logger.error(f"No content.json found in blog post folder: {post_folder_path}")
 
     try:
         sitemap_xml_content = render_template("sitemap.xml", pages=pages)
@@ -343,7 +343,7 @@ def sitemap():
         #app.logger.info(f"Successfully rendered sitemap.xml with {len(pages)} URLs.")
         return response
     except Exception as e:
-        app.logger.error(f"Error rendering sitemap.xml: {e}", exc_info=True)
+        app.logger.critical(f"Error rendering sitemap.xml: {e}", exc_info=True)
         return "Error generating sitemap", 500
 
 @app.route('/robots.txt')
@@ -356,14 +356,14 @@ def robots_txt():
 @app.route('/about')
 def about():
     
-    app.logger.debug(f"/about received {request}")
+    app.logger.warning(f"/about received {request}")
 
     #Just debug messages to test out logging
-    app.logger.debug("/about: This is a debug message")    # Typically used for detailed dev info
-    app.logger.info("/about: This is an info message")     # General application info
-    app.logger.warning("/about: This is a warning")        # Something unexpected, but not fatal
-    app.logger.error("/about: This is an error message")   # Serious problem, app still running
-    app.logger.critical("/about: This is critical") 
+    #app.logger.debug("/about: This is a debug message")    # Typically used for detailed dev info
+    #app.logger.info("/about: This is an info message")     # General application info
+    #app.logger.warning("/about: This is a warning")        # Something unexpected, but not fatal
+    #app.logger.error("/about: This is an error message")   # Serious problem, app still running
+    #app.logger.critical("/about: This is critical") 
 
     #list of pngs to be displayed on about page
     pnglistAbout = [ str(rl_data.PNG_HTML_DIR / Path('redline_author.png'))]
@@ -375,7 +375,7 @@ def about():
 
 @app.route('/feedback', methods=['GET', 'POST'])
 def feedback():
-    app.logger.debug(f"/feedback received {request}")
+    app.logger.warning(f"/feedback received {request}")
 
     if request.method == 'POST':
 
@@ -412,13 +412,13 @@ def feedback():
 
 @app.route('/search')
 def index():
-    app.logger.debug(f"/search received {request}")
+    app.logger.warning(f"/search received {request}")
     return render_template('search.html' )
 
 
 @app.route('/results', methods=["GET", "POST"])
 def results():
-    app.logger.debug(f"/results received {request}")
+    app.logger.warning(f"/results received {request}")
 
     #clear the search results.
     session.pop('search_results', None)
@@ -475,7 +475,7 @@ def results():
 @app.route('/display', methods=["GET"])
 def getdisplayEvent():
 
-    app.logger.debug(f"/display GET received {request}")
+    app.logger.warning(f"/display GET received {request}")
 
     # get the eventname    
     eventname = request.args.get('eventname')
@@ -492,7 +492,7 @@ def getdisplayEvent():
 @app.route('/display', methods=["POST"])
 def postdisplayEvent():
 
-    app.logger.debug(f"/display POST received {request}")
+    app.logger.info(f"/display POST received {request}")
 
     selected_view = None
     selected_format = None
@@ -506,7 +506,7 @@ def postdisplayEvent():
     selected_view = request.form.get("view_option")
     selected_format = request.form.get("output_format")
 
-    app.logger.info(f"/display filters: {selected_view}, {selected_format}")
+    app.logger.warning(f"/display filters: {selected_view}, {selected_format} {eventname}")
 
     if selected_view == "visualization" and selected_format == "html":
 
@@ -698,6 +698,8 @@ def new_search():
     search_query = search_query.strip()  # Remove leading/trailing whitespace
     search_query = escape(search_query)  # Prevent injection if rendered back to user
 
+    app.logger.warning(f"/api/search POST query {search_query}")
+
     # Optionally, apply further filtering:
     if len(search_query) > 100:
         app.logger.debug(f"/api/search POST Search term too long: {search_query}")
@@ -744,6 +746,8 @@ def display_competitor_visuals_route():
         'race_no': race_no,
         'event': event
     }
+    
+    app.logger.warning(f"/display_competitor_visuals {competitorDetails}")
 
     # --- Initialize session variables if not present ---
     redline_vis_generate_competitor_init()
@@ -801,6 +805,8 @@ def generate_and_download_pdf_route():
     competitor_name_actual = request.args.get('competitor_name_actual')
     competitor_race_no_actual = request.args.get('competitor_race_no_actual')
 
+    app.logger.warning(f"/download_pdf {event_name_actual} {competitor_name_actual}")
+
     runtimeVars = session.get("runtime", {}) # Get from session for this example
     outputVars = session.get("output_config", {})
     outputList = session.get("outputList",[])
@@ -857,9 +863,9 @@ def generate_and_download_pdf_route():
             html_info_comp_filepaths = None
             
         else:
-            app.logger.warning(f"No PDF configuration found for {outputVars['pdf_report_generic']} and {outputVars['pdf_report_comp']}")
+            app.logger.error(f"No PDF configuration found for {outputVars['pdf_report_generic']} and {outputVars['pdf_report_comp']}")
 
-        #app.logger.warning(f"PDF filename {pdf_filename} and pdf_config_item {pdf_config_item}")
+        #app.logger.error(f"PDF filename {pdf_filename} and pdf_config_item {pdf_config_item}")
 
         if pdf_config_item:
 
@@ -867,19 +873,22 @@ def generate_and_download_pdf_route():
             pdf_filepath = Path(pdf_output_dir) / Path(pdf_filename)
 
             if(MakeFullPdfReport(filepath=pdf_filepath,  outputList=outputList, html_filepath=html_info_comp_filepaths, competitorAnalysis=outputVars['competitorAnalysis'])==True):
-                #app.logger.warning(f"PDF done {pdf_filename} and pdf_config_item {pdf_config_item}")
+                #app.logger.error(f"PDF done {pdf_filename} and pdf_config_item {pdf_config_item}")
 
                 return send_file(pdf_filepath, as_attachment=True, mimetype='application/pdf')
             
         else:
-            app.logger.warning(f"No PDF configuration found for {outputVars['pdf_report_generic']} and {outputVars['pdf_report_comp']}")
+            app.logger.error(f"No PDF configuration found for {outputVars['pdf_report_generic']} and {outputVars['pdf_report_comp']}")
     else:
-        app.logger.warning(f"No PDF configuration found for {outputVars['pdf_report_generic']}, {outputVars['pdf_report_comp']} and {outputList['filename']} is empty")
+        app.logger.error(f"No PDF configuration found for {outputVars['pdf_report_generic']}, {outputVars['pdf_report_comp']} and {outputList['filename']} is empty")
 
 
 # 3. User: View blog index (list of posts, searchable)
 @app.route('/blog')
 def blog_index():
+    
+    app.logger.warning(f"/blog")
+    
     all_published_posts = rl_data.get_all_posts() # Default: published only
     # ... (rest of your existing blog_index logic for search, pagination) ...
     query = request.args.get('q', '').lower()
@@ -907,7 +916,7 @@ def blog_post_image(slug, filename):
         if signed_url:
             return redirect(signed_url)
         else:
-            app.logger.warning(f"Could not get signed URL for GCS image: {slug}/images/{filename}")
+            app.logger.error(f"Could not get signed URL for GCS image: {slug}/images/{filename}")
             abort(404)
     else:
         # Your existing local image serving logic
@@ -920,7 +929,7 @@ def blog_post_image(slug, filename):
 # User: View individual blog post@app.route('/blog/<slug>')
 @app.route('/blog/<slug>')
 def blog_post_detail(slug):
-    env_mode = os.environ.get('ENV_MODE', 'development').lower()
+    app.logger.warning(f"/blog/{slug}")
 
     post = rl_data.get_post(slug, increment_view_count=True) # Your existing local logic
 
@@ -971,8 +980,7 @@ def login():
         
         if password == config_class.ADMIN_PASSWORD:
             
-            app.logger.warning(f"Session Keys: {list(session.keys())}")
-            
+           
             # Clear any existing session data first
             session.clear()
             
@@ -1010,11 +1018,9 @@ def admin():
 
     app.logger.debug(f"/admin received {request}")
     
-    app.logger.warning(f"Session Keys: {list(session.keys())}")
-    
-    for key in list(session.keys()):
-        if not key.startswith('_'):
-            app.logger.warning(f"Session Keys: {key}: {session[key]}")
+    #for key in list(session.keys()):
+    #    if not key.startswith('_'):
+    #        app.logger.warning(f"Session Keys: {key}: {session[key]}")
     
     #clear the search results.
     session.pop('search_results', None)
@@ -1309,7 +1315,7 @@ def new_blog_post():
                 os.makedirs(post_dir_local_path, exist_ok=True)
             except OSError as e:
                 flash(f"Could not create local directory for post: {e}", "danger")
-                app.logger.error(f"OSError creating local directory {post_dir_local_path}: {e}")
+                app.logger.critical(f"OSError creating local directory {post_dir_local_path}: {e}")
                 return render_template('admin/admin_post_blog.html', legend='New Blog Post', form_data=request.form)
 
         # --- Image Uploading ---
@@ -1375,7 +1381,7 @@ def new_blog_post():
             if not uploaded_images_data and not image_save_failed:
                  flash('At least one valid image is required and must be successfully uploaded.', 'danger')
             
-            app.logger.warning(f"Image upload failed or no valid images for new post '{post_slug}'. Cleaning up.")
+            app.logger.error(f"Image upload failed or no valid images for new post '{post_slug}'. Cleaning up.")
             if env_mode == 'deploy':
                 app.logger.info(f"Attempting GCS cleanup for partially created post '{post_slug}' (if any images were uploaded).")
                 # MODIFIED: Iterate through uploaded_images_data to get filenames for cleanup
@@ -1421,7 +1427,7 @@ def new_blog_post():
                 flash('Blog post created successfully locally!', 'success')
             except IOError as e:
                 flash(f'Error saving local content.json: {e}', 'danger')
-                app.logger.error(f"IOError saving local content.json for {post_slug}: {e}")
+                app.logger.critical(f"IOError saving local content.json for {post_slug}: {e}")
                 if post_dir_local_path and os.path.exists(post_dir_local_path): shutil.rmtree(post_dir_local_path)
 
         if save_config_successful:
@@ -1475,7 +1481,7 @@ def edit_blog_post(slug):
     post_data_from_storage = rl_data.get_post(slug) # Assumes this handles GCS/local
 
     if not post_data_from_storage:
-        app.logger.warning(f"Edit attempt for non-existent post '{slug}' in mode '{env_mode}'.")
+        app.logger.error(f"Edit attempt for non-existent post '{slug}' in mode '{env_mode}'.")
         abort(404)
 
     # Work with a copy for modifications
@@ -1660,7 +1666,7 @@ def edit_blog_post(slug):
                     json.dump(post_for_processing, f, indent=4)
                 save_successful = True
             except IOError as e:
-                app.logger.error(f"Error writing local content.json for {slug}: {e}")
+                app.logger.critical(f"Error writing local content.json for {slug}: {e}")
                 flash(f'Error saving post data locally: {e}', 'danger')
 
         if save_successful:
@@ -1702,7 +1708,7 @@ def delete_blog_post(slug):
                 flash(f'Post "{slug}" and all its images deleted successfully.', 'success')
             except OSError as e:
                 flash(f'Error deleting post (Content deleted, but dir remains) "{slug}": {e}', 'danger')
-                app.logger.error(f"Error deleting directory {post_dir}: {e}")
+                app.logger.critical(f"Error deleting directory {post_dir}: {e}")
         else:
             flash(f'Post "{slug}" not found for deletion.', 'warning')
     return redirect(url_for('manage_blog_posts'))
@@ -1731,14 +1737,14 @@ def sync_blogs_to_gcs_route():
                 logger.info(f"Sync function reported success.")
             elif success is False or isinstance(success, dict) and success.get("status") == "partial_success":
                 flash('Blog post sync to GCS initiated with some issues. Check logs for details.', 'warning')
-                logger.warning(f"Sync function reported partial success or issues.")
+                logger.error(f"Sync function reported partial success or issues.")
             else:
                 flash('Blog post sync to GCS failed to initiate or encountered errors. Check logs.', 'danger')
-                logger.error(f"Sync function reported failure.")
+                logger.critical(f"Sync function reported failure.")
                 
         except Exception as e:
             flash(f'An unexpected error occurred during the sync process: {e}', 'danger')
-            logger.error(f"Exception during sync call: {e}", exc_info=True)
+            logger.critical(f"Exception during sync call: {e}", exc_info=True)
     else:
        logger.info(f"Running in {env_mode} mode. Sync will not attempt be attempted") 
 

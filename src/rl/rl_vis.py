@@ -299,7 +299,7 @@ def getCompetitorIndex(df, runtimeVars_override=None):
     else:
 
         logger = rl_data.get_logger()
-        logger.warning(f"No data for the selected competitor {runtimeVars['competitorName']} {runtimeVars['competitorRaceNo']} in the selected event {runtimeVars['eventDataList'][0]}")
+        logger.error(f"No data for the selected competitor {runtimeVars['competitorName']} {runtimeVars['competitorRaceNo']} in the selected event {runtimeVars['eventDataList'][0]}")
         logger.debug(f"df {df.shape} compDF {compDF.shape}")
 
     return compIndex
@@ -394,15 +394,15 @@ def GenerateCompInfoTable(df, filepath, runtimeVars, competitorIndex=-1 ):
             with open(filepath, 'r', encoding='utf-8') as f:
                 return f.read()
         except Exception as e:
-            logger.error(f"Error reading existing HTML file {filepath}: {e}")
+            logger.critical(f"Error reading existing HTML file {filepath}: {e}")
 
     if competitorIndex == -1 or competitorIndex not in df.index:
         message = f"Invalid competitorIndex ({competitorIndex}) or competitor not in DataFrame for event {runtimeVars.get('eventDataList', [None, 'N/A'])[1]}."
-        logger.warning(message)
+        logger.error(message)
         error_html = f"<p class='text-danger'>{message}</p>"
         try:
             with open(filepath, "w", encoding='utf-8') as file: file.write(error_html)
-        except Exception as e: logger.error(f"Error writing error HTML to {filepath}: {e}")
+        except Exception as e: logger.critical(f"Error writing error HTML to {filepath}: {e}")
         return error_html
 
     html_parts = ['<div class="table-responsive">']
@@ -489,7 +489,7 @@ def GenerateCompInfoTable(df, filepath, runtimeVars, competitorIndex=-1 ):
     
     station_table_rows_data = []
     if not current_station_list_for_breakdown:
-        logger.warning("EventList (for station breakdown) is empty in runtimeVars.")
+        logger.error("EventList (for station breakdown) is empty in runtimeVars.")
     
     for station in current_station_list_for_breakdown:
         row_data = {'Station': station} # Add station name to the row data itself
@@ -551,7 +551,7 @@ def GenerateCompInfoTable(df, filepath, runtimeVars, competitorIndex=-1 ):
             file.write(final_html)
         logger.debug(f"Saved competitor info HTML to {filepath}")
     except Exception as e:
-        logger.error(f"Error writing HTML file {filepath}: {e}")
+        logger.critical(f"Error writing HTML file {filepath}: {e}")
         return f"<p class='text-danger'>Error generating competitor information file: {e}</p>"
 
     return final_html
@@ -1278,7 +1278,7 @@ def CreateGroupBarChart(df, filepath, runtimeVars, competitorIndex=-1 ):
             else:
                 similar_finishers_avg_times.append(np.nan) # Or 0, or competitor's time as fallback
     else:
-        logger.warning(f"No similar finishers found for {competitor_name}.")
+        logger.error(f"No similar finishers found for {competitor_name}.")
         # Fallback: use competitor's times or NaNs if no similar finishers
         similar_finishers_avg_times = [np.nan] * len(station_names) # Or competitor_event_times
 
@@ -1353,7 +1353,7 @@ def CreateCumulativeTimeComparison(df, filepath, runtimeVars, competitorIndex=-1
         return True
         
     if competitorIndex == -1:
-        logger.warning("Error: CreateCumulativeTimeComparison requires a valid competitorIndex.")
+        logger.error("Error: CreateCumulativeTimeComparison requires a valid competitorIndex.")
         return False
 
     competitor_name = df.loc[competitorIndex, 'Name']
@@ -1381,7 +1381,7 @@ def CreateCumulativeTimeComparison(df, filepath, runtimeVars, competitorIndex=-1
                 competitor_event_time_for_fallback = df.loc[competitorIndex, event]
                 similar_finishers_avg_station_times.append(competitor_event_time_for_fallback if not np.isnan(competitor_event_time_for_fallback) else 0)
     else:
-        logger.warning(f"No similar finishers found for {competitor_name}. Using competitor's times for comparison line.")
+        logger.info(f"No similar finishers found for {competitor_name}. Using competitor's times for comparison line.")
         similar_finishers_avg_station_times = [t if not np.isnan(t) else 0 for t in competitor_event_times]
 
 
@@ -1859,7 +1859,7 @@ def CreatePacingPng(df_input_pacing_table, filepath, runtimeVars, competitorInde
         return True
 
     if df_input_pacing_table is None or df_input_pacing_table.empty:
-        logger.warning("Input pacing table DataFrame is empty or None. Cannot generate chart.")
+        logger.error("Input pacing table DataFrame is empty or None. Cannot generate chart.")
         return False
         
     event_display_name = runtimeVars.get('eventDataList', [None, "Event Unknown"])[1]
@@ -1877,19 +1877,19 @@ def CreatePacingPng(df_input_pacing_table, filepath, runtimeVars, competitorInde
 
     if df_pacing.empty:
         # ... (handling for empty plot as before) ...
-        logger.warning("Pacing table is empty after removing summary rows. No stations to plot.")
+        logger.error("Pacing table is empty after removing summary rows. No stations to plot.")
         fig, ax = plt.subplots(figsize=(14, 9))
         ax.text(0.5, 0.5, "No station pacing data available to plot.", 
                 horizontalalignment='center', verticalalignment='center', transform=ax.transAxes)
         ax.set_title(f"{event_display_name}\nPacing Guide - No Data", fontsize=15, pad=20)
         try:
             plt.savefig(filepath, bbox_inches='tight', pad_inches=0.2); plt.close(fig)
-        except Exception as e: logger.error(f"Error saving empty pacing chart {filepath}: {e}"); plt.close(fig)
+        except Exception as e: logger.critical(f"Error saving empty pacing chart {filepath}: {e}"); plt.close(fig)
         return True
 
     percentile_columns = [col for col in df_pacing.columns if str(col).startswith('Top ')]
     if not percentile_columns:
-        logger.error("No percentile columns found in the processed pacing table DataFrame.")
+        logger.critical("No percentile columns found in the processed pacing table DataFrame.")
         return False
         
     def time_str_to_seconds(time_str):
@@ -1971,7 +1971,7 @@ def CreatePacingPng(df_input_pacing_table, filepath, runtimeVars, competitorInde
         plt.close(fig)
         return True
     except Exception as e:
-        logger.error(f"Error saving pacing chart {filepath}: {e}")
+        logger.critical(f"Error saving pacing chart {filepath}: {e}")
         if 'fig' in locals(): plt.close(fig)
         return False
 
@@ -2022,16 +2022,16 @@ def MakeFullPdfReport(filepath, outputList, html_filepath, competitorAnalysis ):
                     page = doc.new_page(width=img_rect.width, height=img_rect.height)
                     page.insert_image(img_rect, filename=f_path_str) # Direct insertion
                 except Exception as e:
-                    logger.error(f"Error processing image {f_path_str} for PDF: {e}")
+                    logger.critical(f"Error processing image {f_path_str} for PDF: {e}")
             else:
                 logger.info(f"File type not supported for PDF image insertion: {f_path_str}")
             
         doc.save(filepath, garbage=4, deflate=True)
-        logger.warning(f"Saving PDF {filepath}")
+        logger.debug(f"Saving PDF {filepath}")
         return True
     
     except Exception as e:
-        logger.error(f"Error creating PDF {filepath}: {e}", exc_info=True)
+        logger.critical(f"Error creating PDF {filepath}: {e}", exc_info=True)
 
 #############################
 # Show Scatter Plot
@@ -2150,7 +2150,7 @@ def prepare_visualization_data_for_template( competitorDetails):
             break
 
     if not runtimeVars['eventDataList']:
-        logger.error(f"Event details not found for: {competitorDetails['event']}")
+        logger.critical(f"Event details not found for: {competitorDetails['event']}")
         return render_template("error.html", message=f"Event configuration for {competitorDetails['event']} not found.")
 
     # Configure StationList based on year
@@ -2175,7 +2175,7 @@ def prepare_visualization_data_for_template( competitorDetails):
     }
 
     if outputVars.get('competitorAnalysis', False):
-        logger.error("competitorAnalysis is not supported for generic page.")
+        logger.critical("competitorAnalysis is not supported for generic page.")
         return render_template("error.html", message=f"competitorAnalysis is not supported for generic page.")
 
     for output_conf in OUTPUT_CONFIGS:
@@ -2267,7 +2267,7 @@ def prepare_competitor_visualization_page(competitorDetails):
 
     # --- 1. Essential Setup: Event details, DF loading, Competitor Index ---
     if not outputVars.get('competitorAnalysis'):
-        logger.error("prepare_competitor_visualization_page called without competitorAnalysis True in config.")
+        logger.critical("prepare_competitor_visualization_page called without competitorAnalysis True in config.")
         return render_template("error.html", message="Configuration error.")
 
     for element in rl_data.EVENT_DATA_LIST: 
@@ -2276,7 +2276,7 @@ def prepare_competitor_visualization_page(competitorDetails):
             break
         
     if not runtimeVars.get('eventDataList'):
-        logger.error(f"Event details not found for: {competitorDetails['event']}")
+        logger.critical(f"Event details not found for: {competitorDetails['event']}")
         return render_template("error.html", message=f"Event configuration for {competitorDetails['event']} not found.")
 
     # Configure StationList based on year
@@ -2294,10 +2294,10 @@ def prepare_competitor_visualization_page(competitorDetails):
         df = pd.read_csv(indatafile)
         tidyTheData(df=df, filename=indatafile)
     except FileNotFoundError:
-        logger.error(f"Data file not found: {indatafile}")
+        logger.critical(f"Data file not found: {indatafile}")
         return render_template("error.html", message=f"Data file not found for {runtimeVars['eventDataList'][0]}.")
     except Exception as e:
-        logger.error(f"Error tidying data for {indatafile}: {e}", exc_info=True)
+        logger.critical(f"Error tidying data for {indatafile}: {e}", exc_info=True)
         return render_template("error.html", message="Error processing event data.")
 
     runtimeVars['competitorName'] = competitorDetails.get('competitor')
@@ -2305,7 +2305,7 @@ def prepare_competitor_visualization_page(competitorDetails):
     
     competitorIndex = getCompetitorIndex(df=df)
     if competitorIndex == -1:
-        logger.warning(f"Competitor {runtimeVars['competitorName']} not found in {runtimeVars['eventDataList'][0]}.")
+        logger.error(f"Competitor {runtimeVars['competitorName']} not found in {runtimeVars['eventDataList'][0]}.")
         return render_template("error.html", message=f"competitor_not_found {runtimeVars['competitorName']}")
     
     # --- End of Essential Setup ---
@@ -2484,7 +2484,7 @@ def generate_single_output_file(params): # df_override for testing or specific c
     output_id = params.get('output_id')
     output_conf = next((item for item in OUTPUT_CONFIGS if item['id'] == output_id), None)
     if not output_conf:
-        logger.error(f"No output configuration found for id: {output_id}")
+        logger.critical(f"No output configuration found for id: {output_id}")
         return {"success": False, "error": "Invalid output configuration."}
 
     # Reconstruct necessary runtime variables (or ensure they are passed/retrieved correctly)
@@ -2544,7 +2544,7 @@ def generate_single_output_file(params): # df_override for testing or specific c
         df = pd.read_csv(in_df_file)
         #tidyTheData(df=df, filename=indatafile) # Requires tidyTheData to be stateless or use temp_runtimeVars
     except Exception as e:
-        logger.error(f"Error loading/tidying data in async for {event_name_actual}: {e}")
+        logger.critical(f"Error loading/tidying data in async for {event_name_actual}: {e}")
         return {"success": False, "error": "Data processing failed."}
 
     competitorIndex = -1
@@ -2554,7 +2554,7 @@ def generate_single_output_file(params): # df_override for testing or specific c
         # IMPORTANT: getCompetitorIndex needs runtimeVars from session, or pass them explicitly
         competitorIndex = getCompetitorIndex(df=df, runtimeVars_override=temp_runtimeVars) # Modify func to accept override
         if competitorIndex == -1:
-            logger.error(f"Competitor not found for async generation. {temp_runtimeVars['competitorName']}")
+            logger.critical(f"Competitor not found for async generation. {temp_runtimeVars['competitorName']}")
             return {"success": False, "error": "Competitor not found for async generation."}
 
     # Call the specific generation function
@@ -2583,10 +2583,10 @@ def generate_single_output_file(params): # df_override for testing or specific c
             else:
                 return {"success": False, "error": f"{output_conf['function_name']} reported failure."}
         else:
-            logger.error(f"Function {output_conf['function_name']} not found in async worker.")
+            logger.critical(f"Function {output_conf['function_name']} not found in async worker.")
             return {"success": False, "error": "Generation function not found."}
     except Exception as e:
-        logger.error(f"Error during async generation of {output_conf['function_name']}: {e}", exc_info=True)
+        logger.critical(f"Error during async generation of {output_conf['function_name']}: {e}", exc_info=True)
         return {"success": False, "error": "Internal server error during image generation."}
 ####
 #
@@ -2654,7 +2654,7 @@ def redline_vis_generate(competitorDetails):
             df = pd.read_csv(indatafile)
             tidyTheData(df=df, filename=indatafile) # Pass filename for logging if tidyTheData uses it
         except FileNotFoundError:
-            logger.error(f"Data file not found: {indatafile}")
+            logger.critical(f"Data file not found: {indatafile}")
             return None # Or handle error appropriately
 
         # Determine competitorIndex if in competitor analysis mode
@@ -2666,7 +2666,7 @@ def redline_vis_generate(competitorDetails):
         
             competitorIndex = getCompetitorIndex(df=df) # Your function to find the index
             if competitorIndex == -1:
-                logger.warning(f"Competitor not found: {runtimeVars['competitorName']}")
+                logger.error(f"Competitor not found: {runtimeVars['competitorName']}")
                 return "Competitor not found." 
     
 
@@ -2690,7 +2690,7 @@ def redline_vis_generate(competitorDetails):
             
             # Skip if competitor is required but not found
             if output_conf['is_competitor_specific'] and competitorIndex == -1:
-                logger.warning(f"Competitor not found: {runtimeVars['competitorName']}")
+                logger.error(f"Competitor not found: {runtimeVars['competitorName']}")
                 continue
 
             # --- Filename and Path Construction ---
@@ -2743,7 +2743,7 @@ def redline_vis_generate(competitorDetails):
                 try:
                     df_for_chart = pd.read_csv(pacing_table_csv_generic)
                 except FileNotFoundError:
-                    logger.error(f"Data file not found: {pacing_table_csv_generic}")
+                    logger.critical(f"Data file not found: {pacing_table_csv_generic}")
                     return None # Or handle error appropriately
                 
                 #Get the output filename
@@ -2805,9 +2805,9 @@ def redline_vis_generate(competitorDetails):
                                 outputList['id'].append(output_conf['id'])
 
                     else:
-                        logger.warning(f"Function {output_conf['function_name']} not found.")
+                        logger.error(f"Function {output_conf['function_name']} not found.")
                 except Exception as e:
-                    logger.error(f"Error calling {output_conf['function_name']}: {e}", exc_info=True)
+                    logger.critical(f"Error calling {output_conf['function_name']}: {e}", exc_info=True)
 
        
         # --- PDF Generation (after all relevant PNGs are made for this event) ---
@@ -2828,7 +2828,7 @@ def redline_vis_generate(competitorDetails):
                     EVENT_NAME_SLUG=event_name_slug
                 )
             else:
-                logger.warning(f"No PDF configuration found for {outputVars['pdf_report_generic']} and {outputVars['pdf_report_comp']}")
+                logger.error(f"No PDF configuration found for {outputVars['pdf_report_generic']} and {outputVars['pdf_report_comp']}")
 
             if pdf_config_item:
 
@@ -2841,9 +2841,9 @@ def redline_vis_generate(competitorDetails):
                     outputList['filename'].append(str(pdf_filepath))
                     outputList['id'].append(pdf_config_item['id'])
             else:
-                logger.warning(f"No PDF configuration found for {outputVars['pdf_report_generic']} and {outputVars['pdf_report_comp']}")
+                logger.error(f"No PDF configuration found for {outputVars['pdf_report_generic']} and {outputVars['pdf_report_comp']}")
         else:
-            logger.warning(f"No PDF configuration found for {outputVars['pdf_report_generic']}, {outputVars['pdf_report_comp']} and {outputList['filename']} is empty")
+            logger.error(f"No PDF configuration found for {outputVars['pdf_report_generic']}, {outputVars['pdf_report_comp']} and {outputList['filename']} is empty")
 
 
     # Save data back to session after processing this event

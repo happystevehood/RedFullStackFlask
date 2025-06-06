@@ -92,10 +92,11 @@ OUTPUT_CONFIGS = [
         'output_type': 'png',
         'requires_category_data': False,
         'generates_multiple_files': False,
-        'html_string_template': ("<p><b>Interpreting the Stacked Bar Chart:</b> Each bar represents a station, and the colored segments show the range of times achieved by different performance percentiles. "
-                                 "The top of the 'Fastest' blue segment is the time for the top ~10% of athletes, while the top of the grey '70-90%' segment is the time for slower athletes. "
-                                 "Data science insight: A large spread between the blue/purple segments and the red/grey segments on a station indicates high variability and thus a big opportunity. "
-                                 "Improving on these 'high-spread' stations can yield greater time savings and rank improvements compared to stations where everyone finishes closer together. Use this to pinpoint where focused effort can make you more competitive.</p>"),        'is_placeholder_ready': True,
+        'html_string_template': ("<p><b>Interpreting the Stacked Bar Chart:</b> Each bar represents a station, and the coloured segments show the range of times achieved by different performance percentiles on that station. "
+                                 "The purple segment is the range of times for the fastest 10% of athletes, while the grey '70-90%' segment is the time for slower athletes. "
+                                 "Data science insight: A large spread between the purple segments and the red/grey segments on a station indicates high variability and thus a big opportunity. "
+                                 "Improving on these 'high-spread' stations can yield greater time savings and rank improvements compared to stations where everyone finishes closer together. Use this to pinpoint where focused effort can make you more competitive.</p>"),        
+        'is_placeholder_ready': True,
         'load_priority': 2 #  PRIORITY
     },
     {
@@ -109,7 +110,7 @@ OUTPUT_CONFIGS = [
         'requires_category_data': False,
         'generates_multiple_files': False,
         'html_string_template': ("<p><b>Interpreting the Violin Plot:</b> Each 'violin' shows the density of finish times for a station – wider parts mean more athletes finished around that specific time. "
-                                 "The white dot is the median, and the thicker black bar shows the interquartile range (middle 50% of athletes). "
+                                 "The dashed black line is the median, and the thicker black bar shows the interquartile range (middle 50% of athletes). "
                                  "From a data perspective, long, thin 'tails' suggest some athletes took much longer, indicating potential bottlenecks or areas where significant time can be lost. "
                                  "Stations with very wide violins had a broad range of performances, making them key differentiators in the race. Focus on consistency and improving your time on stations where you might be in the wider or tail sections.</p>"),
         'is_placeholder_ready': True,
@@ -180,9 +181,10 @@ OUTPUT_CONFIGS = [
         'requires_category_data': False,
         'generates_multiple_files': False,
         'html_string_template': ("<p><b>Interpreting the Pacing Chart:</b> Each line represents a station. "
-                                "Follow a line to see how the average time for that station changes based on the target overall finish percentile (e.g., Top 10%, Top 20%). "
-                                "The black dashed line shows the total target race time. This helps you understand the required pace for each station to hit a specific overall performance goal. "
-                                "Identify stations where the pace changes dramatically for higher percentiles – these may be key areas to maintain speed.</p>"),
+                                "Follow a line to see how the average time for that station changes based on the overall finish percentile (e.g., ~10%, ~20%). "
+                                "Each datapoint is calculated using average times per station of athletes who finished within +-5% range. "
+                                " i.e. 50% values are average time (per statation) for athletes with total time within 45%-55% range. And Yes the lines criss-cross which is confusing but its reallife."
+                                "A Table version of this graph is also available for easier reading of the numbers on the previous screen </p>"),
         'is_placeholder_ready': False, 
         'load_priority': 7 
     },
@@ -213,7 +215,7 @@ OUTPUT_CONFIGS = [
         'output_type': 'png',
         'requires_category_data': False,
         'generates_multiple_files': False,
-        'html_string_template': ("<p><b>Interpreting the Correlation Heatmap:</b> This grid uses colors to show how strongly performance on one station is related to performance on another, and to the Net Time. "
+        'html_string_template': ("<p><b>Interpreting the Correlation Heatmap:</b> This grid uses colours to show how strongly performance on one station is related to performance on another, and to the Net Time. "
                                  "Darker shades (often specified in a legend, e.g., dark green or dark red for strong positive correlation) indicate a stronger relationship. "
                                  "Data science insight: Identify clusters of stations that are highly correlated; being good at one often means being good at others in that cluster (e.g., all erg machines). "
                                  "This can help you understand if your training for one station might have positive carry-over effects to others, or which station types are most predictive of overall success (correlation with Net Time).</p>"),
@@ -267,9 +269,9 @@ OUTPUT_CONFIGS = [
         'output_type': 'png',
         'requires_category_data': False,
         'generates_multiple_files': False,
-        'html_string_template': ("<p><b>Interpreting Your Stacked Bar Chart:</b> This shows station time percentiles (like the generic version), but with <i>your</i> specific time highlighted by a distinct marker (e.g., cyan circle) on each station's bar. "
+        'html_string_template': ("<p><b>Interpreting Your Stacked Bar Chart:</b> This shows station time percentiles (like the generic version), but with <i>your</i> specific time highlighted by a distinct marker (e.g., cyan cross) on each station's bar. "
                                  "You can immediately see which performance band your time falls into for every station. "
-                                 "Data science insight: Identify stations where your marker is in the slower color bands (e.g., red, grey) – these are clear areas for improvement. "
+                                 "Data science insight: Identify stations where your marker is in the slower colour bands (e.g., red, grey) – these are clear areas for improvement. "
                                  "Conversely, stations where your marker is in the faster bands (blue, purple) are your strengths. This provides a granular view of your competitiveness per station.</p>"),
         'is_placeholder_ready': False,
         'load_priority': 2 #  PRIORITY
@@ -302,7 +304,7 @@ OUTPUT_CONFIGS = [
         'output_type': 'png',
         'requires_category_data': False,
         'generates_multiple_files': False,
-        'html_string_template': ("<p><b>Interpreting Your Radar Chart:</b> This spiderweb shows <i>your percentile rank</i> for each station (e.g., 80th percentile means you were faster than 80% of competitors on that station). Points further from the center indicate a better percentile rank. "
+        'html_string_template': ("<p><b>Interpreting Your Radar Chart:</b> This spiderweb shows <i>your percentile rank</i> for each station (e.g., Top 42.1% means you were in the  fastest 42.1%% of competitors on that station). Points further from the center indicate a better percentile rank. "
                                  "It often includes a line for the median (50th percentile) for comparison. "
                                  "Data science insight: The 'shape' of your performance quickly reveals your strengths (points far out) and weaknesses (points closer to the center or inside the median line) across all stations. "
                                  "This holistic view is excellent for identifying patterns, like if you excel in strength but lag in cardio, to guide balanced training.</p>"),
@@ -319,7 +321,7 @@ OUTPUT_CONFIGS = [
         'output_type': 'png',
         'requires_category_data': False,
         'generates_multiple_files': False,
-        'html_string_template': ("<p><b>Interpreting Your Comparison Bar Chart:</b> This chart directly compares <i>your time</i> (e.g., blue bar) on each station against the <i>average time</i> (e.g., red bar) of a group of athletes who had a similar overall finish time to you. "
+        'html_string_template': ("<p><b>Interpreting Your Comparison Bar Chart:</b> This chart directly compares <i>your time</i> (e.g., blue bar) on each station against the <i>average time</i> (e.g., red bar) of athletes who had similar overall finish time to you (+/-5%). "
                                  "Data science insight: This is crucial for race strategy. "
                                  "If your bar is shorter (faster) on a station, you gained time against your peers there. If it's taller, you lost time. "
                                  "This helps identify which specific stations contributed most to your overall placing relative to those around you, highlighting where small improvements can make you leapfrog competitors.</p>"),
@@ -336,7 +338,7 @@ OUTPUT_CONFIGS = [
         'output_type': 'png',
         'requires_category_data': False,
         'generates_multiple_files': False,
-        'html_string_template': ("<p><b>Interpreting Your Cumulative Time Chart:</b> This line graph tracks <i>your cumulative time</i> throughout the race (e.g., blue line) against the average cumulative time of athletes who finished similarly to you (e.g., red line). "
+        'html_string_template': ("<p><b>Interpreting Your Cumulative Time Chart:</b> This line graph tracks <i>your cumulative time</i> throughout the race (e.g., blue line) against the average cumulative time of athletes who finished similarly (+/-5%) to you (e.g., red line). "
                                  "Data science insight: Watch where the lines diverge. If your line drops below the average, you're gaining time. If it goes above, you're losing time. "
                                  "The shaded areas highlight these differences. This helps identify critical phases of the race and at which stations you typically pull ahead or fall behind your direct competition, informing pacing strategies.</p>"),
         'is_placeholder_ready': False,
@@ -352,7 +354,7 @@ OUTPUT_CONFIGS = [
         'output_type': 'png',
         'requires_category_data': False,
         'generates_multiple_files': False,
-        'html_string_template': ("<p><b>Interpreting Your Station Difference Chart:</b> This bar chart shows the exact time difference in seconds between <i>your station time</i> and the average for similar finishers. "
+        'html_string_template': ("<p><b>Interpreting Your Station Difference Chart:</b> This bar chart shows the exact time difference in seconds between <i>your station time</i> and the average for similar finishers (+/-5%). "
                                  "Bars below zero (e.g., green) mean you were faster; bars above zero (e.g., red) mean you were slower. "
                                  "Data science insight: This quantifies exactly where you gain or lose time against your immediate peer group. "
                                  "Large green bars are your standout strengths. Large red bars are your most significant opportunities for improvement to better your rank among those with similar overall capabilities. Focus on turning those red bars green!</p>"),
@@ -372,8 +374,8 @@ OUTPUT_CONFIGS = [
         'requires_category_data': False,
         'generates_multiple_files': True, 
         'num_files_generated_key': 'StationList',
-        'html_string_template': ("<p><b>Interpreting Scatter Plots (Station Time vs. Overall Position):</b> Each dot is an athlete. The horizontal position is their time for this specific station, and the vertical position is their overall race rank (lower is better). "
-                                 "A clear downward trend from left to right means faster station times generally lead to better overall ranks. "),
+        'html_string_template': ("<p><b>Interpreting Scatter Plots (Station Time vs. Overall Position):</b> Each dot is an athlete. The horizontal position is their time for this station, and the vertical position is their overall race rank (lower is better). "
+                                 "A high correlation score (look at title of Chart), means that there is a strong positive relationship between the two variables. "),
         'is_placeholder_ready': True, # Each image generated individually
         'load_priority': 10 #  PRIORITY
     },
@@ -388,7 +390,7 @@ OUTPUT_CONFIGS = [
         'requires_category_data': False,
         'generates_multiple_files': True,
         'num_files_generated_key': 'StationList',
-        'html_string_template': ("<p><b>Interpreting Your Scatter Plot Position:</b> This shows where <i>your performance</i> (highlighted marker, e.g., blue cross) falls on the Station Time vs. Overall Rank scatter plot for each station. "
+        'html_string_template': ("<p><b>Interpreting Your Scatter Plot Position:</b> This shows where <i>your performance</i> (highlighted marker, e.g., cross) falls on the Station Time vs. Overall Rank scatter plot for each station. "
                                  "You can see your station time (horizontal) and your overall rank (vertical) relative to all other competitors. "),
         'is_placeholder_ready': False, # Each image generated individually
         'load_priority': 10 #  PRIORITY

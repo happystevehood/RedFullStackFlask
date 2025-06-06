@@ -651,7 +651,7 @@ def load_global_blog_config():
         blog_bucket_name =  BLOG_BUCKET_NAME
         bucket = get_gcs_bucket(blog_bucket_name)
         if not bucket:
-            logger.error(f"Could not get GCS bucket '{blog_bucket_name}'.")
+            logger.critical(f"Could not get GCS bucket '{blog_bucket_name}'.")
             return default_config # Or raise error
 
         blob = bucket.blob(str(BLOG_CONFIG_FILE_PATH))
@@ -662,13 +662,13 @@ def load_global_blog_config():
                 #logger.info(f"Successfully loaded global blog config from GCS: gs://{bucket.name}/{str(BLOG_CONFIG_FILE_PATH)}")
                 return loaded_config
             else:
-                logger.warning(f"Global blog config not found in GCS at gs://{bucket.name}/{str(BLOG_CONFIG_FILE_PATH)}. Returning default.")
+                logger.error(f"Global blog config not found in GCS at gs://{bucket.name}/{str(BLOG_CONFIG_FILE_PATH)}. Returning default.")
                 return default_config
         except json.JSONDecodeError as jde:
-            logger.error(f"Error decoding JSON from GCS config (gs://{bucket.name}/{str(BLOG_CONFIG_FILE_PATH)}): {jde}", exc_info=True)
+            logger.critical(f"Error decoding JSON from GCS config (gs://{bucket.name}/{str(BLOG_CONFIG_FILE_PATH)}): {jde}", exc_info=True)
             return default_config
         except Exception as e:
-            logger.error(f"Error loading global blog config from GCS (gs://{bucket.name}/{str(BLOG_CONFIG_FILE_PATH)}): {e}", exc_info=True)
+            logger.critical(f"Error loading global blog config from GCS (gs://{bucket.name}/{str(BLOG_CONFIG_FILE_PATH)}): {e}", exc_info=True)
             return default_config
     else: # Local development mode
         #logger.debug(f"Attempting to load global blog config from local file: {str(BLOG_CONFIG_FILE_PATH)}")
@@ -679,16 +679,16 @@ def load_global_blog_config():
                 #logger.info(f"Successfully loaded global blog config from local file: {str(BLOG_CONFIG_FILE_PATH)}")
                 return loaded_config
             else:
-                logger.warning(f"Local global blog config file not found: {str(BLOG_CONFIG_FILE_PATH)}. Returning default.")
+                logger.error(f"Local global blog config file not found: {str(BLOG_CONFIG_FILE_PATH)}. Returning default.")
                 return default_config
         except json.JSONDecodeError as jde:
-            logger.error(f"Error decoding JSON from local config file '{str(BLOG_CONFIG_FILE_PATH)}': {jde}", exc_info=True)
+            logger.critical(f"Error decoding JSON from local config file '{str(BLOG_CONFIG_FILE_PATH)}': {jde}", exc_info=True)
             return default_config
         except IOError as ioe:
-            logger.error(f"IOError reading local config file '{str(BLOG_CONFIG_FILE_PATH)}': {ioe}", exc_info=True)
+            logger.critical(f"IOError reading local config file '{str(BLOG_CONFIG_FILE_PATH)}': {ioe}", exc_info=True)
             return default_config
         except Exception as e: # Catch any other unexpected errors
-            logger.error(f"Unexpected error loading local config file '{str(BLOG_CONFIG_FILE_PATH)}': {e}", exc_info=True)
+            logger.critical(f"Unexpected error loading local config file '{str(BLOG_CONFIG_FILE_PATH)}': {e}", exc_info=True)
             return default_config
 
 
@@ -706,7 +706,7 @@ def save_global_blog_config(config_data):
 
         bucket = get_gcs_bucket(blog_bucket_name)
         if not bucket:
-            logger.error(f"Could not get GCS bucket '{blog_bucket_name}' for save.")
+            logger.critical(f"Could not get GCS bucket '{blog_bucket_name}' for save.")
             return False
 
         blob = bucket.blob(str(BLOG_CONFIG_FILE_PATH))
@@ -716,7 +716,7 @@ def save_global_blog_config(config_data):
             logger.info(f"Successfully saved global blog config to GCS: gs://{bucket.name}/{str(BLOG_CONFIG_FILE_PATH)}")
             return True
         except Exception as e:
-            logger.error(f"Error saving global blog config to GCS (gs://{bucket.name}/{str(BLOG_CONFIG_FILE_PATH)}): {e}", exc_info=True)
+            logger.critical(f"Error saving global blog config to GCS (gs://{bucket.name}/{str(BLOG_CONFIG_FILE_PATH)}): {e}", exc_info=True)
             return False
     else: # Local development mode
         logger.debug(f"Attempting to save global blog config to local file: {str(BLOG_CONFIG_FILE_PATH)}")
@@ -728,10 +728,10 @@ def save_global_blog_config(config_data):
             logger.info(f"Successfully saved global blog config to local file: {str(BLOG_CONFIG_FILE_PATH)}")
             return True
         except IOError as ioe:
-            logger.error(f"IOError writing local config file '{str(BLOG_CONFIG_FILE_PATH)}': {ioe}", exc_info=True)
+            logger.critical(f"IOError writing local config file '{str(BLOG_CONFIG_FILE_PATH)}': {ioe}", exc_info=True)
             return False
         except Exception as e: # Catch any other unexpected errors
-            logger.error(f"Unexpected error saving local config file '{str(BLOG_CONFIG_FILE_PATH)}': {e}", exc_info=True)
+            logger.critical(f"Unexpected error saving local config file '{str(BLOG_CONFIG_FILE_PATH)}': {e}", exc_info=True)
             return False
 
 def allowed_file(filename):
@@ -761,7 +761,7 @@ def create_thumbnail(original_path, thumbnail_path, size=THUMBNAIL_SIZE):
         img.save(thumbnail_path)
         return True
     except IOError as e:
-        logger.error(f"Cannot create thumbnail for {original_path}: {e}")
+        logger.critical(f"Cannot create thumbnail for {original_path}: {e}")
         return False
 
 def save_uploaded_image_and_thumbnail(post_slug, image_file, unique_base_filename):
@@ -781,10 +781,10 @@ def save_uploaded_image_and_thumbnail(post_slug, image_file, unique_base_filenam
             thumbnail_filename = f"{THUMBNAIL_PREFIX}{original_filename}"
             thumbnail_image_path = os.path.join(post_image_dir, thumbnail_filename)
             if not create_thumbnail(original_image_path, thumbnail_image_path):
-                logger.warning(f"Thumbnail creation failed for {original_filename} but original was saved.")
+                logger.error(f"Thumbnail creation failed for {original_filename} but original was saved.")
             return original_filename
         except Exception as e:
-            logger.error(f"Error saving image {original_filename} or its thumbnail: {e}")
+            logger.critical(f"Error saving image {original_filename} or its thumbnail: {e}")
             if os.path.exists(original_image_path): os.remove(original_image_path) # Clean up
             return None
     return None
@@ -799,12 +799,12 @@ def save_uploaded_image_and_thumbnail_to_gcs(slug, image_file_storage, unique_ba
     logger = get_logger()
 
     if not image_file_storage or not image_file_storage.filename:
-        logger.error(f"No image file provided.")
+        logger.critical(f"No image file provided.")
         return None
 
     original_filename = secure_filename(image_file_storage.filename)
     if not allowed_file(original_filename):
-        logger.error(f"File type not allowed: {original_filename}")
+        logger.critical(f"File type not allowed: {original_filename}")
         return None
 
     _, extension = os.path.splitext(original_filename)
@@ -820,7 +820,7 @@ def save_uploaded_image_and_thumbnail_to_gcs(slug, image_file_storage, unique_ba
 
     bucket = get_gcs_bucket(BLOG_BUCKET_NAME) # Ensure get_gcs_bucket and BLOG_BUCKET_NAME are accessible
     if not bucket:
-        logger.error(f"Could not get GCS bucket.")
+        logger.critical(f"Could not get GCS bucket.")
         return None
 
     try:
@@ -856,7 +856,7 @@ def save_uploaded_image_and_thumbnail_to_gcs(slug, image_file_storage, unique_ba
             #logger.info(f"Uploaded thumbnail to {gcs_thumbnail_blob_path}")
 
         except Exception as e_thumb:
-            logger.error(f"Error creating/uploading thumbnail for {original_filename}: {e_thumb}", exc_info=True)
+            logger.critical(f"Error creating/uploading thumbnail for {original_filename}: {e_thumb}", exc_info=True)
             # Decide on error handling: proceed without thumbnail, or fail operation?
             # For now, let's consider it a partial success if original uploaded, but log error.
             # If thumbnail is critical, you might want to delete the original_blob and return None here.
@@ -867,18 +867,18 @@ def save_uploaded_image_and_thumbnail_to_gcs(slug, image_file_storage, unique_ba
         return final_gcs_base_filename # Return the base name of the original uploaded image
 
     except Exception as e:
-        logger.error(f"Error during image upload process for {original_filename}: {e}", exc_info=True)
+        logger.critical(f"Error during image upload process for {original_filename}: {e}", exc_info=True)
         # Potentially try to delete any partially uploaded files if a multi-step process fails
         try:
             if 'original_blob' in locals() and original_blob.exists():
                  original_blob.delete()
         except Exception as e_cleanup:
-            logger.error(f"Error during cleanup of original blob: {e_cleanup}")
+            logger.critical(f"Error during cleanup of original blob: {e_cleanup}")
         try:
             if 'thumbnail_blob' in locals() and thumbnail_blob.exists():
                  thumbnail_blob.delete()
         except Exception as e_cleanup_thumb:
-            logger.error(f"Error during cleanup of thumbnail blob: {e_cleanup_thumb}")
+            logger.critical(f"Error during cleanup of thumbnail blob: {e_cleanup_thumb}")
 
         return None
 
@@ -892,7 +892,7 @@ def delete_blog_image_and_thumbnail(post_slug, image_filename):
         if os.path.exists(original_image_path): os.remove(original_image_path)
         if os.path.exists(thumbnail_image_path): os.remove(thumbnail_image_path)
     except OSError as e:
-        logger.error(f"Error deleting image files for {image_filename} in {post_slug}: {e}")
+        logger.critical(f"Error deleting image files for {image_filename} in {post_slug}: {e}")
 
 
 def delete_blog_image_and_thumbnail_from_gcs(slug, original_image_filename):
@@ -912,11 +912,11 @@ def delete_blog_image_and_thumbnail_from_gcs(slug, original_image_filename):
     logger = get_logger()   
 
     if not slug or not original_image_filename:
-        logger.error(f"Slug or original_image_filename not provided.")
+        logger.critical(f"Slug or original_image_filename not provided.")
         return False
 
     if original_image_filename.startswith(os.environ.get("THUMBNAIL_PREFIX", "thumb_")):
-        logger.warning(
+        logger.error(
             f"'{original_image_filename}' appears to be a thumbnail name. "
             "This function expects the original image filename to derive both paths. "
             "Proceeding, but ensure calling code provides the original filename."
@@ -928,7 +928,7 @@ def delete_blog_image_and_thumbnail_from_gcs(slug, original_image_filename):
     blog_bucket_name = BLOG_BUCKET_NAME
     bucket = get_gcs_bucket(blog_bucket_name)
     if not bucket:
-        logger.error(f"Could not get GCS bucket '{blog_bucket_name}'.")
+        logger.critical(f"Could not get GCS bucket '{blog_bucket_name}'.")
         return False
 
     thumbnail_prefix = os.environ.get("THUMBNAIL_PREFIX", "thumb_")
@@ -953,7 +953,7 @@ def delete_blog_image_and_thumbnail_from_gcs(slug, original_image_filename):
             else:
                 logger.info(f"{log_name} gs://{bucket.name}/{gcs_path} did not exist. No deletion needed.")
         except Exception as e:
-            logger.error(f"Error deleting {log_name} gs://{bucket.name}/{gcs_path}: {e}", exc_info=True)
+            logger.critical(f"Error deleting {log_name} gs://{bucket.name}/{gcs_path}: {e}", exc_info=True)
             all_clear_or_nonexistent = False # Mark as failed if any GCS API error occurs during deletion
 
     return all_clear_or_nonexistent
@@ -970,7 +970,7 @@ def get_post_config_from_gcs(slug):
     blog_bucket_name = BLOG_BUCKET_NAME
     bucket = get_gcs_bucket(blog_bucket_name)
     if not bucket:
-        logger.error(f"Could not get GCS bucket '{blog_bucket_name}'.")
+        logger.critical(f"Could not get GCS bucket '{blog_bucket_name}'.")
         return None
 
     config_blob_path = f"{str(BLOG_BLOB_DIR)}/{slug}/content.json" # Assuming config file name
@@ -984,13 +984,13 @@ def get_post_config_from_gcs(slug):
             #logger.debug(f"Successfully fetched config for slug '{slug}' from GCS.")
             return post_data
         else:
-            logger.warning(f"Post config not found in GCS: gs://{bucket.name}/{config_blob_path}")
+            logger.error(f"Post config not found in GCS: gs://{bucket.name}/{config_blob_path}")
             return None
     except json.JSONDecodeError as jde:
-        logger.error(f"Error decoding JSON for slug '{slug}' from GCS (gs://{bucket.name}/{config_blob_path}): {jde}", exc_info=True)
+        logger.critical(f"Error decoding JSON for slug '{slug}' from GCS (gs://{bucket.name}/{config_blob_path}): {jde}", exc_info=True)
         return None
     except Exception as e:
-        logger.error(f"Error fetching post config for slug '{slug}' from GCS (gs://{bucket.name}/{config_blob_path}): {e}", exc_info=True)
+        logger.critical(f"Error fetching post config for slug '{slug}' from GCS (gs://{bucket.name}/{config_blob_path}): {e}", exc_info=True)
         return None
 
 def save_post_config_to_gcs(slug, post_data):
@@ -1010,7 +1010,7 @@ def save_post_config_to_gcs(slug, post_data):
         logger.info(f"Post config for '{slug}' saved to GCS: gs://{bucket.name}/{config_blob_path}")
         return True
     except Exception as e:
-        logger.error(f"Error saving post config for '{slug}' to GCS: {e}", exc_info=True)
+        logger.critical(f"Error saving post config for '{slug}' to GCS: {e}", exc_info=True)
         return False
     
 
@@ -1035,7 +1035,7 @@ def get_all_posts(published_only=True, sort_key='published_at', reverse_sort=Tru
         blog_bucket_name = BLOG_BUCKET_NAME
         bucket = get_gcs_bucket(blog_bucket_name)
         if not bucket:
-            logger.error(f"get_all_posts: Could not get GCS bucket '{blog_bucket_name}'.")
+            logger.critical(f"get_all_posts: Could not get GCS bucket '{blog_bucket_name}'.")
             return []
 
         # GCS lists objects flatly. We need to find all 'content.json' files.
@@ -1067,7 +1067,7 @@ def get_all_posts(published_only=True, sort_key='published_at', reverse_sort=Tru
     else: # Local development mode
         #logger.debug("get_all_posts: Fetching all posts from local filesystem (dev mode).")
         if not os.path.exists(LOCAL_BLOG_DATA_DIR): # Ensure LOCAL_BLOG_DATA_DIR is correct
-            logger.error(f"get_all_posts: Local blog data directory not found: {LOCAL_BLOG_DATA_DIR}")
+            logger.critical(f"get_all_posts: Local blog data directory not found: {LOCAL_BLOG_DATA_DIR}")
             return []
             
         for slug_folder_name in os.listdir(LOCAL_BLOG_DATA_DIR):
@@ -1083,7 +1083,7 @@ def get_all_posts(published_only=True, sort_key='published_at', reverse_sort=Tru
                             continue
                         all_posts_data.append(post_data)
                     except Exception as e:
-                        logger.error(f"get_all_posts: Error reading local post '{slug_folder_name}': {e}", exc_info=True)
+                        logger.critical(f"get_all_posts: Error reading local post '{slug_folder_name}': {e}", exc_info=True)
     
     # Sort posts
     if use_sort_key:
@@ -1104,7 +1104,7 @@ def get_all_posts(published_only=True, sort_key='published_at', reverse_sort=Tru
         try:
             all_posts_data.sort(key=get_sort_value, reverse=reverse_sort)
         except Exception as e_sort:
-            logger.error(f"get_all_posts: Error sorting posts by '{use_sort_key}': {e_sort}", exc_info=True)
+            logger.critical(f"get_all_posts: Error sorting posts by '{use_sort_key}': {e_sort}", exc_info=True)
             # Proceed with unsorted data or handle as critical error
 
     # Convert date strings to datetime objects for template consistency if needed
@@ -1136,7 +1136,7 @@ def get_post(slug, increment_view_count=False):
             post_data['updated_at'] = datetime.now().isoformat() # View count is an update
             #logger.debug(f"get_post: incrementing view count {post_data['view_count']} for '{slug}' to GCS.")
             if not save_post_config_to_gcs(slug, post_data): # Save updated data back to GCS
-                logger.error(f"get_post: Failed to save updated view count for '{slug}' to GCS.")
+                logger.critical(f"get_post: Failed to save updated view count for '{slug}' to GCS.")
                 # Decide how to handle: return old data, or None? For now, return potentially stale data.
     else: # Local development mode
         #logger.debug(f"get_post: Fetching post '{slug}' from local filesystem (dev mode).")
@@ -1155,12 +1155,12 @@ def get_post(slug, increment_view_count=False):
                         json.dump(post_data, f, indent=4)
                         f.truncate() # Remove trailing old content if new content is shorter
             except Exception as e:
-                logger.error(f"get_post: Error reading/updating local post '{slug}': {e}", exc_info=True)
+                logger.critical(f"get_post: Error reading/updating local post '{slug}': {e}", exc_info=True)
                 post_data = None # Ensure post_data is None on error
         # --- End of local file logic ---
 
     if not post_data:
-        logger.warning(f"get_post: Post '{slug}' not found in mode '{env_mode}'.")
+        logger.error(f"get_post: Post '{slug}' not found in mode '{env_mode}'.")
         return None
 
     return post_data
@@ -1173,7 +1173,7 @@ def get_static_page_lastmod(template_name):
             mod_time = os.path.getmtime(filepath)
             return datetime.fromtimestamp(mod_time, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
     except Exception as e:
-        logger.error(f"Error getting lastmod for {template_name}: {e}")
+        logger.critical(f"Error getting lastmod for {template_name}: {e}")
     return None
 
 def format_iso_datetime_for_sitemap(iso_string):
@@ -1189,7 +1189,7 @@ def format_iso_datetime_for_sitemap(iso_string):
             # Try parsing without microseconds if the first attempt fails
             dt_obj = datetime.strptime(iso_string.replace("Z", "+00:00"), "%Y-%m-%dT%H:%M:%S+00:00")
         except ValueError:
-            logger.warning(f"Could not parse datetime string for sitemap: {iso_string}")
+            logger.error(f"Could not parse datetime string for sitemap: {iso_string}")
             return None
 
     # Ensure it's timezone-aware (UTC)
@@ -1205,7 +1205,7 @@ def get_gcs_bucket(bucket_name):
     logger = get_logger()
     storage_client = storage.Client()
     if not storage_client:
-        logger.error("GCS client not initialized.")
+        logger.critical("GCS client not initialized.")
         return None
     return storage_client.bucket(bucket_name)
 
@@ -1219,7 +1219,7 @@ def list_blog_slugs_from_gcs(gcs_object_prefix=''): # Renamed for clarity from t
     
     bucket = get_gcs_bucket(BLOG_BUCKET_NAME) # Ensure BLOG_BUCKET_NAME is accessible
     if not bucket:
-        logger.error(f"{log_prefix_func} :: Bucket not available.")
+        logger.critical(f"{log_prefix_func} :: Bucket not available.")
         return list(slugs) # Return empty list on error
 
     # Call list_blobs using the 'prefix' keyword argument
@@ -1264,7 +1264,7 @@ def list_blog_slugs_from_gcs(gcs_object_prefix=''): # Renamed for clarity from t
         #    logger.info(f"{log_prefix_func} :: Processed {processed_blob_names} blobs from GCS matching prefix.")
 
     except Exception as e_list:
-        logger.error(f"{log_prefix_func} :: Error during bucket.list_blobs or iteration: {e_list}", exc_info=True)
+        logger.critical(f"{log_prefix_func} :: Error during bucket.list_blobs or iteration: {e_list}", exc_info=True)
         return list(slugs) # Return empty list on error
 
     #logger.info(f"{log_prefix_func} :: Returning {len(slugs)} slugs: {slugs if len(slugs) < 10 else str(list(slugs)[:10]) + '...'}")
@@ -1277,7 +1277,7 @@ def check_if_post_slug_exists_in_gcs(slug_to_check):
     blog_bucket_name = BLOG_BUCKET_NAME
     bucket = get_gcs_bucket(blog_bucket_name) # Your existing helper
     if not bucket:
-        logger.error(f"Could not get GCS bucket for slug check.")
+        logger.critical(f"Could not get GCS bucket for slug check.")
         return True # Fail safe
 
     # Check for the existence of the content.json file for that slug
@@ -1289,7 +1289,7 @@ def check_if_post_slug_exists_in_gcs(slug_to_check):
             #logger.info(f"Slug '{slug_to_check}' (content.json) FOUND in GCS.")
             return True
     except Exception as e:
-        logger.error(f"Error checking GCS for slug '{slug_to_check}': {e}", exc_info=True)
+        logger.critical(f"Error checking GCS for slug '{slug_to_check}': {e}", exc_info=True)
         return True # Fail safe
 
     logger.info(f"Slug '{slug_to_check}' (content.json) NOT FOUND in GCS.")
@@ -1311,7 +1311,7 @@ def save_post_to_gcs(slug, post_data):
         #logger.info(f"Post {slug} saved to GCS: {blob_name}")
         return True
     except Exception as e:
-        logger.error(f"Error saving post {slug} to GCS: {e}")
+        logger.critical(f"Error saving post {slug} to GCS: {e}")
         return False
 
 
@@ -1325,7 +1325,7 @@ def get_blog_image_url_from_gcs(slug, filename):
 
     bucket = get_gcs_bucket(BLOG_BUCKET_NAME)
     if not bucket:
-        logger.error(f"Failed to get GCS bucket object for '{BLOG_BUCKET_NAME}'.")
+        logger.critical(f"Failed to get GCS bucket object for '{BLOG_BUCKET_NAME}'.")
         return None
 
     base_filename = filename.split('/')[-1]
@@ -1367,11 +1367,11 @@ def get_blog_image_url_from_gcs(slug, filename):
         credentials_method_used = f"iam.Signer (Target SA: {target_sa_email_for_signing}, Caller Creds: {type(credentials_for_iam_api_call)})"
         #logger.debug(f" :: iam.Signer object created: {type(signing_credentials)}")
     except Exception as e_iam_signer:
-        logger.error(f" :: Failed to create iam.Signer: {e_iam_signer}", exc_info=True)
+        logger.critical(f" :: Failed to create iam.Signer: {e_iam_signer}", exc_info=True)
         return None # Cannot proceed if iam.Signer creation fails
 
     if not signing_credentials:
-        logger.error(f" :: No valid signing credentials could be established.")
+        logger.critical(f" :: No valid signing credentials could be established.")
         return None
 
     # --- Generate the Signed URL using the 'credentials' kwarg ---
@@ -1402,15 +1402,15 @@ def get_blog_image_url_from_gcs(slug, filename):
         #logger.info(f" :: Successfully generated signed URL.")
         return signed_url
     except AttributeError as ae: # "need private key"
-         logger.error(f" :: AttributeError (likely 'need private key') with '{credentials_method_used}': {ae}", exc_info=True)
+         logger.critical(f" :: AttributeError (likely 'need private key') with '{credentials_method_used}': {ae}", exc_info=True)
          if isinstance(signing_credentials, google_auth_iam.Signer):
-             logger.error(f" :: This confirms the issue: iam.Signer passed to 'credentials' kwarg is not being handled as expected by GCS lib {google.cloud.storage.__version__} when backed by token-based credentials.")
+             logger.critical(f" :: This confirms the issue: iam.Signer passed to 'credentials' kwarg is not being handled as expected by GCS lib {google.cloud.storage.__version__} when backed by token-based credentials.")
          return None
     except google.auth.exceptions.RefreshError as re: # For ADC/metadata issues if iam.Signer fails during its own auth
-        logger.error(f" :: Google Auth RefreshError with '{credentials_method_used}': {re}", exc_info=True)
+        logger.critical(f" :: Google Auth RefreshError with '{credentials_method_used}': {re}", exc_info=True)
         return None
     except Exception as e: # Catch-all for other unexpected errors
-        logger.error(f" :: General error generating signed URL with '{credentials_method_used}': {e}", exc_info=True)
+        logger.critical(f" :: General error generating signed URL with '{credentials_method_used}': {e}", exc_info=True)
         return None
 
 
@@ -1423,13 +1423,13 @@ def delete_blog_post_from_gcs(slug):
     logger = get_logger()
 
     if not slug:
-        logger.error(f"Slug not provided for deletion.")
+        logger.critical(f"Slug not provided for deletion.")
         return False
 
     blog_bucket_name = BLOG_BUCKET_NAME
     bucket = get_gcs_bucket(blog_bucket_name)
     if not bucket:
-        logger.error(f"Could not get GCS bucket '{blog_bucket_name}'.")
+        logger.critical(f"Could not get GCS bucket '{blog_bucket_name}'.")
         return False
 
     # Construct the prefix for objects to delete
@@ -1459,7 +1459,7 @@ def delete_blog_post_from_gcs(slug):
             blob_item.delete()
             deleted_count += 1
         except Exception as e:
-            logger.error(f"Failed to delete blob gs://{bucket.name}/{blob_item.name}: {e}", exc_info=True)
+            logger.critical(f"Failed to delete blob gs://{bucket.name}/{blob_item.name}: {e}", exc_info=True)
             errors_encountered = True
             # Decide if you want to continue deleting others or stop on first error.
             # This loop continues by default.
@@ -1476,10 +1476,10 @@ def delete_blog_post_from_gcs(slug):
                 folder_blob.delete()
                 logger.info(f"Deleted image {path_to_delete} from GCS for post {slug}.")
         except Exception as e:
-            logger.error(f"Error deleting image {path_to_delete} from GCS for post {slug}: {e}")
+            logger.critical(f"Error deleting image {path_to_delete} from GCS for post {slug}: {e}")
 
     if errors_encountered:
-        logger.warning(f"Finished deletion attempt for prefix 'gs://{bucket.name}/{prefix_to_delete}' with errors. Deleted {deleted_count} objects.")
+        logger.error(f"Finished deletion attempt for prefix 'gs://{bucket.name}/{prefix_to_delete}' with errors. Deleted {deleted_count} objects.")
         return False # Indicate that not everything went smoothly
     else:
         if deleted_count > 0:
@@ -1521,7 +1521,7 @@ def delete_blog_image_from_gcs(slug, filename):
                 logger.info(f"Deleted image {path_to_delete} from GCS for post {slug}.")
                 deleted_any = True
         except Exception as e:
-            logger.error(f"Error deleting image {path_to_delete} from GCS for post {slug}: {e}")
+            logger.critical(f"Error deleting image {path_to_delete} from GCS for post {slug}: {e}")
     return deleted_any
 
 
@@ -1547,7 +1547,7 @@ def sync_local_blogs_to_gcs():
         gcs_slugs = set(list_blog_slugs_from_gcs(gcs_object_prefix=blog_gcs_base_prefix))
         logger.info(f"{len(gcs_slugs)} slugs found in GCS under prefix '{blog_gcs_base_prefix}'.")
     except Exception as e_gcs_list:
-        logger.error(f"Failed to list slugs from GCS: {e_gcs_list}", exc_info=True)
+        logger.critical(f"Failed to list slugs from GCS: {e_gcs_list}", exc_info=True)
         return {"status": "error", "message": "Failed to list GCS slugs.", "synced_count": 0, "failed_count": 0, "skipped_count": 0}
 
     if not local_blog_data_path.exists() or not local_blog_data_path.is_dir():
@@ -1575,7 +1575,7 @@ def sync_local_blogs_to_gcs():
                             post_data = json.load(f_local)
                         
                         if post_data.get('slug') != slug_to_sync:
-                            #logger.warning(f"Slug in '{config_file_name}' ('{post_data.get('slug')}') for '{slug_to_sync}' doesn't match folder. Using folder name.")
+                            #logger.error(f"Slug in '{config_file_name}' ('{post_data.get('slug')}') for '{slug_to_sync}' doesn't match folder. Using folder name.")
                             post_data['slug'] = slug_to_sync 
                         
                         # save_post_config_to_gcs should handle blog_gcs_base_prefix internally
@@ -1587,7 +1587,7 @@ def sync_local_blogs_to_gcs():
                                 images_synced_for_this_post = 0
                                 bucket_for_img_upload = get_gcs_bucket(blog_bucket_name_from_env) # Get bucket once per post
                                 if not bucket_for_img_upload:
-                                    logger.error(f"Could not get GCS bucket for image upload of '{slug_to_sync}'. Skipping image sync for this post.")
+                                    logger.critical(f"Could not get GCS bucket for image upload of '{slug_to_sync}'. Skipping image sync for this post.")
                                     current_post_fully_synced = False
                                 else:
                                     for img_filename in os.listdir(local_images_path):
@@ -1611,13 +1611,13 @@ def sync_local_blogs_to_gcs():
                                                 #logger.info(f"Synced image '{img_filename}' for '{slug_to_sync}' to gs://{bucket_for_img_upload.name}/{gcs_img_blob_name}")
                                                 images_synced_for_this_post += 1
                                             except Exception as e_img:
-                                                logger.error(f"Failed to upload image '{img_filename}' for '{slug_to_sync}': {e_img}", exc_info=True)
+                                                logger.critical(f"Failed to upload image '{img_filename}' for '{slug_to_sync}': {e_img}", exc_info=True)
                                                 current_post_fully_synced = False
                                     #logger.info(f"For post '{slug_to_sync}', attempted to sync {images_synced_for_this_post} images.")
                             else:
                                 logger.info(f"No 'images' directory found for local post '{slug_to_sync}'.")
                         else:
-                             logger.error(f"Failed to save '{config_file_name}' for '{slug_to_sync}' to GCS.")
+                             logger.critical(f"Failed to save '{config_file_name}' for '{slug_to_sync}' to GCS.")
                              current_post_fully_synced = False
                         
                         if current_post_fully_synced:
@@ -1626,13 +1626,13 @@ def sync_local_blogs_to_gcs():
                             failed_this_run_slugs.append(slug_to_sync)
 
                     except json.JSONDecodeError as jde:
-                        logger.error(f"Error decoding JSON from '{config_file_local_path}': {jde}", exc_info=True)
+                        logger.critical(f"Error decoding JSON from '{config_file_local_path}': {jde}", exc_info=True)
                         failed_this_run_slugs.append(slug_to_sync)
                     except Exception as e_sync_post:
-                        logger.error(f"General error syncing post '{slug_to_sync}': {e_sync_post}", exc_info=True)
+                        logger.critical(f"General error syncing post '{slug_to_sync}': {e_sync_post}", exc_info=True)
                         failed_this_run_slugs.append(slug_to_sync)
                 else:
-                    logger.warning(f"'{config_file_name}' not found for local post '{slug_to_sync}'. Skipping sync.")
+                    logger.error(f"'{config_file_name}' not found for local post '{slug_to_sync}'. Skipping sync.")
                     # Not necessarily a failure of the overall sync process, just this item.
                     # You could add it to a list of "skipped_no_config_slugs" if needed.
             else:
@@ -1643,7 +1643,7 @@ def sync_local_blogs_to_gcs():
     final_message = f"Sync complete. New posts synced: {synced_this_run_count}. Posts skipped (already in GCS): {skipped_this_run_count}. Posts failed to sync fully: {len(failed_this_run_slugs)}."
     logger.info(f"{final_message}")
     if failed_this_run_slugs:
-        logger.warning(f"Slugs that failed to sync completely: {failed_this_run_slugs}")
+        logger.error(f"Slugs that failed to sync completely: {failed_this_run_slugs}")
         return {"status": "partial_success", "message": final_message, "synced": synced_this_run_count, "failed": len(failed_this_run_slugs), "skipped": skipped_this_run_count}
     
     return {"status": "success", "message": final_message, "synced": synced_this_run_count, "failed": 0, "skipped": skipped_this_run_count}
