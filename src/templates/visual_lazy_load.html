@@ -211,6 +211,19 @@
     <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
 
     <script nonce="{{ csp_nonce() }}">
+        // Fetch the token from the meta tag (if you used the meta tag method)
+        const csrfToken = $('meta[name="csrf-token"]').attr('content');
+
+
+        $.ajaxSetup({
+            beforeSend: function(xhr, settings) {
+                if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
+                    // console.log("Setting X-CSRFToken header"); // For debugging
+                    xhr.setRequestHeader("X-CSRFToken", csrfToken);
+                }
+            }
+        });
+
         const pendingImageTasks = {{ pending_image_tasks | tojson | safe if pending_image_tasks is defined else '[]' }};
         const generateImageUrlEndpoint = "{{ url_for('generate_image_async_route') }}"; 
 

@@ -67,8 +67,8 @@ class DeployConfig(Config):
     PORT = int(os.environ.get('PORT', 8080))  # Always default to 8080 for production
     SESSION_COOKIE_SECURE = True              # Set to True when using HTTPS
     FLASK_RUN_RELOAD = True
-    #WTF_CSRF_ENABLED = True                   # Enable CSRF protection, change to True in production
-    #WTF_CSRF_SSL_STRICT = True                # Require HTTPS for CSRF requests, change to True in production
+    WTF_CSRF_ENABLED = True                   # Enable CSRF protection, change to True in production
+    WTF_CSRF_SSL_STRICT = True                # Require HTTPS for CSRF requests, change to True in production
     WTF_CSRF_ENABLED = False                   ####### Temporary disable CSRF protection #######
     WTF_CSRF_SSL_STRICT = False                ####### Temporary disable CSRF protection #######
     USE_DOCKER = True

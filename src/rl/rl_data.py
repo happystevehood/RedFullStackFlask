@@ -137,26 +137,6 @@ EVENT_DATA_LIST = [
     ["TeamRelayMixed2023", "REDLINE Fitness Games '23 Mixed Team Relay", "2023", "MIXED", "RELAY", "KL"],
 ]
 
-pngStringEventBarCorr = "Below is a correlation bar chart, which provides a picture that uses bars to show how strongly two things are connected — here we are looking at how well Overall Time is linked to each challenge finishing Position"
-pngStringEventHeatCorr = "Below is an event Correlation heat chart, which uses a colorful grid that shows how often different events happen together, using colors to show how strong the connection is"
-pngStringEventHistogram = "Below is an event histogram, which is a simple bar chart that shows how often something happens; here we are counting how many people finish between certain times and showing it with bars."
-pngStringEventBarChart = "Below is a stacked bar chart, which is a bar chart where each bar is split into colored sections to show parts of a whole, here we show how many people finish each challenge between certain times using different colours."
-pngStringEventViolinChart = "Below is a Violin Chart, which is a fancy graph that looks like a stretched-out violin and shows how data is spread out, like showing how long challenges take, with the wide parts meaning that most people finished at that time."
-pngStringEventBarChartCutoff = "Below is a a Bar Chart, which shows how many people miss the 7 minute event cut off mark."
-pngStringEventPieChart = "Below is a Pie Chart, which is a circle divided into slices to show parts of a whole, like a pizza showing how much each friend ate."
-pngStringEventScatterPlot = "Below is a scatter chart, which is a graph with dots that show where two things happen together, here we  put a dot for each competitors overall postion and their statation finish time."
-pngStringEventRadarChart = 'Below is a Radial Spider chart,Imagine a spiderweb showing how fast the average person finishes each station; the further out a point is on a web strand, the quicker the average time for that station!'
-pngStringEventCatGroupBar = "Below is a Catagory Group Bar Chart, which is a bar chart that compares how many people finish each challenge between certain times using different colours to indicate different category."
-
-pngStringEventBarChartCompetitor = "Below is a Competitor stacked bar chart, which is a bar chart where each bar is split into colored sections to show parts of a whole, here we show how many people finish each challenge between certain times using different colours. Note the competitor is highlighted."
-pngStringEventViolinChartCompetitor = "Below is a Competitor Violin Chart, which is a fancy graph that looks like a stretched-out violin and shows how data is spread out, like showing how long challenges take, with the wide parts meaning that most people finished at that time. Note the competitor is highlighted."
-pngStringEventPieChartCompetitor = "Below is a Competitor Pie Chart, which is a circle divided into slices to show parts of a whole, like a pizza showing how much each friend ate. "
-pngStringEventScatterPlotCompetitor = "Below is a Competitor scatter chart, which is a graph with dots that show where two things happen together, here we  put a dot for each competitors overall postion and their statation finish time."
-pngStringEventRadarChartCompetitor  = "Below is a Competitor Radial Spider chart, This spiderweb shows how much better you did than other people in each game; if your line is further out on a strand, you were in a higher percentile, meaning you beat more people at that station!"
-pngStringEventGroupBarChartCompetitor = "Below is a Competitor Group Bar chart, a bar chart that compares competitor station times compared to those who finished the event with simliar times."
-pngStringEventCumulativeChartCompetitor = "Below is a Competitor Cumulative Time chart, a bar chart that compares competitor cumulative times compared to those who finished the event with simliar times."
-pngStringEventStationDiffChartCompetitor = "Below is a Competitor Station Diff chart, a bar chart that shows the differnet  between competitor station times and those who finished the event with simliar times."
-
 # Generate a unique worker ID that persists for this worker process
 WORKER_ID = str(uuid.uuid4())[:8]
 

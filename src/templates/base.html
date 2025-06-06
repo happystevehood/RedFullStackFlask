@@ -16,6 +16,7 @@
     <meta property="og:url" content="https://redline-results-951032250531.asia-southeast1.run.app">
     <meta property="og:type" content="website">
     <meta name="google-site-verification" content="0Ud5eMqGoeoeU7fkdRauYbRbmpQu7Km_FQPKZAAcrmE" />
+    <meta name="csrf-token" content="{{ csrf_token() }}"> 
 
     {% block head %}{% endblock %}
 
@@ -26,7 +27,8 @@
 
     <!-- jQuery (optional, if you're using it) -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    
+    {# Or if  needed directly in script: #}
+
     <style nonce="{{ csp_nonce() }}">
         html, body {
             margin: 0;
