@@ -42,17 +42,13 @@ from rl.rl_dict import OUTPUT_CONFIGS
 # Otherwise get this warning - UserWarning: Starting a Matplotlib GUI outside of the main thread will likely fail
 mpl.use('agg')
  
-#Boolean to decide if output warningsto log
-OutputInfo=False
-
-
 #############################
 # Tidy df functions 
 #############################
 def tidyTheData(df, filename):
 
     logger = rl_data.get_logger()
-    runtimeVars = session.get("runtime", {})
+    runtimeVars = session.get('runtime', {})
 
     #Clean a few uneeded columns first.
     #if 'Fav' in df.columns:
@@ -86,53 +82,74 @@ def tidyTheData(df, filename):
 
     #Reset the CutOffEvent count value to 0
     #runtimeVars['StationCutOffCount'][:] = [0 for _ in runtimeVars['StationCutOffCount']]
+       
+    #actual_station_names = runtimeVars['StationList']
+    #timestamp_cols = runtimeVars['StationListStart'] 
+    
+    #print(f"actual_station_names: {actual_station_names}")
+    #print(f"timestamp_cols: {timestamp_cols}")
+    
+    #for i, station_name_for_duration in enumerate(actual_station_names):
+    #    start_timestamp_col_name = timestamp_cols[i]
+    #    end_timestamp_col_name = timestamp_cols[i+1]
+        
+    actual_station_names = runtimeVars['StationList']
+    timestamp_cols = runtimeVars['StationListStart']     
+    n = len(actual_station_names)
 
-    # Index to last item
-    MyIndex = len(runtimeVars['StationListStart']) - 1
-
-    #iterate the event list in reverse order
-    for event in runtimeVars['StationListStart'][::-1]:
-        #Note Event = runtimeVars['StationListStart'][MyIndex] below, may be tidier ways to write
+    for i in range(n - 1, -1, -1):  # Start at n-1, go down to 0 (exclusive -1), step by -1
+        
+        station_name_for_duration = actual_station_names[i]
+        start_timestamp_col_name = timestamp_cols[i]
+        end_timestamp_col_name = timestamp_cols[i+1]
+          
+        #print(f"i: {i}")
+        #print(f"station_name_for_duration: {station_name_for_duration}")
+        #print(f"start_timestamp_col_name: {start_timestamp_col_name}")
+        #print(f"end_timestamp_col_name: {end_timestamp_col_name}")
 
         #reorganise data such that each event a duration in reverse format
         for x in df.index:
             
-            # do not write to start time
-            if MyIndex != 0:
+            #if time format wrong, it causes excpetions.
+            try:
+                
+                #print(f"x: {x}")
 
-                #if time format wrong, it causes excpetions.
-                try:
+                end_time_str = rl_data.convert_to_standard_time(df.loc[x, end_timestamp_col_name])
+                start_time_str = rl_data.convert_to_standard_time(df.loc[x, start_timestamp_col_name])
 
-                    df.loc[x,event] = timedelta.total_seconds(datetime.strptime(rl_data.convert_to_standard_time(df.loc[x,event]                                   ) ,"%H:%M:%S.%f") 
-                                                            - datetime.strptime(rl_data.convert_to_standard_time(df.loc[x,runtimeVars['StationListStart'][MyIndex-1]]) ,"%H:%M:%S.%f"))
- 
-                    # was originally 10 seconds, changeing to 25 seconds.....
-                    #if value less than 20 seconds, Mens Team Relay Farmers CArry 22seconds.
-                    if df.loc[x,event] < 20.0:
-                        #print data...
-                        if(OutputInfo == True): logger.info(f"Removed Low value {filename} {x} {event} {df.loc[x,event]} {df.loc[x,'Pos']}")
-                                                
-                        #drop the row
-                        df.drop(x, inplace = True)
+                #print(f"end_time_str: {end_time_str}, start_time_str: {start_time_str}")
 
-                    # else if event is greater than 7 minutes
-                    elif (df.loc[x,event] > 420.0):
-                        
-                        #Increment the CutOff event counter (minus 1 due the diff in lists StationListStart and StationCutOffCount)
-                        runtimeVars['StationCutOffCount'][MyIndex-1] = runtimeVars['StationCutOffCount'][MyIndex-1] + 1
+                duration_seconds = timedelta.total_seconds(
+                    datetime.strptime(end_time_str, "%H:%M:%S.%f") -
+                    datetime.strptime(start_time_str, "%H:%M:%S.%f")
+                )
+                #print(f"duration_seconds: {duration_seconds}")
+                
+                df.loc[x, station_name_for_duration] = duration_seconds
 
-                except (ValueError):
-                        #One of the values in not a string so write NaN to the value.
-                        #print('ValueError', df.loc[x,event], df.loc[x,StationListStart[MyIndex-1]])
-                        df.loc[x,event] = float("nan")
+                # ... (Your checks for < 20.0 and > 420.0 with correct indexing for StationCutOffCount[i]) ...
+                if duration_seconds < 20.0:
+                    logger.info(f"Removed Low value {filename} {x} {station_name_for_duration} {duration_seconds} {df.loc[x,'Pos']}")
+                    df.drop(x, inplace=True)
+                    continue 
+                elif duration_seconds > 420.0:
+                    if i < len(runtimeVars['StationCutOffCount']):
+                         runtimeVars['StationCutOffCount'][i] = runtimeVars['StationCutOffCount'][i] + 1
+                    else:
+                        logger.warning(f"Index {i} out of bounds for StationCutOffCount (len {len(runtimeVars['StationCutOffCount'])})")
 
-                except (TypeError):
-                        #One of the values in not a string so write NaN to the value.
-                        #print('TypeError', df.loc[x,event], df.loc[x,StationListStart[MyIndex-1]])
-                        df.loc[x,event] = float("nan")
-                        
-        MyIndex = MyIndex - 1
+            except (ValueError):
+                    #One of the values in not a string so write NaN to the value.
+                    #logger.info(f'ValueError {filename} {x} {station_name_for_duration}, {start_timestamp_col_name}, {end_timestamp_col_name}'  )
+                    df.loc[x,station_name_for_duration] = float("nan")
 
+            except (TypeError):
+                    #One of the values in not a string so write NaN to the value.
+                    logger.info(f'TypeError {filename} {x} {station_name_for_duration}, {start_timestamp_col_name}, {end_timestamp_col_name}'  )
+                    df.loc[x,station_name_for_duration] = float("nan")
+                    
 
     #Now I want to get the mean time of each event duration in seconds, so can create a ratio of 2 event times
     meanStationList = []
@@ -168,7 +185,7 @@ def tidyTheData(df, filename):
                                                                      - datetime.strptime(rl_data.convert_to_standard_time(dforig.loc[x,runtimeVars['StationListStart'][MyIndex-2]]),"%H:%M:%S.%f"))
                             #change from 60 seconds to 90 seconds
                             if (twoEventDuration < 90.0):
-                                if(OutputInfo == True): logger.info(f"2 EventDurLow {filename} {x} {event} {twoEventDuration}")
+                                logger.info(f"EventDurLow {filename} {x} {event} {twoEventDuration}")
                                 #drop the row
                                 df.drop(x, inplace = True)
                             else:        
@@ -209,7 +226,7 @@ def tidyTheData(df, filename):
             #if net time less than 10 minutes (used to be 6 minutes)
             if ((df.loc[x,'Net Time']) < 600.0):
                 #print data...
-                if(OutputInfo == True): logger.info(f"Removed Low NetTime {filename} {x} {df.loc[x,'Net Time']} {df.loc[x,'Pos']}")
+                logger.info(f"Removed Low NetTime {filename} {x} {df.loc[x,'Net Time']} {df.loc[x,'Pos']}")
                 #drop the row
                 df.drop(x, inplace = True)
                 # added as this can cause problems dur the next calculations below.
@@ -228,12 +245,13 @@ def tidyTheData(df, filename):
 
             #if NetTime - Calculated time is more than 13 seconds
             if (abs(df.loc[x,'Net Time'] - calculatedNetTime) > 13):                               
-                if(OutputInfo == True):  logger.info(f"Warning: NetTime Mismatch {filename} {abs(df.loc[x,'Net Time'] - calculatedNetTime)}, {x}"  )
+                logger.info(f"Warning: NetTime Mismatch {filename} {abs(df.loc[x,'Net Time'] - calculatedNetTime)}, {x}"  )
 
         except (ValueError, TypeError):
                  #Set Time values to None
                 #df.loc[x,'Calc Time'] = float("nan")
                 #df.loc[x,'Net Time'] = float("nan")
+                logger.info(f"Warning: ValueError Type Error {filename} {x}"  )
 
                 #drop the row
                 df.drop(x, inplace = True)
@@ -258,7 +276,7 @@ def tidyTheData(df, filename):
         #write the rank average to the df.
         df.loc[x,'Average Rank'] = RankTotal / len(runtimeVars['StationList'])
 
-    session["runtime"] = runtimeVars
+    session['runtime'] = runtimeVars
     
  ##############################################################
 # Input a df using runtimeVars['competitorRaceNo'] and runtimeVars['competitorName']
@@ -266,7 +284,11 @@ def tidyTheData(df, filename):
 #############################################################
 def getCompetitorIndex(df, runtimeVars_override=None):
 
-    runtimeVars = session.get("runtime", {})
+
+    if runtimeVars_override != None:
+        runtimeVars = runtimeVars_override
+    else:
+        runtimeVars = session.get('runtime', {})
     
     #initialise return value to -1
     compIndex = -1
@@ -306,9 +328,12 @@ def getCompetitorIndex(df, runtimeVars_override=None):
 
 ################################
 # Tidy the data/data frame for Correlation
-def tidyTheDataCorr(df):
+def tidyTheDataCorr(df, runtimeVars_override=None):
 
-    runtimeVars = session.get("runtime", {})
+    if runtimeVars_override != None:
+        runtimeVars = runtimeVars_override
+    else:
+        runtimeVars = session.get('runtime', {})
 
     ####Remove Rank columns as dont need anymore
     for event in runtimeVars['StationList'][::1]:
@@ -572,7 +597,7 @@ def CreateCorrBar(df, filepath, runtimeVars, competitorIndex=-1):
     dfcorr = df.copy(deep=True)
 
     #next level tidying for correlation
-    tidyTheDataCorr(dfcorr)
+    tidyTheDataCorr(dfcorr, runtimeVars)
 
     #get corrolation info
     corr_matrix = dfcorr.corr()
@@ -617,7 +642,7 @@ def CreateCorrHeat(df, filepath, runtimeVars, competitorIndex=-1 ):
         dfcorr = df.copy(deep=True)
 
         #next level tidying for correlation
-        tidyTheDataCorr(dfcorr)
+        tidyTheDataCorr(dfcorr, runtimeVars)
         
         #get corrolation info
         corr_matrix = dfcorr.corr()
@@ -1983,7 +2008,7 @@ def CreatePacingPng(df_input_pacing_table, filepath, runtimeVars, competitorInde
 #
 ###############################
 
-def MakeFullPdfReport(filepath, outputList, html_filepath, competitorAnalysis ):
+def MakeFullPdfReport(filepath, outputDict, html_filepath, competitorAnalysis ):
 
     logger = rl_data.get_logger()
  
@@ -2011,7 +2036,7 @@ def MakeFullPdfReport(filepath, outputList, html_filepath, competitorAnalysis ):
                 stringHtml = f.read()
             page.insert_htmlbox(rect, stringHtml)
 
-        for i, f_path_str in enumerate(outputList['filename']):
+        for i, f_path_str in enumerate(outputDict['filename']):
             if (".png" in f_path_str): # Check extension case-insensitively
                 #logger.debug(f"Processing image for PDF: {f_path_str}")
                 try:
@@ -2049,7 +2074,7 @@ def ShowScatterPlot(df, filepath, runtimeVars, stationName, competitorIndex ):
     dfcorr = df.copy(deep=True)
 
     #next level tidying for correlation
-    tidyTheDataCorr(dfcorr)
+    tidyTheDataCorr(dfcorr, runtimeVars)
 
     #get corrolation info
     corr_matrix = dfcorr.corr().at[stationName,'Net Time']
@@ -2135,8 +2160,8 @@ def ShowScatterPlot(df, filepath, runtimeVars, stationName, competitorIndex ):
 def prepare_visualization_data_for_template( competitorDetails):
     logger = rl_data.get_logger()
 
-    runtimeVars = session.get("runtime", {})
-    outputVars = session.get("output_config", {}) 
+    runtimeVars = session.get('runtime', {})
+    outputVars = session.get('output_config', {}) 
     
     pending_image_tasks = []
     ready_outputs_content = [] # For non-image content like HTML tables, download links
@@ -2262,8 +2287,8 @@ def prepare_visualization_data_for_template( competitorDetails):
 def prepare_competitor_visualization_page(competitorDetails):
     logger = rl_data.get_logger()
     
-    runtimeVars = session.get("runtime", {})
-    outputVars = session.get("output_config", {}) 
+    runtimeVars = session.get('runtime', {})
+    outputVars = session.get('output_config', {}) 
 
     # --- 1. Essential Setup: Event details, DF loading, Competitor Index ---
     if not outputVars.get('competitorAnalysis'):
@@ -2477,8 +2502,8 @@ def generate_single_output_file(params): # df_override for testing or specific c
     # Reload necessary context from session or pass minimally via params
     # For simplicity, we'll assume session still holds some relevant info if needed,
     # but ideally, params should be self-sufficient or df reloaded.
-    #runtimeVars = session.get("runtime", {}) # Could be a snapshot stored specifically for async tasks
-    #general_config = session.get("output_config", {})
+    #runtimeVars = session.get('runtime', {}) # Could be a snapshot stored specifically for async tasks
+    #general_config = session.get('output_config', {})
     
     # Get specific output configuration
     output_id = params.get('output_id')
@@ -2514,13 +2539,18 @@ def generate_single_output_file(params): # df_override for testing or specific c
         image_url = '/' +  str(target_filepath)
         return {"success": True, "image_url": image_url, "message": "Image already existed."}
    
-    temp_runtimeVars = {'StationList': []} # Minimal runtimeVars for the single function call
+    temp_runtimeVars = {
+        'StationList': [],
+        'eventDataList': [],
+        'competitorName':"",
+        'competitorRaceNo':""
+        } # Minimal runtimeVars for the single function call
     event_details_found = False
     for element in rl_data.EVENT_DATA_LIST:
         if element[0] == event_name_actual:
             temp_runtimeVars['eventDataList'] = element # Full eventDataList for context
             # Set StationList based on year from eventDataList
-            if element[2] == '2023': 
+            if element[2] == "2023": 
                 temp_runtimeVars['StationList'] = rl_data.STATIONLIST23
             else: 
                 temp_runtimeVars['StationList'] = rl_data.STATIONLIST24
@@ -2598,9 +2628,9 @@ def redline_vis_generate(competitorDetails):
 
     logger = rl_data.get_logger()
     
-    runtimeVars = session.get("runtime", {})
-    outputVars = session.get("output_config", {})
-    outputList = session.get("outputList", {})
+    runtimeVars = session.get('runtime', {})
+    outputVars = session.get('output_config', {})
+    outputDict = session.get("outputList", {})
 
     # --- Initial DataFrame Loading and Tidying ---
 
@@ -2672,8 +2702,8 @@ def redline_vis_generate(competitorDetails):
 
         # --- Loop through OUTPUT_CONFIGS to generate outputs ---
         # Reset lists that will be populated by this generation pass for the current event
-        outputList['filename'] = []
-        outputList['id'] = []
+        outputDict['filename'] = []
+        outputDict['id'] = []
         html_info_comp_filepaths = ""
 
         for output_conf in OUTPUT_CONFIGS:
@@ -2711,8 +2741,8 @@ def redline_vis_generate(competitorDetails):
                     output_dir = getattr(rl_data, output_conf['output_dir_const'])
                     filepath = Path(output_dir) / Path(current_filename)
                     if (ShowScatterPlot(df, filepath, runtimeVars, station_name, competitorIndex) == True):
-                        outputList['filename'].append(str(filepath))
-                        outputList['id'].append(output_conf['id'])
+                        outputDict['filename'].append(str(filepath))
+                        outputDict['id'].append(output_conf['id'])
 
             elif output_conf['id'] == 'scatter_comp_collection' :
                 for station_idx, station_name in enumerate(runtimeVars['StationList']):
@@ -2728,8 +2758,8 @@ def redline_vis_generate(competitorDetails):
                     output_dir = getattr(rl_data, output_conf['output_dir_const'])
                     filepath = Path(output_dir) / Path(current_filename)
                     if (ShowScatterPlot(df, filepath, runtimeVars, station_name, competitorIndex) == True):
-                        outputList['filename'].append(str(filepath))
-                        outputList['id'].append(output_conf['id'])
+                        outputDict['filename'].append(str(filepath))
+                        outputDict['id'].append(output_conf['id'])
                         
             elif output_conf['function_name'] == 'CreatePacingPng':
                 
@@ -2763,8 +2793,8 @@ def redline_vis_generate(competitorDetails):
                                             runtimeVars=runtimeVars, 
                                             competitorIndex=-1) # competitorIndex is not used by CreatePacingPng
                 if success_flag:
-                    outputList['filename'].append(str(filepath))
-                    outputList['id'].append(output_conf['id'])
+                    outputDict['filename'].append(str(filepath))
+                    outputDict['id'].append(output_conf['id'])
 
                         
             else: # Single file output
@@ -2801,8 +2831,8 @@ def redline_vis_generate(competitorDetails):
                         # Standardized call might be:
                         if(func_to_call(df=df,  filepath=filepath, runtimeVars=runtimeVars, competitorIndex=competitorIndex)==True):
                             if output_conf['output_type'] == 'png' or output_conf['output_type'] == 'png_collection':
-                                outputList['filename'].append(str(filepath))
-                                outputList['id'].append(output_conf['id'])
+                                outputDict['filename'].append(str(filepath))
+                                outputDict['id'].append(output_conf['id'])
 
                     else:
                         logger.error(f"Function {output_conf['function_name']} not found.")
@@ -2811,7 +2841,7 @@ def redline_vis_generate(competitorDetails):
 
        
         # --- PDF Generation (after all relevant PNGs are made for this event) ---
-        if (outputVars['pdf_report_generic'] or outputVars['pdf_report_comp']) and outputList['filename']: # Only if PNGs were generated
+        if (outputVars['pdf_report_generic'] or outputVars['pdf_report_comp']) and outputDict['filename']: # Only if PNGs were generated
             pdf_config_item = None
 
             event_name_slug = slugify(eventDataList[0])
@@ -2835,20 +2865,20 @@ def redline_vis_generate(competitorDetails):
                 pdf_output_dir = getattr(rl_data, pdf_config_item["output_dir_const"])
                 pdf_filepath = Path(pdf_output_dir) / Path(pdf_filename)
 
-                if(MakeFullPdfReport(filepath=pdf_filepath,  outputList=outputList, html_filepath=html_info_comp_filepaths, competitorAnalysis=outputVars['competitorAnalysis'])==True):
+                if(MakeFullPdfReport(filepath=pdf_filepath,  outputDict=outputDict, html_filepath=html_info_comp_filepaths, competitorAnalysis=outputVars['competitorAnalysis'])==True):
                    
                     #Me thinks this is pointless!!!
-                    outputList['filename'].append(str(pdf_filepath))
-                    outputList['id'].append(pdf_config_item['id'])
+                    outputDict['filename'].append(str(pdf_filepath))
+                    outputDict['id'].append(pdf_config_item['id'])
             else:
                 logger.error(f"No PDF configuration found for {outputVars['pdf_report_generic']} and {outputVars['pdf_report_comp']}")
         else:
-            logger.error(f"No PDF configuration found for {outputVars['pdf_report_generic']}, {outputVars['pdf_report_comp']} and {outputList['filename']} is empty")
+            logger.error(f"No PDF configuration found for {outputVars['pdf_report_generic']}, {outputVars['pdf_report_comp']} and {outputDict['filename']} is empty")
 
 
     # Save data back to session after processing this event
-    session["runtime"] = runtimeVars
-    session["outputList"] = outputList
+    session['runtime'] = runtimeVars
+    session["outputList"] = outputDict
         
     print(f"redline_vis_generate: return True")
 
@@ -2931,21 +2961,21 @@ def redline_vis_generate_generic_init():
     }
     
     # Creating updated file list.
-    outputList = {
+    outputDict = {
         'id': [],
         'filename': [],
     }
 
     #clear the search results - not sure if this is needed.
-    session.pop('outputList', None)
+    session.pop("outputList", None)
     session.pop('runtime', None)
     session.pop('output_config', None)
     session.pop('async_runtime_vars_snapshot', None)
     
     #re-assign    
-    session["outputList"] = outputList
-    session["runtime"] = runtime
-    session["output_config"] = output_config
+    session["outputList"] = outputDict
+    session['runtime'] = runtime
+    session['output_config'] = output_config
  
     return True
 
@@ -3005,20 +3035,20 @@ def redline_vis_generate_competitor_init():
     }
     
     # Creating updated file list.
-    outputList = {
+    outputDict = {
         'id': [],
         'filename': [],
     }
 
     #clear the search results - not sure if this is needed.
-    session.pop('outputList', None)
+    session.pop("outputList", None)
     session.pop('runtime', None)
     session.pop('output_config', None)
     session.pop('async_runtime_vars_snapshot', None)
     
     #re-assign    
-    session["outputList"] = outputList
-    session["runtime"] = runtime
-    session["output_config"] = output_config
+    session["outputList"] = outputDict
+    session['runtime'] = runtime
+    session['output_config'] = output_config
  
     return True

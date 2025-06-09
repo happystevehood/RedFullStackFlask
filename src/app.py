@@ -250,7 +250,7 @@ def gethome():
 
     #clear the session to keep fresh
     session.pop('search_results', None)
-    session.pop('outputList', None)
+    session.pop("outputList", None)
     session.pop('runtime', None)
     session.pop('output_config', None)
     session.pop('async_runtime_vars_snapshot', None)
@@ -763,36 +763,23 @@ def generate_image_async_route():
         return jsonify({"success": False, "error": "Invalid request, JSON expected"}), 400
     
     params = request.get_json()
-    #print(params)
-    
-    # You might need to pass df or reload it here.
-    # For simplicity in this example, assume generate_single_output_file can handle it
-    # by reloading or if 'df' could be serialized/passed (not recommended for large df).
-    # Best approach: generate_single_output_file reloads df based on params.get('event_name_actual')
-
-    # Restore minimal necessary runtime context for the single image generation
-    # The 'async_runtime_vars_snapshot' should have been saved in prepare_competitor_visualization_page
-    # This assumes that prepare_competitor_visualization_page has already been called for the session
-    # and has populated the session with 'async_runtime_vars_snapshot' and 'output_config'.
-    
-    # Critical: Ensure that session variables used by generate_single_output_file are correctly
-    # set up or passed. If generate_single_output_file reloads everything based on params,
-    # it's more robust.
-
-    # Let's assume generate_single_output_file handles its own session/df loading based on params
+    #print(f"params: {params}")
+        
     result = generate_single_output_file(params) # df_override can be used for testing
+    #print(f"result: {result}")
     
     if(result['success'] == True):
 
-        outputList = session.get("outputList",[])
+        outputDict = session.get("outputList",{})
+        #print(f"outputDict: {outputDict}") #debug print(outputDict)
 
         config_item = next((item for item in OUTPUT_CONFIGS if item['id'] == params['output_id']), None)
         output_dir = getattr(rl_data, config_item["output_dir_const"])
         filepath =  Path(output_dir) / Path(params['target_filename'])
 
         # Update outputList
-        outputList['filename'].append(str(filepath))
-        outputList['id'].append(params['output_id'])
+        outputDict['filename'].append(str(filepath))
+        outputDict['id'].append(params['output_id'])
     
     return jsonify(result)
 
@@ -807,9 +794,9 @@ def generate_and_download_pdf_route():
 
     app.logger.warning(f"/download_pdf {event_name_actual} {competitor_name_actual}")
 
-    runtimeVars = session.get("runtime", {}) # Get from session for this example
-    outputVars = session.get("output_config", {})
-    outputList = session.get("outputList",[])
+    runtimeVars = session.get('runtime', {}) # Get from session for this example
+    outputVars = session.get('output_config', {})
+    outputDict = session.get("outputList",{})
 
     pdf_config_item = next((item for item in OUTPUT_CONFIGS if item['id'] == output_id), None)
     if not pdf_config_item:
@@ -839,8 +826,8 @@ def generate_and_download_pdf_route():
         return "Invalid PDF type requested", 400
 
     # --- Assume PNGs are all ready and available  ---
-    if outputList['filename']: # Only if PNGs were generated
-        #app.logger.debug(f"foutputList['filename']: {outputList['filename']}")
+    if outputDict['filename']: # Only if PNGs were generated
+        #app.logger.debug(f"foutputList['filename']: {outputDict['filename']}")
 
         event_name_slug = slugify(event_name_actual)
         if outputVars['competitorAnalysis'] and outputVars['pdf_report_comp']:
@@ -872,7 +859,7 @@ def generate_and_download_pdf_route():
             pdf_output_dir = getattr(rl_data, pdf_config_item["output_dir_const"])
             pdf_filepath = Path(pdf_output_dir) / Path(pdf_filename)
 
-            if(MakeFullPdfReport(filepath=pdf_filepath,  outputList=outputList, html_filepath=html_info_comp_filepaths, competitorAnalysis=outputVars['competitorAnalysis'])==True):
+            if(MakeFullPdfReport(filepath=pdf_filepath,  outputDict=outputDict, html_filepath=html_info_comp_filepaths, competitorAnalysis=outputVars['competitorAnalysis'])==True):
                 #app.logger.error(f"PDF done {pdf_filename} and pdf_config_item {pdf_config_item}")
 
                 return send_file(pdf_filepath, as_attachment=True, mimetype='application/pdf')
@@ -880,7 +867,7 @@ def generate_and_download_pdf_route():
         else:
             app.logger.error(f"No PDF configuration found for {outputVars['pdf_report_generic']} and {outputVars['pdf_report_comp']}")
     else:
-        app.logger.error(f"No PDF configuration found for {outputVars['pdf_report_generic']}, {outputVars['pdf_report_comp']} and {outputList['filename']} is empty")
+        app.logger.error(f"No PDF configuration found for {outputVars['pdf_report_generic']}, {outputVars['pdf_report_comp']} and {outputDict['filename']} is empty")
 
 
 # 3. User: View blog index (list of posts, searchable)
