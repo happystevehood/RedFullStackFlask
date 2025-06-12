@@ -51,8 +51,8 @@ def tidyTheData(df, filename):
     runtimeVars = session.get('runtime', {})
 
     #Clean a few uneeded columns first.
-    #if 'Fav' in df.columns:
-    #    df.drop('Fav', axis=1, inplace = True)
+    if 'Fav' in df.columns:
+        df.drop('Fav', axis=1, inplace = True)
 
     if 'Share' in df.columns:
         df.drop('Share', axis=1, inplace = True)
@@ -381,6 +381,8 @@ def tidyTheDataCorr(df, runtimeVars_override=None):
 
     #drop rows with empty data 
     df.dropna(inplace = True )
+    
+    return df
 
 
 ########################################################
@@ -608,7 +610,7 @@ def CreateCorrBar(df, filepath, runtimeVars, competitorIndex=-1):
         plt.figure(figsize=(10, 10))
         
         # Shows a nice correlation barchar
-        heatmap = sns.barplot( data=corr_matrix['Net Time'])
+        heatmap = sns.barplot( data=corr_matrix['Net Time'].drop(['Net Time']))
         
         for i in heatmap.containers:
             heatmap.bar_label(i,fmt='%.2f')
@@ -643,7 +645,7 @@ def CreateCorrHeat(df, filepath, runtimeVars, competitorIndex=-1 ):
 
         #next level tidying for correlation
         tidyTheDataCorr(dfcorr, runtimeVars)
-        
+      
         #get corrolation info
         corr_matrix = dfcorr.corr()
 
@@ -682,7 +684,7 @@ def CreateHistAgeCat(df, filepath, runtimeVars, competitorIndex=-1 ):
         colors         = ['red'    , 'tan'    , 'lime']
     
     #else for 2024
-    else:
+    elif (runtimeVars['eventDataList'][2]=="2024"):
         #Competitive singles Category 
         Category_order_single = ["18-24", "25-29", "30-34", "35-39", "40-44",  "45-49", "50+"]
         colors_single =         ['red'  , 'tan'  , 'lime' , 'blue' , 'purple', 'orange', 'grey']
@@ -690,6 +692,12 @@ def CreateHistAgeCat(df, filepath, runtimeVars, competitorIndex=-1 ):
         #Competitive Doubles & Team Relay Category 
         category_order_team = ["< 30", "30-44", "45+"]
         colors_team =         ['red' , 'tan'  , 'lime']
+
+    else:
+        
+        # 2025 Singles Level 2 & 3 Category columns colours
+        Category_order = ["16 - 39", "40 - 49", "50+"]
+        colors         = ['red'    , 'tan'    , 'lime']
 
     #converting from seconds to minutes and making bins dvisible by 5
     binWidth = 5
@@ -1691,12 +1699,12 @@ def CreatePacingTable(df, filepath, runtimeVars, competitorIndex=-1 ):
         #logger.debug(f"File {filepath} already exists. Skipping generation")
         return True
     
-    #print(f"Generating Pacing Table for event {runtimeVars['eventDataList'][0]}")
+    #logger.debug(f"Generating Pacing Table for event {runtimeVars['eventDataList'][0]}")
 
     station_names = runtimeVars['StationList']
     num_stations = len(station_names)
     if num_stations == 0:
-        print("Error: StationList is empty. Cannot generate pacing table.")
+        logger.error("Error: StationList is empty. Cannot generate pacing table.")
         return False
 
     target_percentiles = np.arange(0.1, 1.0, 0.1) 
@@ -1715,23 +1723,24 @@ def CreatePacingTable(df, filepath, runtimeVars, competitorIndex=-1 ):
 
     df_cleaned.dropna(subset=['Net Time'], inplace=True)
     if df_cleaned.empty:
-        print("No valid numeric Net Time data to generate pacing table.")
+        logger.error("No valid numeric Net Time data to generate pacing table.")
         return False
 
-    df_for_pacing_calcs = df_cleaned[df_cleaned['Time Adj'].fillna(0) == 0].copy()
-    df_to_use_for_cohorts_and_percentiles = df_for_pacing_calcs
-    if df_for_pacing_calcs.empty:
-        print("Warning: No athletes found with Time Adj == 0. Pacing table will be based on all athletes.")
-        df_to_use_for_cohorts_and_percentiles = df_cleaned
-        if df_to_use_for_cohorts_and_percentiles.empty:
-            print("Critical: No data left. Cannot generate table.")
-            return False
+    #df_for_pacing_calcs = df_cleaned[df_cleaned['Time Adj'].fillna(0) == 0].copy()
+    #df_to_use_for_cohorts_and_percentiles = df_for_pacing_calcs
+    df_to_use_for_cohorts_and_percentiles = df_cleaned
+    #if df_for_pacing_calcs.empty:
+    #    print("Warning: No athletes found with Time Adj == 0. Pacing table will be based on all athletes.")
+    #    df_to_use_for_cohorts_and_percentiles = df_cleaned
+    #    if df_to_use_for_cohorts_and_percentiles.empty:
+    #        logger.error("Critical: No data left. Cannot generate table.")
+    #        return False
     
     df_sorted = df_to_use_for_cohorts_and_percentiles.sort_values(by='Net Time').reset_index(drop=True)
     total_ranked_athletes = len(df_sorted)
 
     if total_ranked_athletes == 0:
-        print("No ranked athletes to process after filtering.")
+        logger.error("No ranked athletes to process after filtering.")
         return False
 
     raw_avg_station_times_data = {station: {} for station in station_names}
@@ -1753,7 +1762,7 @@ def CreatePacingTable(df, filepath, runtimeVars, competitorIndex=-1 ):
         end_index = int(np.ceil(upper_rank_percentile * total_ranked_athletes))
         end_index = min(end_index, total_ranked_athletes)
 
-        #print(f"Processing {percentile_key_name} {total_ranked_athletes}, {start_index}, {end_index} ")
+        #logger.info(f"Processing {percentile_key_name} {total_ranked_athletes}, {start_index}, {end_index} ")
 
         if start_index >= end_index and total_ranked_athletes > 0:
             target_index = int(p_val * (total_ranked_athletes -1) )
@@ -1762,6 +1771,20 @@ def CreatePacingTable(df, filepath, runtimeVars, competitorIndex=-1 ):
             end_index = min(total_ranked_athletes, target_index + num_either_side + 1)
 
         cohort_df = df_sorted.iloc[start_index:end_index]
+      
+        cohort_df = cohort_df[cohort_df['Time Adj'].fillna(0) == 0].copy()
+        if cohort_df.empty:
+            logger.info("Warning: No athletes found with Time Adj == 0 for percentile {percentile_key_name} .")
+
+        
+        #df_for_pacing_calcs = df_cleaned[df_cleaned['Time Adj'].fillna(0) == 0].copy()
+        #df_to_use_for_cohorts_and_percentiles = df_for_pacing_calcs
+        #if df_for_pacing_calcs.empty:
+        #    print("Warning: No athletes found with Time Adj == 0. Pacing table will be based on all athletes.")
+        #    df_to_use_for_cohorts_and_percentiles = df_cleaned
+        #    if df_to_use_for_cohorts_and_percentiles.empty:
+        #        print("Critical: No data left. Cannot generate table.")
+        #        return False
         
         for station in station_names:
             avg_station_time_seconds = np.nan
@@ -1859,11 +1882,11 @@ def CreatePacingTable(df, filepath, runtimeVars, competitorIndex=-1 ):
         
         try:
             pacing_df_for_csv.to_csv(filepath, index=False)
-            #print(f"Saved pacing table to {filepath}")
+            #logger.debug(f"Saved pacing table to {filepath}")
         except Exception as e:
-            print(f"Error saving pacing table to CSV: {e}")
+            logger.error(f"Error saving pacing table to CSV: {e}")
     else:
-        print("No pacing table data generated to save.")
+        logger.error("No pacing table data generated to save.")
 
     return pacing_table_data_list_of_dicts
 
@@ -2182,10 +2205,13 @@ def prepare_visualization_data_for_template( competitorDetails):
     if runtimeVars['eventDataList'][2]=="2023": # Assuming index 2 is year
         runtimeVars['StationList'] = rl_data.STATIONLIST23
         runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART23
-    else:
+    elif runtimeVars['eventDataList'][2]=="2024":
         runtimeVars['StationList'] = rl_data.STATIONLIST24
         runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART24
-
+    else:
+        runtimeVars['StationList'] = rl_data.STATIONLIST25
+        runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART25
+        
     logger.info(f"Preparing event page: {runtimeVars['eventDataList'][0]}")
    
     # --- End of Essential Setup ---
@@ -2216,8 +2242,13 @@ def prepare_visualization_data_for_template( competitorDetails):
 
         output_dir_path_obj = Path(getattr(rl_data, output_conf['output_dir_const']))
         
+        #if this function requires category data, but event has none, then skip
+        if output_conf['requires_category_data'] == True and runtimeVars['eventDataList'][6] == "NO_CAT":
+                logger.debug(f"No category data, skipping {output_conf['id']} {output_conf['function_name']} {output_conf['id']} {output_conf['output_dir_const']} {output_conf['filename_template']}")
+                pass
+      
         # --- Handle PNGs and PNG Collections for Lazy Loading ---
-        if output_conf['output_type'] == 'png' or output_conf['output_type'] == 'png_collection':
+        elif output_conf['output_type'] == 'png' or output_conf['output_type'] == 'png_collection':
             items_to_generate_for_this_conf = []
             # ... (your existing logic for populating items_to_generate_for_this_conf) ...
             if output_conf['generates_multiple_files']:
@@ -2308,9 +2339,12 @@ def prepare_competitor_visualization_page(competitorDetails):
     if runtimeVars['eventDataList'][2]=="2023": # Assuming index 2 is year
         runtimeVars['StationList'] = rl_data.STATIONLIST23
         runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART23
-    else:
+    elif runtimeVars['eventDataList'][2]=="2024":
         runtimeVars['StationList'] = rl_data.STATIONLIST24
         runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART24
+    else:
+        runtimeVars['StationList'] = rl_data.STATIONLIST25
+        runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART25
 
     logger.info(f"Preparing competitor page for event: {runtimeVars['eventDataList'][0]}")
     
@@ -2552,8 +2586,11 @@ def generate_single_output_file(params): # df_override for testing or specific c
             # Set StationList based on year from eventDataList
             if element[2] == "2023": 
                 temp_runtimeVars['StationList'] = rl_data.STATIONLIST23
-            else: 
+            elif element[2] == "2024": 
                 temp_runtimeVars['StationList'] = rl_data.STATIONLIST24
+            else: 
+                temp_runtimeVars['StationList'] = rl_data.STATIONLIST25
+
             event_details_found = True
             break
     if not event_details_found:
@@ -2673,9 +2710,12 @@ def redline_vis_generate(competitorDetails):
             runtimeVars['StationList'] = rl_data.STATIONLIST23
             runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART23
 
-        else:
+        elif (eventDataList[2]=="2024"):
             runtimeVars['StationList'] = rl_data.STATIONLIST24
             runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART24
+        else:
+            runtimeVars['StationList'] = rl_data.STATIONLIST25
+            runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART25
 
         logger.debug(f"eventDataList[0] {eventDataList[0]}")
 
@@ -2796,6 +2836,10 @@ def redline_vis_generate(competitorDetails):
                     outputDict['filename'].append(str(filepath))
                     outputDict['id'].append(output_conf['id'])
 
+            #if this function requires category data, but event has none, then skip
+            elif output_conf['requires_category_data'] == True and eventDataList[6] == "NO_CAT":
+                logger.debug(f"No category data, skipping {output_conf['id']} {output_conf['function_name']} {output_conf['id']} {output_conf['output_dir_const']} {output_conf['filename_template']}")
+                continue
                         
             else: # Single file output
                 filename = output_conf['filename_template'].format(

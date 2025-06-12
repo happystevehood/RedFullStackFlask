@@ -142,7 +142,7 @@ OUTPUT_CONFIGS = [
         'filename_template': '{EVENT_NAME_SLUG}_NetTimeHist_Generic.png', # Original filename had STATION_NAME_HERE, but CreateHistAgeCat is likely for Net Time
         'output_dir_const': 'PNG_GENERIC_DIR',
         'output_type': 'png',
-        'requires_category_data': True, # This function specifically uses 'Category'
+        'requires_category_data': False, # Works with and without categories
         'generates_multiple_files': False,
         'html_string_template': ("<p><b>Interpreting the Net Time Histogram:</b> This chart displays the distribution of overall finish times for all participants, often broken down by age category. "
                                  "Each bar represents a range of finish times, and its height shows how many athletes finished within that range. "

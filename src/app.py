@@ -553,10 +553,12 @@ def postdisplayEvent():
         #configure for 2023 format or 2024 format
         if (rl_data.EVENT_DATA_LIST[index][2]=="2023"):
             heatmap_specific_columns = rl_data.STATIONLISTSTART23
-        else:
+        elif (rl_data.EVENT_DATA_LIST[index][2]=="2024"):
             heatmap_specific_columns = rl_data.STATIONLISTSTART24
+        else:
+            app.logger.error(f"ERROR: Event year not found {rl_data.EVENT_DATA_LIST[index][2]}")
             
-        #add the time column to the heatmap_specific_columns list
+        #add the time column to the heatmap_specific_columns listdf.dropna
         heatmap_specific_columns.append('Time Adj')
         
         return render_template('table.html', headers=headers, data=data, title=title, enable_heatmap=True, heatmap_specific_columns=heatmap_specific_columns)
@@ -770,7 +772,7 @@ def generate_image_async_route():
     
     if(result['success'] == True):
 
-        outputDict = session.get("outputList",{})
+        outputDict = session.get("outputList",{'id': [] ,'filename': [] })
         #print(f"outputDict: {outputDict}") #debug print(outputDict)
 
         config_item = next((item for item in OUTPUT_CONFIGS if item['id'] == params['output_id']), None)
@@ -1005,12 +1007,15 @@ def admin():
 
     app.logger.debug(f"/admin received {request}")
     
-    #for key in list(session.keys()):
-    #    if not key.startswith('_'):
-    #        app.logger.warning(f"Session Keys: {key}: {session[key]}")
-    
+    for key in list(session.keys()):
+        if not key.startswith('_'):
+            app.logger.debug(f"Session Keys: {key}: {session[key]}")
+ 
     #clear the search results.
     session.pop('search_results', None)
+
+    if 'search_results' in session:  
+        app.logger.warning(f"Warning: After Pop: 'search_results': {session['search_results']}")
 
     # Get current log levels for display
     log_levels = rl_data.get_log_levels()
