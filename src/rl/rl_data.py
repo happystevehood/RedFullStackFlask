@@ -12,6 +12,7 @@ from flask import render_template as flask_render_template
 from google.cloud import storage
 import csv
 import io
+import glob # For listing files
 import math
 from datetime import datetime, timedelta, timezone
 from PIL import Image # Import Pillow
@@ -420,6 +421,73 @@ def get_log_levels():
     
     #logger.debug("get_log_levels<")
     return levels
+
+def rotate_logs():
+    logger = get_logger()
+    
+    root_logger = logging.getLogger() # Get the root logger
+    
+    rotated_and_cleaned_handlers = []
+
+    for handler in root_logger.handlers:
+        # Ensure you're targeting your custom SafeRotatingFileHandler
+        if isinstance(handler, SafeRotatingFileHandler): # Replace with your actual class path
+            base_filename = handler.baseFilename # e.g., /path/to/your/app.log
+            try:
+                logger.info(f"Attempting to rotate log file: {base_filename}")
+                # doRollover renames current file (e.g., app.log -> app.log.1)
+                # and makes the handler point to a new empty app.log
+                handler.doRollover() 
+                logger.info(f"Log file {base_filename} rotated successfully.")
+                rotated_and_cleaned_handlers.append(base_filename)
+
+                # --- Now, delete old backup files for this handler ---
+                # Files will be like: app.log.1, app.log.2, etc.
+                # We want to delete these after rotation.
+                
+                # Construct search pattern for backup files, e.g., /path/to/your/app.log.*
+                # glob.glob is good for this.
+                backup_file_pattern = f"{base_filename}.*" 
+                backup_files = glob.glob(backup_file_pattern)
+                
+                # Sort files to potentially keep the most recent backup (e.g., app.log.1) if desired
+                # Sorting them numerically if they are numbered (e.g. app.log.1, app.log.2, app.log.10)
+                def sort_key(filename):
+                    parts = filename.split('.')
+                    try:
+                        return int(parts[-1]) if parts[-1].isdigit() else float('inf')
+                    except ValueError:
+                        return float('inf') # Should not happen if pattern is correct
+
+                backup_files.sort(key=sort_key)
+
+                # --- Deletion Strategy ---
+                # Option 1: Delete ALL backups (app.log.1, app.log.2, ...)
+                files_to_delete = backup_files
+                # Option 2: Keep the most recent backup (app.log.1) and delete older ones
+                # if len(backup_files) > handler.backupCount: # Or just > 1 to keep only app.log.1
+                #     files_to_delete = backup_files[1:] # Keep app.log.1 (the first in sorted list), delete rest
+                # else:
+                #     files_to_delete = [] # No older files to delete if fewer than backupCount
+
+                if files_to_delete:
+                    logger.info(f"Found old backup files to delete for {base_filename}: {files_to_delete}")
+                    for old_log_file in files_to_delete:
+                        try:
+                            os.remove(old_log_file)
+                            logger.info(f"Deleted old log file: {old_log_file}")
+                        except OSError as e:
+                            logger.error(f"Error deleting old log file {old_log_file}: {e}")
+                else:
+                    logger.info(f"No old backup files found or to delete for {base_filename} based on strategy.")
+
+            except AttributeError:
+                logger.warning(f"Handler {handler} does not have doRollover or baseFilename attribute.")
+            except Exception as e:
+                logger.error(f"Error during log rotation/cleanup for {getattr(handler, 'baseFilename', 'unknown handler')}: {e}", exc_info=True)
+    
+    return rotated_and_cleaned_handlers
+         
 
 #############################
 # Non log based helper functions

@@ -260,6 +260,24 @@ OUTPUT_CONFIGS = [
         'load_priority': 1 #  PRIORITY
     },
     {
+        'id': 'histogram_nettime_comp', 
+        'name': 'Overall Net Time Distribution',
+        'function_name': 'CreateHistAgeCat', 
+        'is_competitor_specific': True,
+        'filename_template': '{EVENT_NAME_SLUG}_{COMPETITOR_NAME_SLUG}_NetTimeHist.png', 
+        'output_dir_const': 'PNG_COMP_DIR',
+        'output_type': 'png',
+        'requires_category_data': False, # Works with and without categories
+        'generates_multiple_files': False,
+        'html_string_template': ("<p><b>Interpreting the Net Time Histogram:</b> This chart displays the distribution of overall finish times for all participants, often broken down by age category. "
+                                 "Each bar represents a range of finish times, and its height shows how many athletes finished within that range. Your time is highlighted "
+                                 "Data insight: Look at the spread and peaks for your category to understand where you fit in relative to the bulk of competitors. "
+                                 "This helps you set realistic goals and see how your target time compares to the general field. "
+                                 "A wide spread indicates diverse performance levels within that category.</p>"),
+        'is_placeholder_ready': False,  #as dont know at time of writing if event has mutliple age categories,
+        'load_priority': 2 #  PRIORITY
+    },
+    {
         'id': 'bar_stacked_dist_comp', # Was showBar_comp
         'name': 'Your Performance vs. Time Percentiles',
         'function_name': 'CreateBarChartEvent',
@@ -274,7 +292,7 @@ OUTPUT_CONFIGS = [
                                  "Data science insight: Identify stations where your marker is in the slower colour bands (e.g., red, grey) – these are clear areas for improvement. "
                                  "Conversely, stations where your marker is in the faster bands (blue, purple) are your strengths. This provides a granular view of your competitiveness per station.</p>"),
         'is_placeholder_ready': False,
-        'load_priority': 2 #  PRIORITY
+        'load_priority': 3 #  PRIORITY
     },
     {
         'id': 'violin_comp',
@@ -292,7 +310,7 @@ OUTPUT_CONFIGS = [
                                  "This helps you understand if your station times are typical, exceptionally fast, or slower than most. "
                                  "It provides context beyond just your raw time, showing your standing relative to the entire field's performance shape on that station.</p>"),
         'is_placeholder_ready': False,
-        'load_priority': 3 #  PRIORITY
+        'load_priority': 4 #  PRIORITY
     },
     {
         'id': 'radar_percentile_comp', # Was createRadar_comp
@@ -309,7 +327,7 @@ OUTPUT_CONFIGS = [
                                  "Data science insight: The 'shape' of your performance quickly reveals your strengths (points far out) and weaknesses (points closer to the center or inside the median line) across all stations. "
                                  "This holistic view is excellent for identifying patterns, like if you excel in strength but lag in cardio, to guide balanced training.</p>"),
         'is_placeholder_ready': False,
-        'load_priority': 4 #  PRIORITY
+        'load_priority': 5 #  PRIORITY
     },
     {
         'id': 'bar_sim_comp', # Was showBarSim
@@ -326,7 +344,7 @@ OUTPUT_CONFIGS = [
                                  "If your bar is shorter (faster) on a station, you gained time against your peers there. If it's taller, you lost time. "
                                  "This helps identify which specific stations contributed most to your overall placing relative to those around you, highlighting where small improvements can make you leapfrog competitors.</p>"),
         'is_placeholder_ready': False,
-        'load_priority': 5 #  PRIORITY
+        'load_priority': 6 #  PRIORITY
     },
     {
         'id': 'cumul_sim_comp', # Was showCumulSim
@@ -342,7 +360,7 @@ OUTPUT_CONFIGS = [
                                  "Data science insight: Watch where the lines diverge. If your line drops below the average, you're gaining time. If it goes above, you're losing time. "
                                  "The shaded areas highlight these differences. This helps identify critical phases of the race and at which stations you typically pull ahead or fall behind your direct competition, informing pacing strategies.</p>"),
         'is_placeholder_ready': False,
-        'load_priority': 6 #  PRIORITY
+        'load_priority': 7 #  PRIORITY
     },
     {
         'id': 'diff_sim_comp', # Was showDiffSim
@@ -359,7 +377,7 @@ OUTPUT_CONFIGS = [
                                  "Data science insight: This quantifies exactly where you gain or lose time against your immediate peer group. "
                                  "Large green bars are your standout strengths. Large red bars are your most significant opportunities for improvement to better your rank among those with similar overall capabilities. Focus on turning those red bars green!</p>"),
         'is_placeholder_ready': False,
-        'load_priority': 7 #  PRIORITY
+        'load_priority': 8 #  PRIORITY
     },
 
     # --- Scatter Plots (Needs to be called for each event, Generates 1 file) ---

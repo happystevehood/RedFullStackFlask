@@ -10,7 +10,7 @@ import tempfile
 
 import pandas as pd
 
-import os, csv, math, re
+import os, csv, math
 from dotenv import load_dotenv
 from pathlib import Path
 import uuid
@@ -1219,6 +1219,20 @@ def clear_logs():
             
     app.logger.info(f"All logs have been cleared.")
     return app.redirect(app.url_for('view_logs', _external=True, _scheme=request.scheme))
+
+@app.route('/admin/logs/rotate', methods=['POST']) 
+@login_required
+def rotate_logs_route():
+    app.logger.info(f"/admin/logs/rotate POST received")
+    
+    success = rl_data.rotate_logs()
+    if success:
+        flash("Log rotation initiated. New log file is now active. Old logs are archived.", "success")
+    else:
+        flash("No suitable rotating file handler found to perform rotation.", "warning")
+           
+    return redirect(url_for('view_logs')) # Or your admin page
+
 
 @app.route('/admin/logs')
 @login_required

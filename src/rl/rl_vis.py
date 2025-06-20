@@ -22,6 +22,7 @@ import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
+import matplotlib.lines as mlines
 import seaborn as sns
 
 from datetime import datetime, timedelta
@@ -56,6 +57,9 @@ def tidyTheData(df, filename):
 
     if 'Share' in df.columns:
         df.drop('Share', axis=1, inplace = True)
+        
+    if 'Net Cat Pos (Net Gen Pos)' in df.columns:
+        df.drop('Net Cat Pos (Net Gen Pos)', axis=1, inplace = True)
 
     #Rename Columns so consistent across years....etc
     df.rename(columns={'Net Pos':'Pos'},inplace=True)
@@ -601,6 +605,8 @@ def CreateCorrBar(df, filepath, runtimeVars, competitorIndex=-1):
     #next level tidying for correlation
     tidyTheDataCorr(dfcorr, runtimeVars)
 
+    #print(dfcorr.head(10))
+
     #get corrolation info
     corr_matrix = dfcorr.corr()
 
@@ -662,110 +668,144 @@ def CreateCorrHeat(df, filepath, runtimeVars, competitorIndex=-1 ):
 ############################
 # Show Histogram Age Categories
 #############################
-
 def CreateHistAgeCat(df, filepath, runtimeVars, competitorIndex=-1 ):
     logger = rl_data.get_logger()
+    config = session.get('ouptut_config', {}) 
 
-    # Check if file exists or force generation
-    if os.path.isfile(filepath) :
-        #logger.debug(f"File {filepath} already exists. Skipping generation.")
+    if os.path.isfile(filepath) and not config.get('forcePng', False):
+        logger.debug(f"File {filepath} already exists for CreateHistAgeCat. Skipping generation.")
         return True
 
-    # set num of categories to be 3 by default
-    num_cat        = 3
+    fig, ax = plt.subplots(figsize=(12, 8)) # Use ax for more control
 
-    plt.figure(figsize=(10, 10))
-
-    # do for 2023
-    if (runtimeVars['eventDataList'][2]=="2023"):
-
-        #Competitive singles Category columns colours
-        Category_order = ["18 - 29", "30 - 39", "40+"]
-        colors         = ['red'    , 'tan'    , 'lime']
-    
-    #else for 2024
-    elif (runtimeVars['eventDataList'][2]=="2024"):
-        #Competitive singles Category 
-        Category_order_single = ["18-24", "25-29", "30-34", "35-39", "40-44",  "45-49", "50+"]
-        colors_single =         ['red'  , 'tan'  , 'lime' , 'blue' , 'purple', 'orange', 'grey']
-
-        #Competitive Doubles & Team Relay Category 
-        category_order_team = ["< 30", "30-44", "45+"]
-        colors_team =         ['red' , 'tan'  , 'lime']
-
-    else:
+    # --- Data Preparation ---
+    if 'Net Time' not in df.columns:
+        logger.error("'Net Time' column not found in DataFrame for histogram.")
+        plt.close(fig)
+        return False
         
-        # 2025 Singles Level 2 & 3 Category columns colours
-        Category_order = ["16 - 39", "40 - 49", "50+"]
-        colors         = ['red'    , 'tan'    , 'lime']
+    net_times_numeric = pd.to_numeric(df['Net Time'], errors='coerce')
+    net_times_in_minutes = net_times_numeric.dropna() / 60.0
 
-    #converting from seconds to minutes and making bins dvisible by 5
-    binWidth = 5
-    binMin = ((int(min(df['Net Time']))//60)//binWidth)*binWidth
-    binMax = (((int(max(df['Net Time']))//60)+binWidth)//binWidth)*binWidth
-    bins=np.arange(binMin,binMax, binWidth)
+    if net_times_in_minutes.empty:
+        logger.warning("No valid 'Net Time' data for histogram.")
+        ax.text(0.5, 0.5, "No valid Net Time data to display.", ha='center', va='center', transform=ax.transAxes)
+        ax.set_xlabel('Time (Minutes)')
+        ax.set_ylabel('Num. Participants')
+        ax.set_title(runtimeVars['eventDataList'][1] + ' Time Distribution - No Data')
+        plt.savefig(filepath, bbox_inches='tight', pad_inches=0.3)
+        plt.close(fig)
+        return True
 
-    #BinAllWidth
-    binAllWidth = 20
-    binAllMin = ((int(min(df['Net Time']))//60)//binWidth)*binWidth
-    binAllMax = (((int(max(df['Net Time']))//60)+binWidth)//binWidth)*binWidth
-    binsAll=np.arange(binAllMin,binAllMax, binAllWidth)
+    min_time_min = np.floor(net_times_in_minutes.min()) 
+    max_time_min = np.ceil(net_times_in_minutes.max()) 
+    if min_time_min >= max_time_min: max_time_min = min_time_min + 1
+    bins = np.arange(min_time_min, max_time_min + 1, 1)
+    if len(bins) < 2: bins = np.array([min_time_min, min_time_min + 1])
 
-    catAll = list((df['Net Time'])/60.0)
+    # --- Category Handling & Plotting ---
+    legend_handles = []
+    legend_labels = []
 
-    #if category column exist.
-    if 'Category' in df.columns:
+    if 'Category' in df.columns and df['Category'].nunique() > 1 and runtimeVars.get('requires_category_data', True): # Check config if this plot should be by cat
+        unique_cats = sorted(df['Category'].dropna().unique())
+        # Prioritize specific category order if defined, else use unique_cats
+        category_order = runtimeVars.get('CategoryOrderHint', unique_cats) # Add CategoryOrderHint to runtimeVars if specific order needed
+        
+        # Ensure category_order only contains categories present in the data for this event
+        category_order = [cat for cat in category_order if cat in unique_cats]
+        if not category_order : category_order = unique_cats # Fallback if hint was bad
 
-        #if 2024 style
-        if (runtimeVars['eventDataList'][2]=="2024"):
+        try:
+            import seaborn as sns
+            colors = sns.color_palette("tab10", n_colors=len(category_order))
+        except ImportError:
+            colors = plt.cm.get_cmap('viridis', len(category_order)).colors if len(category_order) > 0 else ['blue']
 
-            #need to setup for singles or teams
-            #if single matches exist
-            if (Category_order_single[0] in df['Category'].values):
-                Category_order = Category_order_single
-                colors = colors_single
-                num_cat        = 7
-            else:
-                Category_order = category_order_team
-                colors = colors_team
-                num_cat        = 3            
+        data_to_plot_stacked = []
+        actual_labels_for_stack = []
+        actual_colors_for_stack = []
 
-        #create list per category
-        cat0 = list((df[df['Category'] == Category_order[0]]['Net Time'])/60.0)
-        cat1 = list((df[df['Category'] == Category_order[1]]['Net Time'])/60.0)
-        cat2 = list((df[df['Category'] == Category_order[2]]['Net Time'])/60.0)
-
-        if (num_cat == 7):
-            cat3 = list((df[df['Category'] == Category_order[3]]['Net Time'])/60.0)
-            cat4 = list((df[df['Category'] == Category_order[4]]['Net Time'])/60.0)
-            cat5 = list((df[df['Category'] == Category_order[5]]['Net Time'])/60.0)
-            cat6 = list((df[df['Category'] == Category_order[6]]['Net Time'])/60.0)
-
-        #if cat0 not empty means there are categories.
-        if cat0 != []:
-
-            if (num_cat == 3):
-                plt.hist([cat0,cat1,cat2], color=colors, label=Category_order, bins=bins)
-                plt.legend()
-            else:
-                plt.hist([cat0,cat1,cat2,cat3,cat4,cat5,cat6], color=colors, label=Category_order, bins=bins)
-                plt.legend()
-                #sns.histplot(data=df, x='Net Time', hue='Category',  multiple="dodge", shrink=.8, palette=colors, hue_order=Category_order, legend=True)
+        for i, cat_name in enumerate(category_order):
+            category_times_in_minutes = pd.to_numeric(df[df['Category'] == cat_name]['Net Time'], errors='coerce').dropna() / 60.0
+            if not category_times_in_minutes.empty:
+                data_to_plot_stacked.append(category_times_in_minutes)
+                actual_labels_for_stack.append(cat_name)
+                actual_colors_for_stack.append(colors[i % len(colors)])
+        
+        if data_to_plot_stacked:
+            ax.hist(data_to_plot_stacked, bins=bins, stacked=True, label=actual_labels_for_stack, color=actual_colors_for_stack, edgecolor='white')
+            # For legend, get handles from hist or create custom ones
+            # plt.hist returns n, bins, patches. patches is a list of lists for stacked.
+            # For simplicity with stacked, let legend be created from labels passed to hist.
+            # legend_handles, legend_labels = ax.get_legend_handles_labels() # This might get complex with stacked
+            # Create custom handles for stacked legend
+            for i, label in enumerate(actual_labels_for_stack):
+                legend_handles.append(mlines.Line2D([], [], color=actual_colors_for_stack[i], marker='s', linestyle='None', markersize=10))
+                legend_labels.append(label)
         else:
-            plt.hist(catAll,bins=binAllWidth)
+            if not net_times_in_minutes.empty:
+                ax.hist(net_times_in_minutes, bins=bins, color='skyblue', edgecolor='black')
+    else: 
+        if not net_times_in_minutes.empty:
+            ax.hist(net_times_in_minutes, bins=bins, color='skyblue', edgecolor='black', label='All Participants')
+            # legend_handles, legend_labels = ax.get_legend_handles_labels() # For single series
 
-    else:
-        plt.hist(catAll,bins=binAllWidth)
+    # --- Competitor Indication (if competitorIndex is valid) ---
+    if competitorIndex != -1 and competitorIndex in df.index:
+        competitor_net_time_seconds = pd.to_numeric(df.loc[competitorIndex, 'Net Time'], errors='coerce')
+        if not pd.isna(competitor_net_time_seconds):
+            competitor_net_time_minutes = competitor_net_time_seconds / 60.0
+            competitor_name = df.loc[competitorIndex, 'Name'] if 'Name' in df.columns else "Competitor"
+            
+            # Add a vertical line for the competitor's time
+            line_color = 'red' # Choose a distinct color
+            ax.axvline(competitor_net_time_minutes, color=line_color, linestyle='--', linewidth=2, ymax=0.95, zorder=10)
+            
+            # Create a custom legend handle for the competitor
+            comp_handle = mlines.Line2D([], [], color=line_color, linestyle='--', linewidth=2, 
+                                        label=f"{competitor_name}'s Time ({rl_data.format_time_mm_ss(competitor_net_time_seconds)})")
+            legend_handles.append(comp_handle)
+            legend_labels.append(comp_handle.get_label()) # Get label from handle
+            
+            # Optional: Add text annotation near the line (can get crowded)
+            # y_pos_for_text = ax.get_ylim()[1] * 0.9 # Position text near the top
+            # ax.text(competitor_net_time_minutes + 0.2, y_pos_for_text, 
+            #         f"{competitor_name}\n{rl_data.format_time_mm_ss(competitor_net_time_seconds)}",
+            #         color=line_color, fontsize=8, ha='left', va='top')
+        else:
+            logger.warning(f"Competitor {competitorIndex} Net Time is invalid.")
 
-    plt.xticks(bins)
-    plt.xlabel('Time (Minutes)')
-    plt.ylabel('Num. Participants')
-    plt.title(runtimeVars['eventDataList'][1] + ' Time Distrbution')
-    plt.grid(color ='grey', linestyle ='-.', linewidth = 0.5, alpha = 0.4)
 
-    # Output/Show depending of global variable setting.
-    plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.5)
-    plt.close()
+    # --- Final Plot Styling ---
+    tick_step = 5 if (max_time_min - min_time_min) > 30 else 2 if (max_time_min - min_time_min) > 10 else 1
+    ax.set_xticks(np.arange(min_time_min, max_time_min + 1, tick_step))
+    ax.tick_params(axis='x', labelsize=8)
+    ax.tick_params(axis='y', labelsize=8)
+
+    ax.set_xlabel('Finish Time (Minutes)', fontsize=10)
+    ax.set_ylabel('Number of Participants', fontsize=10)
+    event_display_name = runtimeVars['eventDataList'][1]
+    
+    title_str = f'{event_display_name}\nOverall Time Distribution'
+    if competitorIndex != -1 and 'competitor_name' in locals() and competitor_name:
+        title_str += f"\n(Competitor: {competitor_name})"
+    ax.set_title(title_str, fontsize=14, pad=15)
+    
+    ax.grid(True, axis='y', linestyle=':', color='grey', alpha=0.7)
+
+    if legend_handles: # Only show legend if there's something to label
+        ax.legend(handles=legend_handles, labels=legend_labels, title="Legend", fontsize=8, title_fontsize=9, loc='upper right')
+
+    plt.tight_layout()
+
+    try:
+        plt.savefig(filepath, bbox_inches='tight', pad_inches=0.2)
+        logger.info(f"Saved histogram to {filepath}")
+    except Exception as e:
+        logger.error(f"Error saving histogram {filepath}: {e}")
+    finally:
+        plt.close() 
 
     return True
 
@@ -1006,7 +1046,7 @@ def CreateViolinChartEvent(df, filepath, runtimeVars, competitorIndex=-1 ):
         competitor_title_name = df.loc[competitorIndex, 'Name'] if 'Name' in df.columns else "Selected Competitor"
         plt.title(f"{runtimeVars['eventDataList'][1]} - {competitor_title_name}\nStation Time vs. Distribution", fontsize=14)
     
-    plt.tight_layout(pad=1.0)
+    #plt.tight_layout(pad=1.0)
 
     plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.3)
     plt.close()
@@ -1361,7 +1401,7 @@ def CreateGroupBarChart(df, filepath, runtimeVars, competitorIndex=-1 ):
     autolabel(rects1)
     autolabel(rects2)
 
-    fig.tight_layout() # Adjust layout to make room for labels
+    #fig.tight_layout() # Adjust layout to make room for labels
 
     # Set Y-axis limit slightly above the max plotted value
     all_plotted_times = [t for t in competitor_event_times + plotable_similar_times if not np.isnan(t)]
@@ -1477,7 +1517,7 @@ def CreateCumulativeTimeComparison(df, filepath, runtimeVars, competitorIndex=-1
     # Create legend with just the line plots
     ax.legend(handles=[line1, line2], loc='upper left', fontsize=9)
 
-    fig.tight_layout(pad=1.0) # Add some padding
+    #fig.tight_layout(pad=1.0) # Add some padding
 
     # Determine y-axis limits after plotting everything to ensure labels fit
     all_cumulative_data = np.concatenate([competitor_cumulative_times, similar_finishers_cumulative_avg])
@@ -1582,7 +1622,7 @@ def CreateStationTimeDifferenceChart(df, filepath, runtimeVars, competitorIndex=
         ax.set_ylim(-50, 50) # Default if no data
 
     ax.grid(True, axis='y', linestyle=':', alpha=0.7)
-    fig.tight_layout()
+    #fig.tight_layout()
 
     plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.3)
     plt.close()
@@ -1681,7 +1721,7 @@ def CreateCatBarCharts(df, filepath, runtimeVars, competitorIndex=-1 ):
     ax.set_ylim(0, max_avg_time_plotted * 1.15 if max_avg_time_plotted > 0 else 100) # Add 15% padding
 
     ax.grid(True, axis='y', linestyle=':', alpha=0.7)
-    fig.tight_layout()
+    #fig.tight_layout()
 
     plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.3)
     plt.close()
@@ -2981,7 +3021,8 @@ def redline_vis_generate_generic_init():
         #'pie_comp'                      : False, 
         #'bar_stacked_dist_comp'         : False, 
         #'violin_comp'                   : False, 
-        #'radar_percentile_comp'         : False, 
+        #'radar_percentile_comp'         : False,
+        #'histogram_nettime_comp'        : False, 
         #'bar_sim_comp'                  : False, 
         #'cumul_sim_comp'                : False, 
         #'diff_sim_comp'                 : False, 
@@ -3056,7 +3097,8 @@ def redline_vis_generate_competitor_init():
         'bar_stacked_dist_comp'         : True, 
         'pie_comp'                      : True, 
         'violin_comp'                   : True, 
-        'radar_percentile_comp'         : True, 
+        'radar_percentile_comp'         : True,
+        'histogram_nettime_comp'        : True,
         'bar_sim_comp'                  : True, 
         'cumul_sim_comp'                : True, 
         'diff_sim_comp'                 : True, 
