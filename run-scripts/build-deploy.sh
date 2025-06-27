@@ -1,7 +1,7 @@
 #!/bin/bash
 # Deploy the application to a production server 
 
-export NAME_VERSION=blog_v4.07
+export NAME_VERSION=blog_v4.09
 export PROJECT_ID=redline-fitness-results
 export IMAGE=gcr.io/$PROJECT_ID/app.py:$NAME_VERSION
 

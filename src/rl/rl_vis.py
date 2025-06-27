@@ -758,6 +758,10 @@ def CreateHistAgeCat(df, filepath, runtimeVars, competitorIndex=-1 ):
             competitor_net_time_minutes = competitor_net_time_seconds / 60.0
             competitor_name = df.loc[competitorIndex, 'Name'] if 'Name' in df.columns else "Competitor"
             
+            #calculate finishing percentage 
+            # competitor position / max value in the 'Pos' column
+            position_percent = ((100.0 * df.loc[competitorIndex, 'Pos']) / len(df.dropna(subset=['Net Time']).index)) 
+                        
             # Add a vertical line for the competitor's time
             line_color = 'red' # Choose a distinct color
             ax.axvline(competitor_net_time_minutes, color=line_color, linestyle='--', linewidth=2, ymax=0.95, zorder=10)
@@ -769,10 +773,10 @@ def CreateHistAgeCat(df, filepath, runtimeVars, competitorIndex=-1 ):
             legend_labels.append(comp_handle.get_label()) # Get label from handle
             
             # Optional: Add text annotation near the line (can get crowded)
-            # y_pos_for_text = ax.get_ylim()[1] * 0.9 # Position text near the top
-            # ax.text(competitor_net_time_minutes + 0.2, y_pos_for_text, 
-            #         f"{competitor_name}\n{rl_data.format_time_mm_ss(competitor_net_time_seconds)}",
-            #         color=line_color, fontsize=8, ha='left', va='top')
+            y_pos_for_text = ax.get_ylim()[1] * 0.95 # Position text near the top
+            ax.text(competitor_net_time_minutes + 0.2, y_pos_for_text, 
+                     f"Top {position_percent:2.1f}%",
+                     color='black', fontsize=8, ha='left', va='top')
         else:
             logger.warning(f"Competitor {competitorIndex} Net Time is invalid.")
 
@@ -808,6 +812,240 @@ def CreateHistAgeCat(df, filepath, runtimeVars, competitorIndex=-1 ):
         plt.close() 
 
     return True
+
+#############################
+# Create Station Histograms 1 - 6 wrapper
+#############################
+
+def CreateStationHistogramsPart1(df, filepath, runtimeVars, competitorIndex=-1):
+    logger = rl_data.get_logger()
+    
+    if os.path.isfile(filepath):
+        logger.debug(f"File {filepath} already exists. Skipping.")
+        print(f"File {filepath} already exists. Skipping.")
+        return False
+        
+    return CreateStationHistograms(df, filepath=filepath, runtimeVars=runtimeVars, competitorIndex=competitorIndex, part_to_generate=1)
+
+#############################
+# Create Station Histograms 7 - 12 wrapper
+#############################
+
+def CreateStationHistogramsPart2(df, filepath, runtimeVars, competitorIndex=-1):
+    logger = rl_data.get_logger()
+    
+    if os.path.isfile(filepath):
+        logger.debug(f"File {filepath} already exists. Skipping.")
+        print(f"File {filepath} already exists. Skipping.")
+        return False
+        
+    return CreateStationHistograms(df, filepath=filepath, runtimeVars=runtimeVars, competitorIndex=competitorIndex, part_to_generate=2)
+
+#############################
+# Create Station Histograms 1 - 12
+#############################
+
+def CreateStationHistograms(df, filepath, runtimeVars, competitorIndex=-1, part_to_generate=None):
+    """
+    Generates PNGs for station histograms, split into parts.
+    Each part will be a 1-column, 6-row grid of subplots.
+    All subplots within a part share a common x-axis time scale if global_x_scale is True.
+
+    Args:
+        df (pd.DataFrame): The main DataFrame.
+        filepath (str or Path): Filepath for png
+        runtimeVars (dict): Runtime variables.
+        competitorIndex (int): Index of the competitor, or -1.
+        part_to_generate (int, optional): 1 or 2. If None, generates both. 
+                                          Used by async calls to generate one part at a time.
+    """
+    logger = rl_data.get_logger()
+    config = session.get('ouptut_config', {})
+
+    station_names_all = runtimeVars.get('StationList', [])
+    if not station_names_all or len(station_names_all) != 12:
+        logger.error(f"StationList must contain exactly 12 stations. Found: {len(station_names_all)}")
+        return False
+
+    # --- Determine Global X-axis Range (in seconds) across ALL 12 stations ---
+    # This calculation should ideally happen once if generating parts separately via async.
+    # For now, it's calculated here. If called for individual parts, it should ideally get
+    # these global_min/max values passed in or from a cached/pre-calculated source.
+    all_filtered_times_for_global_scale = []
+    for station_name_iter in station_names_all: # Iterate over all 12 for global scale
+        if station_name_iter in df.columns:
+            station_times_iter = pd.to_numeric(df[station_name_iter], errors='coerce').dropna()
+            if not station_times_iter.empty:
+                cutoff_95th = station_times_iter.quantile(0.95)
+                if pd.notna(cutoff_95th):
+                    all_filtered_times_for_global_scale.extend(station_times_iter[station_times_iter <= cutoff_95th].tolist())
+
+    if not all_filtered_times_for_global_scale:
+        global_min_time_sec, global_max_time_sec = 0, 600 # Default
+    else:
+        global_min_time_sec = np.floor(min(all_filtered_times_for_global_scale) / 10) * 10
+        global_max_time_sec = np.ceil(max(all_filtered_times_for_global_scale) / 10) * 10
+    if global_min_time_sec >= global_max_time_sec: global_max_time_sec = global_min_time_sec + 60
+        
+    #global_min_time_sec = 0
+    #global_max_time_sec = 10*60
+    
+    num_global_bins = 60
+    global_bin_width = max(5, np.ceil(((global_max_time_sec - global_min_time_sec) / num_global_bins) / 5) * 5)
+    if global_bin_width == 0: global_bin_width = 5
+    common_bins = np.arange(global_min_time_sec, global_max_time_sec + global_bin_width, global_bin_width)
+    if len(common_bins) < 2: common_bins = np.array([global_min_time_sec, global_max_time_sec])
+    # --- End of Global X-axis Scale Calculation ---
+
+    parts_to_process = []
+    if part_to_generate == 1:
+        parts_to_process = [{'stations': station_names_all[0:6], 'part_num': 1, 'title_part': "Stations 1-6"}]
+    elif part_to_generate == 2:
+        parts_to_process = [{'stations': station_names_all[6:12], 'part_num': 2, 'title_part': "Stations 7-12"}]
+    elif part_to_generate is None: # Generate both parts (e.g., for synchronous call)
+        parts_to_process = [
+            {'stations': station_names_all[0:6], 'part_num': 1, 'title_part': "Stations 1-6"},
+            {'stations': station_names_all[6:12], 'part_num': 2, 'title_part': "Stations 7-12"}
+        ]
+    else:
+        logger.error(f"Invalid part_to_generate value: {part_to_generate}")
+        return False
+        
+    overall_success = True
+
+    for part_info in parts_to_process:
+        current_stations = part_info['stations']
+        part_num = part_info['part_num']
+        
+        if (part_to_generate is None):
+            base_filepath_obj = Path(filepath)
+            current_filepath = base_filepath_obj.with_name(base_filepath_obj.stem + f"_Part{part_num}").with_suffix(".png")
+
+            if os.path.isfile(current_filepath) and not config.get('forcePng', False):
+                logger.debug(f"File {current_filepath} already exists. Skipping.")
+                continue
+        else:
+            current_filepath = Path(filepath)
+
+        # Create a 6x1 grid of subplots (6 rows, 1 column)
+        nrows_subplot, ncols_subplot = 6, 1
+        # Adjust figsize: taller and wide enough for one column of wide plots
+        # Width can be around 12 inches. Height needs to accommodate 6 plots + titles/labels.
+        # Approx 2.5-3 inches per subplot height.
+        fig_height_per_subplot = 2.75 
+        fig, axes = plt.subplots(nrows_subplot, ncols_subplot, figsize=(12, fig_height_per_subplot * nrows_subplot)) 
+        if nrows_subplot * ncols_subplot == 1: # if for some reason only 1 plot
+            axes = [axes] 
+        else:
+            axes = axes.flatten()
+
+        event_display_name = runtimeVars.get('eventDataList', [None, "Event Unknown"])[1]
+        main_title_text = f"{event_display_name} - {part_info['title_part']}\nTime Distributions (Fastest 99%, Common X-Axis)"
+        if competitorIndex != -1 and 'Name' in df.columns and competitorIndex in df.index:
+            competitor_name = df.loc[competitorIndex, 'Name']
+            main_title_text += f"\nCompetitor: {competitor_name}"
+        fig.suptitle(main_title_text, fontsize=14, y=0.99) # Adjust y if needed due to taller figure
+
+        for i, station_name in enumerate(current_stations):
+            if i >= len(axes): break 
+            ax = axes[i]
+
+            # ... (Data checking and filtering for station_times_for_hist as before) ...
+            if station_name not in df.columns:
+                ax.text(0.5,0.5, "Data N/A", ha='center', va='center'); ax.set_title(station_name, fontsize=10); ax.set_xticks([]); ax.set_yticks([])
+                continue
+            station_times_all = pd.to_numeric(df[station_name], errors='coerce').dropna()
+            if station_times_all.empty:
+                ax.text(0.5,0.5, "No Data", ha='center', va='center'); ax.set_title(station_name, fontsize=10); ax.set_xticks([]); ax.set_yticks([])
+                continue
+            cutoff_99th_station = station_times_all.quantile(0.99)
+            station_times_for_hist = station_times_all[station_times_all <= cutoff_99th_station] if pd.notna(cutoff_99th_station) else station_times_all
+            if station_times_for_hist.empty: station_times_for_hist = station_times_all
+
+
+            ax.hist(station_times_for_hist, bins=common_bins, color='lightblue', edgecolor='black', alpha=0.75 ) #,  density=True)  density=True can be good for comparison
+            ax.set_title(station_name, fontsize=10, pad=5)
+            
+            ax.set_xlim(global_min_time_sec, global_max_time_sec)
+
+            # Fewer Y ticks for taller, narrower plots
+            ax.yaxis.set_major_locator(plt.MaxNLocator(nbins=3, prune='both')) 
+            ax.tick_params(axis='y', labelsize=7)
+            if i == len(current_stations) -1 : # X-axis label only for the last subplot in the column
+                 ax.set_xlabel('Time (s)', fontsize=9)
+                 # X-ticks for the last subplot (can be more detailed)
+                 num_desired_xticks_subplot = 10 # More ticks as it's wider
+                 xtick_locs_subplot = plt.MaxNLocator(nbins=num_desired_xticks_subplot, prune='both', integer=True).tick_values(global_min_time_sec, global_max_time_sec)
+                 ax.set_xticks(xtick_locs_subplot)
+                 ax.set_xticklabels([f"{int(xt)}" for xt in xtick_locs_subplot], rotation=0, ha="center") # No rotation needed if enough space
+                 ax.tick_params(axis='x', labelsize=8)
+            else:
+                 ax.set_xticks([]) # No x-ticks for upper plots in the column to save space
+
+
+            # Y-axis label - can be set for the figure or for one of the middle plots
+            if i == (nrows_subplot // 2) : # Put Y label on a middle plot
+                ax.set_ylabel('Finishers', fontsize=9) # Changed label from 'Frequency' if density=True
+                #ax.set_ylabel('Density / Frequency', fontsize=9) # Changed label from 'Frequency' if density=True
+
+            ax.grid(True, axis='y', linestyle=':', alpha=0.5)
+
+            if competitorIndex != -1 and competitorIndex in df.index:
+                # ... (Competitor indication logic - mostly same as before) ...
+                # ... ensure text annotation positions adapt to the new taller/wider subplot ...
+                competitor_station_time = pd.to_numeric(df.loc[competitorIndex, station_name], errors='coerce')
+                station_rank_col = f"{station_name} Rank"
+                if not pd.isna(competitor_station_time) and station_rank_col in df.columns:
+                    if global_min_time_sec <= competitor_station_time <= global_max_time_sec:
+                        competitor_rank = pd.to_numeric(df.loc[competitorIndex, station_rank_col], errors='coerce')
+                        if not pd.isna(competitor_rank):
+                            total_rfs = df[station_rank_col].dropna().count()
+                            pos_perc = (competitor_rank / total_rfs) * 100 if total_rfs > 0 else 0
+                            
+                            line_color = 'red' # Changed for better contrast
+                            ax.axvline(competitor_station_time, color=line_color, linestyle='--', linewidth=2.0, ymax=0.92, zorder=10)
+                            
+                            # Add Competitor's Time (mm:ss) in top-right of subplot
+                            competitor_time_str = f"Station time:{rl_data.format_time_mm_ss(competitor_station_time)}" # Use your project's formatter
+                            ax.text(0.98, 0.97, competitor_time_str, 
+                                    transform=ax.transAxes, # Position relative to subplot axes
+                                    horizontalalignment='right', 
+                                    verticalalignment='top',
+                                    fontsize=10, 
+                                    color='black', # Match line color
+                                    bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.7, ec='none'))
+                            
+                            text_y_pos = ax.get_ylim()[1] * 0.85 # Adjust y for text based on new plot height
+                            current_xlim = ax.get_xlim()
+                            text_x_pos_offset = (current_xlim[1] - current_xlim[0]) * 0.03 # Smaller % offset for wider plot
+
+                            if competitor_station_time < (current_xlim[0] + (current_xlim[1]-current_xlim[0])/2): 
+                                text_ha = 'left'; anno_x_pos = competitor_station_time + text_x_pos_offset
+                            else: 
+                                text_ha = 'right'; anno_x_pos = competitor_station_time - text_x_pos_offset
+                            
+                            anno_x_pos = max(current_xlim[0] + text_x_pos_offset*0.1, min(current_xlim[1] - text_x_pos_offset*0.1, anno_x_pos))
+
+                            ax.text(anno_x_pos, text_y_pos, f"Top {pos_perc:.0f}%",
+                                    color=line_color, fontsize=10, ha=text_ha, va='center', # Adjusted va
+                                    bbox=dict(boxstyle='round,pad=0.15', fc='white', alpha=0.75, ec='none'))
+        
+        # Remove unused axes if any (shouldn't happen if current_stations has 6 items)
+        for j_ax in range(len(current_stations), nrows_subplot * ncols_subplot):
+             if j_ax < len(axes): fig.delaxes(axes[j_ax])
+
+        plt.tight_layout(rect=[0, 0.02, 1, 0.95]) # Adjust rect for suptitle and potential x-label of last plot
+
+        try:
+            plt.savefig(current_filepath, bbox_inches='tight', pad_inches=0.15)
+            logger.info(f"Saved station histogram {part_info['title_part']} to {current_filepath}")
+        except Exception as e:
+            logger.error(f"Error saving station histogram {current_filepath}: {e}")
+            overall_success = False
+        finally:
+            plt.close(fig) 
+
+    return overall_success
 
 #############################
 # Show Bar chart Events
@@ -3001,7 +3239,7 @@ def redline_vis_generate_generic_init():
 
         #generic png
         'pie_generic'                   : True, 
-        'bar_stacked_dist_generic'      : True,  
+        'bar_stacked_dist_generic'      : True,
         'violin_generic'                : True,  
         'radar_median_generic'          : True,  
         'cutoff_bar_generic'            : True,  
@@ -3011,7 +3249,9 @@ def redline_vis_generate_generic_init():
         'heatmap_correlation_generic'   : True, 
         'scatter_generic_collection'    : True,
         'pacing_chart_png_generic'      : True,
-        
+        'station_hist_generic_part1'    : True,
+        'station_hist_generic_part2'    : True,
+                
         #generic non-png
         'duration_csv_generic'          : True, 
         'pacing_table_csv_generic'      : True, 
@@ -3027,7 +3267,9 @@ def redline_vis_generate_generic_init():
         #'cumul_sim_comp'                : False, 
         #'diff_sim_comp'                 : False, 
         #'scatter_comp_collection'       : False,
-
+        #'station_hist_comp_part1'       : False,
+        #'station_hist_comp_part2'       : False,
+        
         #Competitor-png
         #'html_info_comp'                : False,
         #'pdf_report_comp'               : False,
@@ -3086,6 +3328,9 @@ def redline_vis_generate_competitor_init():
         #'correlation_bar_generic'       : False,  
         #'heatmap_correlation_generic'   : False, 
         #'scatter_generic_collection'    : False,
+        #'station_hist_generic_part1'    : False,
+        #'station_hist_generic_part2'    : False,
+
         
         #generic non-png
         #'duration_csv_generic'          : False, 
@@ -3103,6 +3348,8 @@ def redline_vis_generate_competitor_init():
         'cumul_sim_comp'                : True, 
         'diff_sim_comp'                 : True, 
         'scatter_comp_collection'       : True,
+        'station_hist_comp_part1'       : True,
+        'station_hist_comp_part2'       : True,
 
         #Competitor-png
         'html_info_comp'                : True,
