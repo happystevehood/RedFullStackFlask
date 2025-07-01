@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, render_template, send_file, send_from
 from markupsafe import escape
 from functools import wraps
 from datetime import datetime
+import logging
 
 from google.cloud import storage
 import tempfile
@@ -14,6 +15,7 @@ import os, csv, math
 from dotenv import load_dotenv
 from pathlib import Path
 import uuid
+from io import BytesIO
 
 #for security purposes
 from flask_wtf.csrf import CSRFProtect, generate_csrf
@@ -26,6 +28,11 @@ from slugify import slugify
 from functools import wraps
 import shutil
 import json
+import re
+
+# --- Define the ANSI Escape Code Regular Expression ---
+# This regex matches the patterns for ANSI color codes.
+ANSI_ESCAPE_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
 # local inclusion.
 from rl.rl_search import find_competitor
@@ -36,6 +43,7 @@ from rl.rl_vis import redline_vis_generate_generic, redline_vis_generate_generic
     prepare_competitor_visualization_page, redline_vis_generate_competitor_init, \
     generate_single_output_file, \
     MakeFullPdfReport, prepare_visualization_data_for_template
+
 
 def create_app():
     """Create and configure the Flask application."""
@@ -58,10 +66,10 @@ def create_app():
     # Set up the logger
     """Initialize Flask app with improved logging"""
     # Set up the logger
-    logger = rl_data.setup_logger()
+    #logger = rl_data.setup_logger()
 
     # Replace Flask's logger with our improved logger
-    app.logger = logger
+    #app.logger = logger
 
     #To prevent abuse (e.g., bots spamming the search box), need to review if limits are appropriate
     limiter = Limiter(app=app,
@@ -1017,13 +1025,7 @@ def admin():
     if 'search_results' in session:  
         app.logger.warning(f"Warning: After Pop: 'search_results': {session['search_results']}")
 
-    # Get current log levels for display
-    log_levels = rl_data.get_log_levels()
-    
-    # Store in g for template access (not in session)
-    g.log_levels = log_levels
-
-    return render_template("admin.html", current_log_levels=log_levels)
+    return render_template("admin.html")
 
 
 @app.route('/admin', methods=["POST"])
@@ -1061,13 +1063,7 @@ def postadmin():
         app.logger.debug(f"Regenerate output")
         redline_vis_generate_generic()
 
-    level1 = rl_data.get_log_levels()
-    level2 = session.get('log_levels')
-
-    levels = rl_data.get_log_levels() or session.get('log_levels')
-    #app.logger.info(f"Log Levels: {levels} {level1} {level2}") 
-
-    return render_template("admin.html", current_log_levels=levels)
+    return render_template("admin.html")
 
 @app.route('/admin/feedback')
 @login_required
@@ -1194,64 +1190,135 @@ def clear_feedback():
 @app.route('/admin/logs/download')
 @login_required
 def download_logs():
-    app.logger.debug(f"/admin/logs/download received {request}")
+    app.logger.debug(f"/admin/logs/download received")
+    env_mode = os.environ.get('ENV_MODE', 'development')
 
-    return send_file(rl_data.LOG_FILE, as_attachment=True, download_name='activity.log')
+    if env_mode == 'deploy':
+        # --- GCS File Download ---
+        if not rl_data.storage or not rl_data.BLOG_BUCKET_NAME:
+            flash("GCS is not configured, cannot download log.", "danger")
+            return redirect(url_for('view_logs'))
+        try:
+            log_date = datetime.utcnow().strftime('%Y-%m-%d')
+            gcs_log_filename = f"logs/deploy/app_{log_date}.log"
+            storage_client = rl_data.storage.Client()
+            bucket = storage_client.bucket(rl_data.BLOG_BUCKET_NAME)
+            blob = bucket.blob(gcs_log_filename)
+            if not blob.exists():
+                flash(f"GCS log file '{gcs_log_filename}' not found.", "warning")
+                return redirect(url_for('view_logs'))
+            log_stream = BytesIO(blob.download_as_bytes())
+            return send_file(
+                log_stream, as_attachment=True,
+                download_name=f'activity_{log_date}.log',
+                mimetype='text/plain'
+            )
+        except Exception as e:
+            app.logger.error(f"Error downloading log from GCS: {e}", exc_info=True)
+            flash(f"Error downloading log from GCS: {e}", "danger")
+            return redirect(url_for('view_logs'))
+    else:
+        # --- Local File Download ---
+        if os.path.exists(rl_data.LOG_FILE):
+            return send_file(rl_data.LOG_FILE, as_attachment=True, download_name='activity_local.log')
+        else:
+            flash("Local log file not found.", "warning")
+            return redirect(url_for('view_logs'))
 
 @app.route('/admin/logs/clear', methods=['POST'])
 @login_required
-def clear_logs():
-    app.logger.debug(f"/admin/logs/clear POST received {request}")
-    
-    filename = f"{str(rl_data.LOG_FILE)}.lock"
-
-    try:
-        import portalocker
-        # Use portalocker with a file path, not a file object
-        with portalocker.Lock(filename,  timeout=10):
-            with open(rl_data.LOG_FILE, 'w') as f:
-                f.truncate()
-    except (portalocker.LockException, IOError, OSError) as e:
-            # If locking fails, try without locking
-            app.logger.info(f"Warning: Lock failed during log clear: {e}")
-            with open(rl_data.LOG_FILE, 'w') as f:
-                   f.truncate()
-            
-    app.logger.info(f"All logs have been cleared.")
-    return app.redirect(app.url_for('view_logs', _external=True, _scheme=request.scheme))
-
-@app.route('/admin/logs/rotate', methods=['POST']) 
-@login_required
-def rotate_logs_route():
-    app.logger.info(f"/admin/logs/rotate POST received")
-    
-    success = rl_data.rotate_logs()
-    if success:
-        flash("Log rotation initiated. New log file is now active. Old logs are archived.", "success")
-    else:
-        flash("No suitable rotating file handler found to perform rotation.", "warning")
-           
-    return redirect(url_for('view_logs')) # Or your admin page
-
+def clear_logs_route(): # Unified clear/rotate route
+    app.logger.info(f"/admin/logs/clear POST received")
+    message, category = rl_data.clear_or_rotate_logs() # Call the unified function
+    flash(message, category)
+    return redirect(url_for('view_logs'))
 
 @app.route('/admin/logs')
 @login_required
 def view_logs():
-    app.logger.debug(f"/admin/logs received {request}")
+    app.logger.debug(f"/admin/logs received. Checking for logs...")
     
     import re
-    ANSI_ESCAPE_RE = re.compile(r'\x1B[@-_][0-?]*[ -/]*[@-~]')
-    
-    try:
-        with open(rl_data.LOG_FILE, 'r') as f:
-            raw_log = f.read()
-            log_contents = ANSI_ESCAPE_RE.sub('', raw_log)  # Strip ANSI codes
-    except FileNotFoundError:
-        app.logger.info(f"Log file not found")
-        log_contents = 'Log file not found.'
-    
-    return render_template('admin_logs.html', log_contents=log_contents)
+    ANSI_ESCAPE_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+    log_files_content = {}
+    env_mode = os.environ.get('ENV_MODE', 'development')
 
+    try:
+        if env_mode == 'deploy':
+            # --- Read from GCS ---
+            if not rl_data.storage or not rl_data.BLOG_BUCKET_NAME:
+                log_files_content['error'] = "GCS is not configured on the server."
+                app.logger.warning("GCS logging not configured, cannot view logs.")
+            else:
+                app.logger.info(f"Attempting to read logs from GCS bucket: {rl_data.BLOG_BUCKET_NAME}")
+                storage_client = rl_data.storage.Client()
+                bucket = storage_client.bucket(rl_data.BLOG_BUCKET_NAME)
+                
+                # In your previous setup, logs were per-worker per-day.
+                # So we must list all blobs for today.
+                log_date = datetime.utcnow().strftime('%Y-%m-%d')
+                prefix_to_view = f"logs/deploy/app_{log_date}"
+                
+                blobs = list(bucket.list_blobs(prefix=prefix_to_view)) # Use list() to get all at once
+                app.logger.info(f"Found {len(blobs)} log blob(s) in GCS with prefix '{prefix_to_view}'.")
+
+                if not blobs:
+                    log_files_content['info'] = f"No log files found for today ({log_date}) in GCS bucket '{rl_data.BLOG_BUCKET_NAME}'."
+                else:
+                    for blob in blobs:
+                        app.logger.debug(f"Attempting to download blob: {blob.name}")
+                        # This download call requires 'storage.objects.get' permission.
+                        content = blob.download_as_text() 
+                        clean_content = ANSI_ESCAPE_RE.sub('', content)
+                        log_files_content[blob.name] = clean_content
+                        app.logger.info(f"Successfully read {len(content)} bytes from {blob.name}.")
+
+        else:
+            # --- Read from Local File ---
+            if os.path.exists(rl_data.LOG_FILE):
+                app.logger.info(f"Reading local log file: {rl_data.LOG_FILE}")
+                with open(rl_data.LOG_FILE, 'r', encoding='utf-8') as f:
+                    log_contents = f.read()
+                log_files_content[os.path.basename(rl_data.LOG_FILE)] = ANSI_ESCAPE_RE.sub('', log_contents)
+            else:
+                 log_files_content['error'] = f"Local log file not found at: {rl_data.LOG_FILE}"
+
+    except Exception as e:
+        # This will catch permissions errors from GCS and other issues
+        app.logger.error(f"An error occurred while viewing logs: {e}", exc_info=True)
+        log_files_content['error'] = f"An error occurred while trying to read logs: {e}"
+
+    
+    current_levels = rl_data.get_log_levels()
+    
+    return render_template('admin_logs.html', 
+                           log_files_content=log_files_content, 
+                           current_levels=current_levels,
+                           env_mode=env_mode)
+
+@app.route('/admin/logs/download/<path:gcs_blob_name>')
+@login_required
+def download_gcs_log(gcs_blob_name):
+    # This route is specifically for downloading a GCS log file
+    # You would generate links to this route in your admin_logs.html template
+    app.logger.debug(f"Request to download GCS log: {gcs_blob_name}")
+    try:
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(rl_data.BLOG_BUCKET_NAME)
+        blob = bucket.blob(gcs_blob_name)
+        if not blob.exists():
+            flash(f"Log file '{gcs_blob_name}' not found.", "danger")
+            return redirect(url_for('view_logs'))
+        
+        log_stream = BytesIO(blob.download_as_bytes())
+        return send_file(log_stream, as_attachment=True,
+                         download_name=os.path.basename(gcs_blob_name),
+                         mimetype='text/plain')
+    except Exception as e:
+        flash(f"Error downloading GCS log: {e}", "danger")
+        return redirect(url_for('view_logs'))
+    
+    
 @app.route('/admin/set-log-level', methods=['POST'])
 @login_required
 def set_log_level():

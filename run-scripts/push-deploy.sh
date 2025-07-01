@@ -1,9 +1,10 @@
 #!/bin/bash
 # Deploy docker image to the gcloud platform 
 
-export NAME_VERSION=blog_v4.09
+export NAME_VERSION=v4.11
 export PROJECT_ID=redline-fitness-results
 export IMAGE=gcr.io/$PROJECT_ID/app.py:$NAME_VERSION
+#export IMAGE=gcr.io/$PROJECT_ID/app_test.py:$NAME_VERSION
 
 #Change to the project root directory
 cd "$(dirname "$0")/.."

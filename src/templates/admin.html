@@ -52,32 +52,5 @@
     <hr class="my-4">
     {# --- END NEW --- #}
 
-    <form method="POST" action="/admin/set-log-level" class="form-inline my-2">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label class="mr-2">Global Log Level:</label>
-        <select name="global_log_level" class="form-control mr-2">
-            {% for level in ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] %}
-                <option value="{{ level }}" {% if current_log_levels.global == level %}selected{% endif %}>{{ level }}</option>
-            {% endfor %}
-        </select>
-        <label class="mr-2">File Handler:</label>
-        <select name="file_log_level" class="form-control mr-2">
-            {% for level in ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] %}
-                <option value="{{ level }}" {% if current_log_levels.file == level %}selected{% endif %}>{{ level }}</option>
-            {% endfor %}
-        </select>
-    
-        <label class="mr-2">Console Handler:</label>
-        <select name="console_log_level" class="form-control mr-2">
-            {% for level in ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] %}
-                <option value="{{ level }}" {% if current_log_levels.console == level %}selected{% endif %}>{{ level }}</option>
-            {% endfor %}
-        </select>
-
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-sm btn-primary">Update</button>
-    </form>
-
-
 </div>  
 {% endblock %}

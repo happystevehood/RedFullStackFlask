@@ -11,14 +11,9 @@ else
     PORT=${PORT:-8080}
 fi
 
-echo "Starting application in $ENV_MODE mode on port $PORT"
+# Change to the project root directory
+cd "$(dirname "$0")/src"
 
-# Run the application with Gunicorn
-cd /app/src
-exec gunicorn \
-    -w 6 \
-    --preload \
-    --timeout 90 \
-    -b "0.0.0.0:$PORT" \
-    --worker-class gthread \
-    app:app
+# Run Gunicorn using the Python config file.
+exec gunicorn --config "$(dirname "$0")/src/rl/rl_gunicorn.py" app:app
+#exec gunicorn --config src.rl.gunicorn_conf src.app:app

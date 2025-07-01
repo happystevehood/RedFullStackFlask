@@ -1,4 +1,4 @@
-import os
+import os, sys
 from pathlib import Path
 import logging
 import uuid
@@ -15,6 +15,7 @@ import io
 import glob # For listing files
 import math
 from datetime import datetime, timedelta, timezone
+import time
 from PIL import Image # Import Pillow
 from io import BytesIO
 import numpy as np
@@ -24,6 +25,8 @@ import numpy as np
 from google.auth import iam as google_auth_iam # Alias to avoid confusion with any 'iam' variable
 import google.auth
 import google.auth.transport.requests
+
+
 
 # file sturcture 'constants'
 # static - csv 	- input
@@ -43,7 +46,6 @@ PDF_GENERIC_DIR  = Path('static') / 'pdf' / 'generic'
 PNG_COMP_DIR     = Path('static') / 'png' / 'comp'
 PNG_GENERIC_DIR  = Path('static') / 'png' / 'generic' 
 PNG_HTML_DIR     = Path('static') / 'png' / 'html' 
-
 
 TEMPLATE_FOLDER = Path('templates')
 
@@ -160,82 +162,276 @@ WORKER_ID = str(uuid.uuid4())[:8]
 # Create a thread-local storage for request context information
 thread_local = threading.local()
 
-
-"""
-Improved logging implementation for Flask with multiple workers
-- Uses a central log configuration file
-- Adds worker ID for better tracking
-- Uses file locks to prevent race conditions
-- Supports graceful reloading
-"""
+# --- Custom Filter and Formatter ---
 class WorkerInfoFilter(logging.Filter):
-    """Filter that adds worker ID and request info to log records"""
+    """Filter that adds worker ID and request info to log records during requests."""
     def filter(self, record):
-         
-        # Add worker_id attribute to the record
-        if not hasattr(record, 'worker_id'):
-            record.worker_id = WORKER_ID
-                    
-        # Add request info if available
-        if not hasattr(record, 'request_id'):
-            if hasattr(thread_local, 'request_id'):
-                record.request_id = thread_local.request_id
-            else:
-                record.request_id = '-'
-
+        record.worker_id = WORKER_ID
+        record.request_id = getattr(thread_local, 'request_id', '-')
         return True
 
+class SafeFormatter(logging.Formatter):
+    """
+    A robust Formatter that handles missing keys in the log record gracefully
+    by providing default values and manually constructing the final log string.
+    This avoids KeyErrors during application startup with Flask/Werkzeug reloader.
+    """
+    def format(self, record):
+        # 1. Manually add standard attributes that might be missing on some records
+        record.asctime = self.formatTime(record, self.datefmt)
+        
+        # 2. Add our custom attributes with defaults if they don't exist
+        record.worker_id = getattr(record, 'worker_id', WORKER_ID)
+        record.request_id = getattr(record, 'request_id', '-')
+        
+        # 3. Handle the main message formatting
+        # This step is crucial and was part of the problem before.
+        # The record.message attribute is not created until format() is called.
+        record.message = record.getMessage()
+
+        # 4. Handle potential exception formatting
+        if self.usesTime():
+            record.asctime = self.formatTime(record, self.datefmt)
+        if record.exc_info:
+            if not record.exc_text:
+                record.exc_text = self.formatException(record.exc_info)
+        if record.stack_info:
+            if not record.stack_text:
+                record.stack_text = self.formatStack(record.stack_info)
+        
+        # 5. Get the format string and format it.
+        # Now, all keys in the format string (asctime, worker_id, etc.) are guaranteed
+        # to be attributes on the record object.
+        s = self.formatMessage(record)
+        
+        # Append exception text if it exists
+        if record.exc_text:
+            if s[-1:] != "\n":
+                s = s + "\n"
+            s = s + record.exc_text
+        if record.stack_info:
+            if s[-1:] != "\n":
+                s = s + "\n"
+            s = s + record.stack_text
+        return s
+
+# --- Custom Handlers ---
 class SafeRotatingFileHandler(RotatingFileHandler):
-    """Thread and process-safe RotatingFileHandler using cross-platform file locking"""
+    """
+    A RotatingFileHandler that is more robust for multi-process environments,
+    especially on Windows, by explicitly closing the stream before rotation.
+    """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if portalocker is None:
+            raise ImportError("portalocker library is required for SafeRotatingFileHandler.")
         self.lock_file = f"{kwargs.get('filename', args[0])}.lock"
     
-    def _open(self):
-        """Open the file with exclusive creation to avoid race conditions"""
-        return open(self.baseFilename, self.mode)
-    
     def doRollover(self):
-        """Use file locking to safely rotate logs across processes"""
+        """
+        Rotates logs safely. Explicitly closes the stream before renaming
+        to release the file handle, which is critical on Windows.
+        """
+        # Ensure we have the lock before touching any files
         lock_path = str(self.lock_file)
         try:
-            # Use portalocker with a file path, not a file object
             with portalocker.Lock(lock_path, 'w', timeout=10):
+                # --- This is the key change ---
+                if self.stream: # Check if stream is open
+                    self.stream.close()
+                    self.stream = None # Set to None so it will be reopened on next emit
+                
+                # Now that our own handle is closed, the parent's rollover has a better chance
                 super().doRollover()
-        except (portalocker.LockException, IOError, OSError) as e:
-            # If locking fails, try without locking
-            print(f"Warning: Lock failed during log rotation: {e}")
-            super().doRollover()
+                
+        except Exception as e:
+            # If locking or rollover fails, log the error but don't crash
+            print(f"Error during doRollover: {e}", file=sys.stderr)
+            # We don't call super().doRollover() again here as it would be redundant and likely fail again
     
     def emit(self, record):
-        import sys # Import here to avoid circular imports
-
-        """Thread and process-safe emit with file locking"""
-        # So replaced with the follwoing 2 if statements. ones.....
-
-        # Add worker_id attribute to the record
-        if not hasattr(record, 'worker_id'):
-            record.worker_id = WORKER_ID
-                    
-        # Add request info if available
-        if not hasattr(record, 'request_id'):
-            if hasattr(thread_local, 'request_id'):
-                record.request_id = thread_local.request_id
-            else:
-                record.request_id = '-'
+        """Thread and process-safe emit with file locking."""
         try:
-            # Use portalocker with a file path, not a file object
             lock_path = str(self.lock_file)
             with portalocker.Lock(lock_path, 'w', timeout=5):
+                # The standard handler's emit will call _open() if self.stream is None
                 super().emit(record)
-        except (portalocker.LockException, IOError, OSError) as e:
-            # If locking fails, still try to emit without lock
+        except Exception:
             try:
                 super().emit(record)
             except Exception as e2:
-                # Last resort - print to stderr
                 print(f"Error emitting log record: {e2}", file=sys.stderr)
 
+
+# --- GCS Logging Handler ---
+# In rl_data.py or your chosen logging utility file
+
+import logging
+import threading
+import time
+import sys
+from datetime import datetime
+
+try:
+    from google.cloud import storage
+except ImportError:
+    storage = None
+
+# This should be defined at the module level
+WORKER_ID = str(uuid.uuid4())[:8] # Assuming uuid is imported
+
+class GCSLoggingHandler(logging.Handler):
+    """
+    A Python logging handler that uploads log records to a unique file per worker
+    in Google Cloud Storage. It uses GCS's 'compose' API for efficient and
+    atomic appends, making it safe for multi-process environments like Gunicorn.
+    """
+    def __init__(self, bucket_name, gcs_log_path_template, buffer_capacity=100, upload_interval=30):
+        """
+        Initializes the GCS logging handler.
+
+        Args:
+            bucket_name (str): The name of the GCS bucket.
+            gcs_log_path_template (str): A template for the log file path, which should include
+                                       placeholders for {date} and {worker_id}.
+                                       Example: "logs/deploy/app_{date}_worker_{worker_id}.log"
+            buffer_capacity (int): Max number of log records to buffer before forcing an upload.
+            upload_interval (int): Max number of seconds to wait before forcing an upload.
+        """
+        super().__init__()
+        
+        # Initialize all instance attributes to a safe default state first.
+        self.storage_client = None
+        self.bucket = None
+        self._is_initialized = False # Flag to track if GCS connection was successful
+        self.buffer = []
+        self.lock = threading.RLock() # Thread-safe lock for buffer operations
+        self.uploader_thread = None
+        self.upload_interval = upload_interval
+        self.last_upload_time = time.time()
+        self.buffer_capacity = buffer_capacity
+        
+        if storage is None:
+            print("CRITICAL: google-cloud-storage library not imported. GCSLoggingHandler is disabled.", file=sys.stderr)
+            return
+
+        if not bucket_name:
+            print("CRITICAL: GCS bucket_name not provided. GCSLoggingHandler is disabled.", file=sys.stderr)
+            return
+
+        try:
+            # The log path is unique per worker and per day.
+            log_date = datetime.utcnow().strftime('%Y-%m-%d')
+            self.gcs_log_path = gcs_log_path_template.format(date=log_date, worker_id=WORKER_ID)
+
+            self.storage_client = storage.Client()
+            self.bucket = self.storage_client.bucket(bucket_name)
+            
+            # Start a background thread for periodic uploads if interval is positive
+            if self.upload_interval > 0:
+                self.uploader_thread = threading.Thread(target=self._periodic_uploader, daemon=True)
+                self.uploader_thread.start()
+            
+            self._is_initialized = True
+            # This print goes to stderr, which is visible in Cloud Run logs
+            print(f"GCSLoggingHandler initialized for worker {WORKER_ID}, writing to: gs://{bucket_name}/{self.gcs_log_path}", file=sys.stderr)
+
+        except Exception as e:
+            print(f"FATAL: Could not initialize GCSLoggingHandler. Error: {e}", file=sys.stderr)
+            # self.bucket remains None, and self._is_initialized remains False, effectively disabling the handler.
+
+    def emit(self, record):
+        """
+        Formats the record and adds it to the buffer. Triggers a flush if the
+        buffer exceeds capacity.
+        """
+        if not self._is_initialized:
+            return
+        
+        log_entry = self.format(record) + "\n"
+        
+        with self.lock:
+            self.buffer.append(log_entry)
+            should_flush = len(self.buffer) >= self.buffer_capacity
+        
+        if should_flush:
+            self.flush()
+
+    def flush(self):
+        """
+        Uploads buffered logs to GCS using the 'compose' method for atomic appends.
+        This method is thread-safe.
+        """
+        if not self._is_initialized or not self.buffer:
+            return
+        
+        with self.lock:
+            if not self.buffer:
+                return
+            # Join all buffered records into a single string and clear the buffer
+            records_to_upload_str = "".join(self.buffer)
+            self.buffer = []
+
+        # Perform GCS operations outside the lock to avoid holding it during network I/O
+        try:
+            # A unique name for the temporary object for this specific flush operation
+            temp_blob_name = f"{self.gcs_log_path}.{time.time_ns()}.tmp"
+            
+            main_blob = self.bucket.blob(self.gcs_log_path)
+            temp_blob = self.bucket.blob(temp_blob_name)
+
+            # 1. Upload the new content to a temporary blob.
+            temp_blob.upload_from_string(records_to_upload_str, content_type='text/plain')
+
+            # 2. Check if the main log file exists. Use reload() for strong consistency.
+            try:
+                main_blob.reload()
+                main_blob_exists = True
+            except Exception: # Catches google.api_core.exceptions.NotFound
+                main_blob_exists = False
+
+            if main_blob_exists:
+                # 3. Atomically compose the main file and the temporary file.
+                main_blob.compose([main_blob, temp_blob])
+                # Delete the temporary blob. It's good practice to wrap in another try/except.
+                try:
+                    temp_blob.delete()
+                except Exception as e_del:
+                    print(f"Warning: Failed to delete temporary log blob {temp_blob_name}: {e_del}", file=sys.stderr)
+            else:
+                # 4. If the main file doesn't exist, rename the temporary blob to become the main file.
+                self.bucket.rename_blob(temp_blob, new_name=self.gcs_log_path)
+            
+            self.last_upload_time = time.time()
+        except Exception as e:
+            print(f"CRITICAL ERROR during GCS flush: {e}", file=sys.stderr)
+            # Optional: Add records back to the buffer for a retry attempt.
+            # Be cautious as this can lead to memory issues if the GCS issue is persistent.
+            with self.lock:
+                self.buffer.insert(0, records_to_upload_str)
+
+    def _periodic_uploader(self):
+        """A background daemon thread that periodically flushes the log buffer."""
+        while True:
+            time.sleep(self.upload_interval)
+            # No need to check time here, just check if there's content in buffer
+            if self.buffer:
+                self.flush()
+
+    def close(self):
+        """
+        Ensures any remaining logs in the buffer are flushed before closing.
+        """
+        # Stop the uploader thread if it exists
+        if self.uploader_thread and self.uploader_thread.is_alive():
+            # In a real daemon, you would use an event to signal it to stop.
+            # For simplicity here, we just flush.
+            pass
+            
+        if self._is_initialized:
+            self.flush()
+        super().close()
+        
 def load_log_config():
     """Load logging configuration from file, or create with defaults if doesn't exist"""
     os.makedirs(LOG_FILE_DIR, exist_ok=True)
@@ -270,224 +466,298 @@ def save_log_config(config):
         with open(LOG_CONFIG_FILE, 'w') as f:
             json.dump(config, f)
 
-def get_logger(name=None):
-    """Get a properly configured logger instance"""
-    if name:
-        logger = logging.getLogger(name)
-    else:
-        logger = logging.getLogger()
+# --- Main Setup and Control Functions ---
+# 
+#def setup_logger():
+    """
+    Setup logging with proper configuration for multiple workers and different environments.
+    This function is designed to be idempotent (safe to call multiple times).
+    """
+    '''   logger = logging.getLogger()
     
-    # Ensure the logger has our filter
-    has_worker_filter = False
-    for filter in logger.filters:
-        if isinstance(filter, WorkerInfoFilter):
-            has_worker_filter = True
-            break
-    
-    if not has_worker_filter:
-        logger.addFilter(WorkerInfoFilter())
-    
-    return logger
+    # Check if this specific setup has already run to prevent re-adding handlers on Flask reloads
+    if getattr(logger, '_is_rl_configured', False):
+        logger.debug("Logger already configured by rl_data.setup_logger. Skipping.")
+        return logger
 
-def setup_logger():
-    """Setup logging with proper configuration for multiple workers"""
-    import sys  # Import here to avoid circular imports
-    
-    os.makedirs(LOG_FILE_DIR, exist_ok=True)
-    
-    # Get the root logger
-    logger = logging.getLogger()
-    
-    # Check if the logger is already configured properly
-    if logger.handlers:
-        for handler in logger.handlers:
-            # Check if our custom formatter is already there
-            if hasattr(handler, 'formatter') and hasattr(handler.formatter, '_fmt'):
-                if 'worker_id' in handler.formatter._fmt:
-                    # Logger already set up, just ensure the filter is there
-                    logger.addFilter(WorkerInfoFilter())
-                    logger.debug(f"Logger already configured with {len(logger.handlers)} handlers. Skipping setup.")
-                    return logger
-        
-        # No handler has our custom formatter, remove all handlers to reconfigure
+    # Clear any pre-existing handlers from other libraries (e.g., Werkzeug's default)
+    # This ensures we have full control over the logging format and destinations.
+    if logger.hasHandlers():
         for handler in logger.handlers[:]:
             logger.removeHandler(handler)
     
-    # Load configuration from file
-    config = load_log_config()
-    
-    # Set global level
+    # Load configuration from file (or use defaults)
+    config = load_log_config() # Assumes this function is defined and works
     global_level = getattr(logging, config['global'], DEFAULT_LOG_LEVEL)
     logger.setLevel(global_level)
     
-    # Create formatter with worker ID and request ID
-    formatter = logging.Formatter(
+    # Use our SafeFormatter to prevent KeyErrors during startup from Werkzeug
+    formatter = SafeFormatter(
         '[%(asctime)s] [W:%(worker_id)s] [R:%(request_id)s] [PID:%(process)d] '
         '%(levelname)s in %(module)s: %(message)s'
     )
-
-    # Add worker ID filter to all log records
+    
+    # Add the filter to the logger itself. This enriches records generated within the app context.
     logger.addFilter(WorkerInfoFilter())
     
-    # File handler with safe rotation
-    file_level = getattr(logging, config['file'], DEFAULT_LOG_FILE_LEVEL)
-    try:
-        # Create directory if it doesn't exist
-        os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
-        
-        file_handler = SafeRotatingFileHandler(
-            str(LOG_FILE),  # Convert to string for Windows compatibility
-            maxBytes=5_000_000, 
-            backupCount=3,
-            delay=True  # Don't open the file until first emit
-        )
-        file_handler.setLevel(file_level)
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
-    except Exception as e:
-        print(f"Error setting up file handler: {e}", file=sys.stderr)
-    
-    # Console handler
+    # --- Add Console Handler ---
     try:
         console_level = getattr(logging, config['console'], DEFAULT_LOG_CONSOLE_LEVEL)
-        console_handler = logging.StreamHandler()
+        # Explicitly use stdout to avoid issues with some WSGI servers redirecting stderr
+        console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(console_level)
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
     except Exception as e:
         print(f"Error setting up console handler: {e}", file=sys.stderr)
+        
+    # --- Add File Handler (GCS for deploy, local file for other envs) ---
+    file_level = getattr(logging, config['file'], DEFAULT_LOG_FILE_LEVEL)
+    env_mode = os.environ.get('ENV_MODE', 'development')
     
-     #too many output messaes DEBUG messates
+    if env_mode == 'deploy':
+         if storage and BLOG_BUCKET_NAME:
+            try:
+                # Template will be filled by the handler's __init__
+                gcs_log_path_template = "logs/deploy/app_{date}_worker_{worker_id}.log"
+                gcs_handler = GCSLoggingHandler(
+                    bucket_name=BLOG_BUCKET_NAME,
+                    gcs_log_path_template=gcs_log_path_template,
+                )
+                # ... (set formatter, level, and add handler) ...
+            except Exception as e:
+                print(f"CRITICAL: Failed to set up GCSLoggingHandler for deploy: {e}", file=sys.stderr)                   
+    else: 
+        # LOCAL / NON-DEPLOY MODE: Use local rotating file handler
+        if portalocker:
+            try:
+                # Add a debug print to stderr to confirm the path being used
+                print(f"DEBUG: Attempting to set up log file at: {LOG_FILE}", file=sys.stderr)
+                
+                os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+                
+                file_handler = SafeRotatingFileHandler(
+                    str(LOG_FILE), maxBytes=5_000_000, backupCount=3, delay=True
+                )
+                file_handler.setLevel(file_level)
+                file_handler.setFormatter(formatter)
+                logger.addHandler(file_handler)
+                
+                print(f"INFO: SafeRotatingFileHandler successfully added for local file '{LOG_FILE}'.", file=sys.stderr)
+
+            except Exception as e:
+                # Make the error message very visible in the console
+                print("\n" + "="*80, file=sys.stderr)
+                print("          FATAL ERROR: FAILED TO SETUP THE LOCAL LOG FILE HANDLER.", file=sys.stderr)
+                print(f"          Error was: {e}", file=sys.stderr)
+                print(f"          Check permissions and path for the log file: {LOG_FILE}", file=sys.stderr)
+                print("="*80 + "\n", file=sys.stderr)
+        else:
+            print("\n" + "="*80, file=sys.stderr)
+            print("          WARNING: portalocker library is not installed.", file=sys.stderr)
+            print("          Local file logging will be DISABLED and will NOT be process-safe.", file=sys.stderr)
+            print("          To enable, run: pip install portalocker", file=sys.stderr)
+            print("="*80 + "\n", file=sys.stderr)
+
+    # --- Silence Noisy Libraries ---
     logging.getLogger('matplotlib.font_manager').setLevel(logging.WARNING)
     logging.getLogger('google.auth').setLevel(logging.WARNING)
-    logging.getLogger('google_auth_httplib2').setLevel(logging.WARNING) # If using httplib2 transport
-    logging.getLogger('urllib3.connectionpool').setLevel(logging.WARNING)
-    logging.getLogger('urllib3.util').setLevel(logging.WARNING)
+    logging.getLogger('urllib3').setLevel(logging.WARNING)
+    # Set Werkzeug's own logger level. Use INFO to see requests, WARNING to hide them.
+    logging.getLogger('werkzeug').setLevel(logging.INFO)
 
-    logger.info(f"Logger initialized for worker {WORKER_ID}")
-    return logger
+    # Set a flag on the logger itself to indicate that our custom setup has completed.
+    logger._is_rl_configured = True
+    
+    # This first log message will go to all configured handlers (console and file/GCS)
+    logger.info(f"Logger successfully initialized for worker {WORKER_ID} in '{env_mode}' mode.")
+    
+    return logger 
+    '''
+
+def clear_or_rotate_logs():
+    """
+    Clears logs based on the current environment.
+    - 'deploy' mode: Deletes today's GCS log object and triggers its immediate recreation.
+    - Other modes: Rotates local files and deletes all old backups.
+    
+    Returns:
+        tuple: A (message, category) tuple for Flask's flash function.
+    """
+    logger = get_logger() # Assuming get_logger() is defined in the same module
+    env_mode = os.environ.get('ENV_MODE', 'development')
+    
+    if env_mode == 'deploy':
+        logger.info(f"Performing GCS log deletion for deploy mode.")
+        if not storage or not BLOG_BUCKET_NAME:
+            return "GCS logging not configured, cannot clear.", "warning"
+        try:
+            storage_client = storage.Client()
+            bucket = storage_client.bucket(BLOG_BUCKET_NAME)
+            # Find ALL log files for today to delete them
+            log_date = datetime.utcnow().strftime('%Y-%m-%d')
+            prefix_to_delete = f"logs/deploy/app_{log_date}_worker_"
+            blobs_to_delete = bucket.list_blobs(prefix=prefix_to_delete)
+            
+            deleted_count = 0
+            for blob in blobs_to_delete:
+                blob.delete()
+                deleted_count += 1
+                logger.info(f"Deleted GCS log object: {blob.name}")
+            
+            if deleted_count > 0:
+                return f"Deleted {deleted_count} GCS log file(s) for today.", "success"
+            else:
+                return "No GCS log files found for today to delete.", "info"
+        except Exception as e:
+            return f"Error deleting GCS logs: {e}", "danger"
+            
+    else:
+        # --- Local File Rotation and Cleanup Logic ---
+        logger.info("Performing local log rotation and cleanup.")
+        root_logger = logging.getLogger()
+        handler_actioned = False
+
+        for handler in root_logger.handlers:
+            if isinstance(handler, SafeRotatingFileHandler):
+                base_filename = handler.baseFilename
+                try:
+                    # doRollover renames current file (e.g., app.log -> app.log.1)
+                    # and makes the handler point to a new empty app.log
+                    handler.doRollover()
+                    handler_actioned = True
+                    logger.info(f"Log file {base_filename} rotated successfully.")
+                    
+                    # Optional: Aggressively delete ALL numbered backup files
+                    backup_file_pattern = f"{base_filename}.*" 
+                    backup_files_found = glob.glob(backup_file_pattern)
+                    
+                    if backup_files_found:
+                        logger.info(f"Deleting old log backups: {backup_files_found}")
+                        for f in backup_files_found:
+                            try:
+                                os.remove(f)
+                            except OSError as e:
+                                logger.error(f"Error deleting old log file {f}: {e}")
+                    
+                    return "Local logs rotated and all backups cleared.", "success"
+                except Exception as e:
+                    logger.error(f"Error during manual log rotation/cleanup: {e}", exc_info=True)
+                    return f"Error rotating logs: {e}", "danger"
+
+        if not handler_actioned:
+            handler_types = [type(h).__name__ for h in root_logger.handlers]
+            logger.warning(f"No suitable SafeRotatingFileHandler found for local rotation. Active handlers: {handler_types}")
+            return "No rotating file handler found to clear/rotate.", "warning"
+
+
+
+def get_logger(name=None):
+    """
+    Get a logger instance. Ensures setup_logger() has been called at least once
+    in the application's lifecycle.
+    """
+    # This function is mostly a convenience wrapper around logging.getLogger
+    # setup_logger should be called once when the application starts up.
+    # The filter logic can be simplified if setup_logger handles it definitively.
+    if name:
+        return logging.getLogger(name)
+    else:
+        return logging.getLogger() # Get the root logger
 
 def update_log_level(global_level=None, handler_levels=None):
-    """Update log levels and save to config file"""
+    """
+    Update log levels for active handlers and save the new configuration.
+    This function will affect the current worker process immediately and
+    save the config for future worker processes.
+    """
     logger = get_logger()
-    #logger.debug(f"update_log_level> {global_level}, {handler_levels}")
+    config = load_log_config() # Load current config to update it
     
-    # Load current config
-    config = load_log_config()
-    
-    # Update global level if specified
+    # Update global log level
     if global_level:
-        level = getattr(logging, global_level.upper(), None)
+        level = getattr(logging, str(global_level).upper(), None)
         if isinstance(level, int):
             logger.setLevel(level)
-            config['global'] = global_level.upper()
+            config['global'] = str(global_level).upper()
+            logger.info(f"Global log level set to {str(global_level).upper()}")
     
-    # Update handler levels if specified
-    if handler_levels:
+    # Update individual handler levels if a dictionary is provided
+    if handler_levels and isinstance(handler_levels, dict):
         for handler in logger.handlers:
-            if isinstance(handler, (SafeRotatingFileHandler, RotatingFileHandler)) and 'file' in handler_levels:
-                level = getattr(logging, handler_levels['file'].upper(), None)
+            # For the local file handler
+            if isinstance(handler, SafeRotatingFileHandler) and 'file' in handler_levels:
+                level_str = str(handler_levels['file']).upper()
+                level = getattr(logging, level_str, None)
                 if isinstance(level, int):
                     handler.setLevel(level)
-                    config['file'] = handler_levels['file'].upper()
+                    config['file'] = level_str # Update config for persistence
+                    logger.info(f"SafeRotatingFileHandler level set to {level_str}")
+
+            # For the GCS handler (also controlled by the 'file' setting from the form)
+            elif isinstance(handler, GCSLoggingHandler) and 'file' in handler_levels:
+                level_str = str(handler_levels['file']).upper()
+                level = getattr(logging, level_str, None)
+                if isinstance(level, int):
+                    handler.setLevel(level)
+                    # The config still uses the 'file' key for the cloud handler's level
+                    # This keeps the UI simple with one "File/Cloud Log Level" setting
+                    config['file'] = level_str 
+                    logger.info(f"GCSLoggingHandler level set to {level_str}")
+
+            # For the console handler
             elif isinstance(handler, logging.StreamHandler) and 'console' in handler_levels:
-                level = getattr(logging, handler_levels['console'].upper(), None)
+                level_str = str(handler_levels['console']).upper()
+                level = getattr(logging, level_str, None)
                 if isinstance(level, int):
                     handler.setLevel(level)
-                    config['console'] = handler_levels['console'].upper()
+                    config['console'] = level_str
+                    logger.info(f"Console StreamHandler level set to {level_str}")
     
-    # Save updated config
+    # Save the updated configuration for persistence
     save_log_config(config)
     
-    logger.debug("Log levels updated and saved to config file")
-    return get_log_levels()
+    logger.debug("Log levels updated and configuration file saved.")
+    return get_log_levels() # Return the new state
 
 def get_log_levels():
-    """Get current log levels from the active logger"""
+    """
+    Get current log levels from the active logger and its handlers.
+    Now includes a specific check for GCS handler level.
+    """
     logger = get_logger()
-    #logger.debug("get_log_levels>")
     
     levels = {
         'global': logging.getLevelName(logger.level),
-        'file': None,
-        'console': None
+        'file': None,      # For local SafeRotatingFileHandler
+        'gcs': None,       # For GCSLoggingHandler
+        'console': None    # For console StreamHandler
     }
     
+    found_file = False
+    found_gcs = False
+    found_console = False
+
     for handler in logger.handlers:
-        if isinstance(handler, (SafeRotatingFileHandler, RotatingFileHandler)):
+        if isinstance(handler, SafeRotatingFileHandler) and not found_file:
             levels['file'] = logging.getLevelName(handler.level)
-        elif isinstance(handler, logging.StreamHandler):
+            found_file = True
+        elif isinstance(handler, GCSLoggingHandler) and not found_gcs:
+            levels['gcs'] = logging.getLevelName(handler.level)
+            found_gcs = True
+        elif isinstance(handler, logging.StreamHandler) and not hasattr(handler, '_is_gcs_stream') and not found_console:
+            # Check for a property to distinguish it from potential internal stream handlers of other libs
             levels['console'] = logging.getLevelName(handler.level)
+            found_console = True
     
-    #logger.debug("get_log_levels<")
+    # For display purposes in the admin panel, we can consolidate 'file' and 'gcs'
+    # since they are controlled by the same config setting ('file').
+    # We can create a new key for the template to use.
+    levels['file_or_gcs'] = levels['gcs'] if levels['gcs'] is not None else levels['file']
+
     return levels
 
-def rotate_logs():
-    logger = get_logger()
-    
-    root_logger = logging.getLogger() # Get the root logger
-    
-    rotated_and_cleaned_handlers = []
-
-    for handler in root_logger.handlers:
-        # Ensure you're targeting your custom SafeRotatingFileHandler
-        if isinstance(handler, SafeRotatingFileHandler): # Replace with your actual class path
-            base_filename = handler.baseFilename # e.g., /path/to/your/app.log
-            try:
-                logger.info(f"Attempting to rotate log file: {base_filename}")
-                # doRollover renames current file (e.g., app.log -> app.log.1)
-                # and makes the handler point to a new empty app.log
-                handler.doRollover() 
-                logger.info(f"Log file {base_filename} rotated successfully.")
-                rotated_and_cleaned_handlers.append(base_filename)
-
-                # --- Now, delete old backup files for this handler ---
-                # Files will be like: app.log.1, app.log.2, etc.
-                # We want to delete these after rotation.
-                
-                # Construct search pattern for backup files, e.g., /path/to/your/app.log.*
-                # glob.glob is good for this.
-                backup_file_pattern = f"{base_filename}.*" 
-                backup_files = glob.glob(backup_file_pattern)
-                
-                # Sort files to potentially keep the most recent backup (e.g., app.log.1) if desired
-                # Sorting them numerically if they are numbered (e.g. app.log.1, app.log.2, app.log.10)
-                def sort_key(filename):
-                    parts = filename.split('.')
-                    try:
-                        return int(parts[-1]) if parts[-1].isdigit() else float('inf')
-                    except ValueError:
-                        return float('inf') # Should not happen if pattern is correct
-
-                backup_files.sort(key=sort_key)
-
-                # --- Deletion Strategy ---
-                # Option 1: Delete ALL backups (app.log.1, app.log.2, ...)
-                files_to_delete = backup_files
-                # Option 2: Keep the most recent backup (app.log.1) and delete older ones
-                # if len(backup_files) > handler.backupCount: # Or just > 1 to keep only app.log.1
-                #     files_to_delete = backup_files[1:] # Keep app.log.1 (the first in sorted list), delete rest
-                # else:
-                #     files_to_delete = [] # No older files to delete if fewer than backupCount
-
-                if files_to_delete:
-                    logger.info(f"Found old backup files to delete for {base_filename}: {files_to_delete}")
-                    for old_log_file in files_to_delete:
-                        try:
-                            os.remove(old_log_file)
-                            logger.info(f"Deleted old log file: {old_log_file}")
-                        except OSError as e:
-                            logger.error(f"Error deleting old log file {old_log_file}: {e}")
-                else:
-                    logger.info(f"No old backup files found or to delete for {base_filename} based on strategy.")
-
-            except AttributeError:
-                logger.warning(f"Handler {handler} does not have doRollover or baseFilename attribute.")
-            except Exception as e:
-                logger.error(f"Error during log rotation/cleanup for {getattr(handler, 'baseFilename', 'unknown handler')}: {e}", exc_info=True)
-    
-    return rotated_and_cleaned_handlers
-         
+        
 
 #############################
 # Non log based helper functions
