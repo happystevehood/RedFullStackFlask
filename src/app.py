@@ -360,6 +360,11 @@ def robots_txt():
     # Serves 'robots.txt' from your 'static_folder' (which is 'static/')
     return send_from_directory(rl_data.ROBOTS_DIR, 'robots.txt')
 
+@app.route('/favicon.ico')
+def favicon():
+    # Serves the favicon from the 'static/favicons/' directory
+    return send_from_directory(os.path.join(app.root_path, 'static', 'favicons'),
+                               'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 @app.route('/about')
 def about():
@@ -1256,14 +1261,16 @@ def view_logs():
                 
                 # In your previous setup, logs were per-worker per-day.
                 # So we must list all blobs for today.
-                log_date = datetime.utcnow().strftime('%Y-%m-%d')
-                prefix_to_view = f"logs/deploy/app_{log_date}"
+                #log_date = datetime.utcnow().strftime('%Y-%m-%d')
+                #prefix_to_view = f"logs/deploy/app_{log_date}"
+                prefix_to_view = f"logs/deploy/app_"
                 
-                blobs = list(bucket.list_blobs(prefix=prefix_to_view)) # Use list() to get all at once
+                # Use list() to get all at once, use reversed() to get newest first
+                blobs = list(reversed(list((bucket.list_blobs(prefix=prefix_to_view)))))
                 app.logger.info(f"Found {len(blobs)} log blob(s) in GCS with prefix '{prefix_to_view}'.")
 
                 if not blobs:
-                    log_files_content['info'] = f"No log files found for today ({log_date}) in GCS bucket '{rl_data.BLOG_BUCKET_NAME}'."
+                    log_files_content['info'] = f"No log files found with prefix '{prefix_to_view}' in GCS bucket '{rl_data.BLOG_BUCKET_NAME}'."
                 else:
                     for blob in blobs:
                         app.logger.debug(f"Attempting to download blob: {blob.name}")
@@ -1271,6 +1278,7 @@ def view_logs():
                         content = blob.download_as_text() 
                         clean_content = ANSI_ESCAPE_RE.sub('', content)
                         log_files_content[blob.name] = clean_content
+                        
                         app.logger.info(f"Successfully read {len(content)} bytes from {blob.name}.")
 
         else:

@@ -595,8 +595,10 @@ def clear_or_rotate_logs():
             storage_client = storage.Client()
             bucket = storage_client.bucket(BLOG_BUCKET_NAME)
             # Find ALL log files for today to delete them
-            log_date = datetime.utcnow().strftime('%Y-%m-%d')
-            prefix_to_delete = f"logs/deploy/app_{log_date}_worker_"
+            #log_date = datetime.utcnow().strftime('%Y-%m-%d')
+            #prefix_to_delete = f"logs/deploy/app_{log_date}_worker_"
+            prefix_to_delete = f"logs/deploy/app_"
+            
             blobs_to_delete = bucket.list_blobs(prefix=prefix_to_delete)
             
             deleted_count = 0

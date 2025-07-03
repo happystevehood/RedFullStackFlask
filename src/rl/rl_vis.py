@@ -2643,7 +2643,7 @@ def prepare_competitor_visualization_page(competitorDetails):
     competitorIndex = getCompetitorIndex(df=df)
     if competitorIndex == -1:
         logger.error(f"Competitor {runtimeVars['competitorName']} not found in {runtimeVars['eventDataList'][0]}.")
-        return render_template("error.html", message=f"competitor_not_found {runtimeVars['competitorName']}")
+        return render_template("error.html", message=f"Competitor {runtimeVars['competitorName']} completed data not found in {runtimeVars['eventDataList'][0]}.")
     
     # --- End of Essential Setup ---
 

@@ -95,7 +95,7 @@
         <div class="card-footer text-muted">
             Current Mode: <strong>{{ env_mode }}</strong>. 
             {% if env_mode == 'deploy' %}
-                Log clearing will delete today's GCS log objects.
+                Log clearing will delete GCS log objects.
             {% else %}
                 Log clearing will rotate the local log file and delete old backups.
             {% endif %}
