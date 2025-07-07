@@ -17,6 +17,7 @@
 
     <div id="searchui">
         <h2 class="mb-3">Search by Competitor Name:</h2>
+        <p>If searching for "Joe Bloggs", then can search for "Joe", "Bloggs", "Joe Bloggs" or even "Blog"!</p>
 
         <form id="newSearchForm" class="row gy-2 gx-3 align-items-center mb-4">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -69,8 +70,8 @@ $(document).ready(function() {
         if (data.length === 0) {
             $searchDetail.hide();
             $display.hide();
-            $results.text(`No matches found!`);
-            return;
+            $results.text(`No matches found! Refine you search criteria as needed...`);
+            /* return; */
         } else if (data.length === 50) {
             $results.text(`Success! The first 25 of ${data.length} matches shown. Refine you search criteria as needed... Click a name to get more details:`);
         } else {

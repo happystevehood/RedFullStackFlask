@@ -2686,7 +2686,9 @@ def prepare_competitor_visualization_page(competitorDetails):
             # Assuming GenerateCompInfoTable returns the HTML string or saves to a temp file read here
             # For simplicity, let's assume it can return HTML string.
             # Filepath here is more for if it *were* to save, but we need the HTML content.
-            temp_html_filename = output_conf['filename_template'].format(COMPETITOR_NAME_SLUG=competitor_name_slug)
+            temp_html_filename = output_conf['filename_template'].format(
+                EVENT_NAME_SLUG=event_name_slug,
+                COMPETITOR_NAME_SLUG=competitor_name_slug)
             temp_html_filepath = output_dir_path_obj / temp_html_filename
             
             html_content = GenerateCompInfoTable(df=df, filepath=temp_html_filepath, runtimeVars=runtimeVars, competitorIndex=competitorIndex)

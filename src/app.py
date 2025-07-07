@@ -854,7 +854,9 @@ def generate_and_download_pdf_route():
             )
             
             html_info_comp_filepaths = html_config_item['filename_template'].format(
-                COMPETITOR_NAME_SLUG=competitor_name_slug)
+                EVENT_NAME_SLUG=event_name_slug,
+                COMPETITOR_NAME_SLUG=competitor_name_slug
+            )
             html_output_dir = getattr(rl_data, html_config_item["output_dir_const"])            
             html_info_comp_filepaths = Path(html_output_dir) / Path(html_info_comp_filepaths)           
             

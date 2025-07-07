@@ -40,7 +40,7 @@ OUTPUT_CONFIGS = [
         'name': 'Race Summary',
         'function_name': 'GenerateCompInfoTable',
         'is_competitor_specific': True,
-        'filename_template': '{COMPETITOR_NAME_SLUG}_report.html', 
+        'filename_template': '{EVENT_NAME_SLUG}_{COMPETITOR_NAME_SLUG}_report.html', 
         'output_dir_const': 'PDF_COMP_DIR',
         'output_type': 'html_table', 
         'requires_category_data': False,
