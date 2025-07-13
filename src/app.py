@@ -753,8 +753,10 @@ def display_competitor_visuals_route():
         race_no = request.args.get('race_no')
         event = request.args.get('event')
 
-    if not all([competitor, race_no, event]):
-        return "Missing parameters (competitor, race_no, event)", 400
+    # There are valid cases where the race_no is empty as provided by the organisers....
+    # below code cause those cases to fail.
+    #if not all([competitor, race_no, event]):
+    #    return "Missing parameters (competitor, race_no, event)", 400
 
     competitorDetails = {
         'competitor': competitor,

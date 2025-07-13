@@ -73,7 +73,7 @@ $(document).ready(function() {
             $results.text(`No matches found! Refine you search criteria as needed...`);
             /* return; */
         } else if (data.length === 50) {
-            $results.text(`Success! The first 25 of ${data.length} matches shown. Refine you search criteria as needed... Click a name to get more details:`);
+            $results.text(`Success! The first ${data.length} matches shown. Refine you search criteria as needed... Click a name to get more details:`);
         } else {
             $results.text(`Success! ${data.length} matches found! Click a name to get more details:`);
         }
@@ -83,7 +83,7 @@ $(document).ready(function() {
 
         const $ul = $('<ul/>', { class: 'list-group' });
 
-        data.slice(0, 25).forEach((val, i) => {
+        data.slice(0, 50).forEach((val, i) => {
             $('<li/>', {
                 class: 'list-group-item list-group-item-action',
                 id: i,
@@ -94,9 +94,9 @@ $(document).ready(function() {
 
         $ul.appendTo($display);
 
-        if (data.length > 25) {
+        if (data.length === 50) {
             $('<p/>', {
-                text: `...Please refine your search criteria.`,
+                text: `If your target competitor is not listed ...Please refine your search criteria further.`,
                 class: 'text-danger mt-2'
             }).appendTo($display);
         }
