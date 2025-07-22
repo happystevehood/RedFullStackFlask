@@ -35,6 +35,19 @@
 <div class="container my-4">
     <h2 class="mb-4">Admin Panel - Application Logs</h2>
 
+    <hr>
+    {# Standard flash message rendering #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
     <!-- Section for Log Controls -->
     <div class="card mb-4">
         <div class="card-header">
@@ -104,7 +117,7 @@
 
     <!-- Section for Displaying Log Contents -->
     <h3 class="mt-5">Log Contents</h3>
-    
+        
     {% if log_files_content %}
         {% if log_files_content.get('error') %}
             <div class="alert alert-danger">{{ log_files_content.error }}</div>
@@ -115,11 +128,26 @@
                 <div class="card log-card mb-3">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <span><strong>Log File:</strong> <code>{{ filename }}</code></span>
-                        {% if env_mode == 'deploy' %}
-                            <a href="{{ url_for('download_gcs_log', gcs_blob_name=filename) }}" class="btn btn-sm btn-light">
-                                <i class="fas fa-download"></i> Download
-                            </a>
-                        {% endif %}
+                        
+                        {# Button Group for Actions #}
+                        <div>
+                            {% if env_mode == 'deploy' %}
+                                <a href="{{ url_for('download_gcs_log', gcs_blob_name=filename) }}" class="btn btn-sm btn-info">
+                                    Download
+                                </a>
+                            {% endif %}
+
+                            {# NEW DELETE BUTTON FORM #}
+                            <form action="{{ url_for('delete_single_log', filename=filename) }}" method="POST" class="d-inline"
+                                  onsubmit="return confirm('Are you sure you want to permanently delete this log file: \'{{ filename }}\'? This action cannot be undone.');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-danger">
+                                    Delete
+                                </button>
+                            </form>
+                            {# END NEW DELETE BUTTON FORM #}
+                        </div>
+
                     </div>
                     <div class="card-body p-0">
                         <pre class="log-container m-0"><code>{{ content | e }}</code></pre>

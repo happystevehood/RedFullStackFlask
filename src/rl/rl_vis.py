@@ -61,6 +61,9 @@ def tidyTheData(df, filename):
     if 'Net Cat Pos (Net Gen Pos)' in df.columns:
         df.drop('Net Cat Pos (Net Gen Pos)', axis=1, inplace = True)
 
+    if 'Net Gender Pos' in df.columns:
+        df.drop('Net Gender Pos', axis=1, inplace = True)
+
     #Rename Columns so consistent across years....etc
     df.rename(columns={'Net Pos':'Pos'},inplace=True)
     df.rename(columns={'Net Cat Pos':'Cat Pos'},inplace=True)
@@ -215,12 +218,13 @@ def tidyTheData(df, filename):
 
             df.loc[x,'Net Time'] =  timedelta.total_seconds(datetime.strptime(rl_data.convert_to_standard_time(df.loc[x,'Net Time']),"%H:%M:%S.%f") 
                                                           - datetime.strptime(rl_data.convert_to_standard_time("00:00:00.0")        ,"%H:%M:%S.%f"))
+            
             df.loc[x,'Start']    =  timedelta.total_seconds(datetime.strptime(rl_data.convert_to_standard_time(df.loc[x,'Start'])   ,"%H:%M:%S.%f") 
                                                           - datetime.strptime(rl_data.convert_to_standard_time("00:00:00.0")        ,"%H:%M:%S.%f"))
-          
-            #time Adjust format is the samve
-            if ('Time Adj' in df.columns and pd.isna(df.loc[x, "Time Adj"]) == False):
-                #print(f"Time Adj 1: {df.loc[x,'Time Adj']}")
+                      
+            #time Adjust format is the samve #added for 2025
+            if ('Time Adj' in df.columns and pd.isna(df.loc[x, "Time Adj"]) == False and df.loc[x, "Time Adj"] != "-"):
+                print(f"Time Adj 1: {df.loc[x,'Time Adj']}")
                 timeAdj = df.loc[x,"Time Adj"].replace("+", "")
                 df.loc[x,'Time Adj'] = timedelta.total_seconds(datetime.strptime(rl_data.convert_to_standard_time(df.loc[x,'Time Adj']),"%H:%M:%S.%f") 
                                                              - datetime.strptime(rl_data.convert_to_standard_time("00:00:00.0")        ,"%H:%M:%S.%f"))
@@ -253,8 +257,8 @@ def tidyTheData(df, filename):
 
         except (ValueError, TypeError):
                  #Set Time values to None
-                #df.loc[x,'Calc Time'] = float("nan")
-                #df.loc[x,'Net Time'] = float("nan")
+                df.loc[x,'Calc Time'] = float("nan")
+                df.loc[x,'Net Time'] = float("nan")
                 logger.info(f"Warning: ValueError Type Error {filename} {x}"  )
 
                 #drop the row
@@ -380,8 +384,15 @@ def tidyTheDataCorr(df, runtimeVars_override=None):
     if 'Net Gender Pos' in df.columns:
         df.drop('Net Gender Pos', axis=1, inplace = True)
 
+    #modified for 2025
+    if 'Gender' in df.columns:
+        df.drop('Gender', axis=1, inplace = True)
+        
+    if 'Wave' in df.columns:
+        df.drop('Wave', axis=1, inplace = True)
+
     #Remove boring columns
-    df.drop(columns=['Race No','Name', 'Gender', 'Wave'], inplace=True)
+    df.drop(columns=['Race No','Name'], inplace=True)
 
     #drop rows with empty data 
     df.dropna(inplace = True )
@@ -449,7 +460,8 @@ def GenerateCompInfoTable(df, filepath, runtimeVars, competitorIndex=-1 ):
     else:
         html_parts.append(f'<tr><th scope="row" style="width: 30%;">Competitor Name</th><td>{competitor_name_title}</td></tr>')
 
-    html_parts.append(f'<tr><th scope="row">Gender</th><td>{df.loc[competitorIndex, "Gender"]}</td></tr>')
+    if 'Gender' in df.columns:
+        html_parts.append(f'<tr><th scope="row">Gender</th><td>{df.loc[competitorIndex, "Gender"]}</td></tr>')
 
     compCat = None
     if 'Category' in df.columns:
@@ -458,7 +470,9 @@ def GenerateCompInfoTable(df, filepath, runtimeVars, competitorIndex=-1 ):
 
     event_display_name = runtimeVars.get('eventDataList', [None, "N/A"])[1]
     html_parts.append(f'<tr><th scope="row">Event</th><td>{event_display_name}</td></tr>')
-    html_parts.append(f'<tr><th scope="row">Wave</th><td>{df.loc[competitorIndex, "Wave"]}</td></tr>')
+    
+    if 'Wave' in df.columns:
+        html_parts.append(f'<tr><th scope="row">Wave</th><td>{df.loc[competitorIndex, "Wave"]}</td></tr>')
     
     total_finishers = len(df.dropna(subset=['Net Time']).index)
     pos_val = df.loc[competitorIndex, "Pos"]

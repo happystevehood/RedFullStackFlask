@@ -115,22 +115,22 @@ STATIONLIST24 =      [         'Run', 'Row', 'Deadball Burpee', 'Pendulum Shots'
 STATIONLISTSTART24 = ['Start', 'Run', 'Row', 'Deadball Burpee', 'Pendulum Shots', 'Bike', 'Sandbag Gauntlet', 'Battle Whip', 'Farmer\'s Carry', 'Agility Chamber', 'Ski', 'Mule', 'Sled Push Pull']
 
 #The 2025 Events Lists
-STATIONLIST25 =      [         'Run', 'Ski', 'Deadball Burpee', 'Bike', 'Farmer\'s Carry', 'Shuttle Runs', 'Russain Twists', 'Sandbag Gauntlet', 'Row', 'Squat Thrusts', 'Mule', 'Sled Push Pull']
-STATIONLISTSTART25 = ['Start', 'Run', 'Ski', 'Deadball Burpee', 'Bike', 'Farmer\'s Carry', 'Shuttle Runs', 'Russain Twists', 'Sandbag Gauntlet', 'Row', 'Squat Thrusts', 'Mule', 'Sled Push Pull']
+STATIONLIST25 =      [         'RUN', 'SKI', 'DEADBALL BURPEES', 'BIKE', 'FARMER\'S CARRY', 'SHUTTLE RUNS', 'RUSSIAN TWISTS', 'SANDBAG GAUNTLET', 'ROW', 'SQUAT THRUSTS', 'THE MULE', 'SLED PUSH & PULL']
+STATIONLISTSTART25 = ['Start', 'RUN', 'SKI', 'DEADBALL BURPEES', 'BIKE', 'FARMER\'S CARRY', 'SHUTTLE RUNS', 'RUSSIAN TWISTS', 'SANDBAG GAUNTLET', 'ROW', 'SQUAT THRUSTS', 'THE MULE', 'SLED PUSH & PULL']
 
 
 # Your data for filtering purposes
 EVENT_DATA_LIST = [
     #2025
-    #["WomensSinglesAdvKL2025", "REDLINE Fitness Games '25 KL Womens Singles Adv.", "2025", "WOMENS", "SINGLES_ADVANCED", "KL", "YES_CAT"],
-    #["MensSinglesAdvKL2025", "REDLINE Fitness Games '25 KL Mens Singles Adv.", "2025", "MENS", "SINGLES_ADVANCED", "KL"], "YES_CAT",
     #["WomensSinglesInterKL2025", "REDLINE Fitness Games '25 KL Womens Singles Inter.", "2025", "WOMENS", "SINGLES_INTERMEDIATE", "KL", "YES_CAT"],
-    #["WomensDoublesKL2025", "REDLINE Fitness Games '25 KL Womens Doubles", "2025", "WOMENS", "DOUBLES", "KL", "NO_CAT"],
+    #["WomensSinglesAdvKL2025", "REDLINE Fitness Games '25 KL Womens Singles Adv.", "2025", "WOMENS", "SINGLES_ADVANCED", "KL", "YES_CAT"],
+    #["MensSinglesAdvKL2025", "REDLINE Fitness Games '25 KL Mens Singles Adv.", "2025", "MENS", "SINGLES_ADVANCED", "KL", "YES_CAT"],
     #["MixedDoublesKL2025", "REDLINE Fitness Games '25 KL Mixed Doubles", "2025", "MIXED", "DOUBLES", "KL", "NO_CAT"],
-    #["SinglesBeginnersKL2025", "REDLINE Fitness Games '25 KL Singles Beginners", "2025", "MIXED", "SINGLES_BEGINNERS", "KL", "NO_CAT"],
-    
-    #["MensSinglesInterKL2025", "REDLINE Fitness Games '25 KL Mens Singles Inter.", "2025", "MENS", "SINGLES_INTERMEDIATE", "KL", "YES_CAT"],
     #["MensDoublesKL2025", "REDLINE Fitness Games '25 KL Mens Doubles", "2025", "MENS", "DOUBLES", "KL", "NO_CAT"],
+    #["WomensBeginnersKL2025", "REDLINE Fitness Games '25 KL Singles Beginners", "2025", "MIXED", "SINGLES_BEGINNERS", "KL", "NO_CAT"],
+    #["MensBeginnersKL2025", "REDLINE Fitness Games '25 KL Singles Beginners", "2025", "MIXED", "SINGLES_BEGINNERS", "KL", "NO_CAT"],
+    #["MensSinglesInterKL2025", "REDLINE Fitness Games '25 KL Mens Singles Inter.", "2025", "MENS", "SINGLES_INTERMEDIATE", "KL", "YES_CAT"],
+    #["WomensDoublesKL2025", "REDLINE Fitness Games '25 KL Womens Doubles", "2025", "WOMENS", "DOUBLES", "KL", "NO_CAT"],
     #["TeamRelayWomenKL2025", "REDLINE Fitness Games '25 KL Womens Team Relay", "2025", "WOMENS", "RELAY", "KL", "NO_CAT"],
     #["TeamRelayMenKL2025", "REDLINE Fitness Games '25 KL Mens Team Relay", "2025", "MENS", "RELAY", "KL", "NO_CAT"],
     #["TeamRelayMixedKL2025", "REDLINE Fitness Games '25 KL Mixed Team Relay", "2025", "MIXED", "RELAY", "KL", "NO_CAT"],
@@ -470,112 +470,95 @@ def save_log_config(config):
 
 # --- Main Setup and Control Functions ---
 # 
-#def setup_logger():
+# rl/rl_data.py
+
+# ... (keep other functions as they are)
+
+def setup_logger():
     """
-    Setup logging with proper configuration for multiple workers and different environments.
-    This function is designed to be idempotent (safe to call multiple times).
+    Setup logging. For local dev with the reloader, ONLY log to console to avoid
+    file lock issues. For Docker/deploy, add the appropriate file/GCS handler.
+    This function is idempotent.
     """
-    '''   logger = logging.getLogger()
+    logger = logging.getLogger() # Get the root logger
     
-    # Check if this specific setup has already run to prevent re-adding handlers on Flask reloads
     if getattr(logger, '_is_rl_configured', False):
-        logger.debug("Logger already configured by rl_data.setup_logger. Skipping.")
         return logger
 
-    # Clear any pre-existing handlers from other libraries (e.g., Werkzeug's default)
-    # This ensures we have full control over the logging format and destinations.
+    # Clear any pre-existing handlers
     if logger.hasHandlers():
         for handler in logger.handlers[:]:
             logger.removeHandler(handler)
     
-    # Load configuration from file (or use defaults)
-    config = load_log_config() # Assumes this function is defined and works
-    global_level = getattr(logging, config['global'], DEFAULT_LOG_LEVEL)
+    config = load_log_config()
+    global_level = getattr(logging, config.get('global', 'DEBUG'), logging.DEBUG)
     logger.setLevel(global_level)
     
-    # Use our SafeFormatter to prevent KeyErrors during startup from Werkzeug
     formatter = SafeFormatter(
         '[%(asctime)s] [W:%(worker_id)s] [R:%(request_id)s] [PID:%(process)d] '
         '%(levelname)s in %(module)s: %(message)s'
     )
     
-    # Add the filter to the logger itself. This enriches records generated within the app context.
     logger.addFilter(WorkerInfoFilter())
     
-    # --- Add Console Handler ---
-    try:
-        console_level = getattr(logging, config['console'], DEFAULT_LOG_CONSOLE_LEVEL)
-        # Explicitly use stdout to avoid issues with some WSGI servers redirecting stderr
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setLevel(console_level)
-        console_handler.setFormatter(formatter)
-        logger.addHandler(console_handler)
-    except Exception as e:
-        print(f"Error setting up console handler: {e}", file=sys.stderr)
+    # --- Always Add Console Handler ---
+    console_level = getattr(logging, config.get('console', 'DEBUG'), logging.DEBUG)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(console_level)
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
         
-    # --- Add File Handler (GCS for deploy, local file for other envs) ---
-    file_level = getattr(logging, config['file'], DEFAULT_LOG_FILE_LEVEL)
+    # --- Conditionally Add File/GCS Handler ---
     env_mode = os.environ.get('ENV_MODE', 'development')
     
+    # **CRITICAL FIX**: Check if the Flask reloader is active.
+    # The 'WERKZEUG_RUN_MAIN' env var is set to 'true' in the reloaded child process.
+    is_reloader_active = os.environ.get('WERKZEUG_RUN_MAIN') == 'true'
+
     if env_mode == 'deploy':
-         if storage and BLOG_BUCKET_NAME:
+        # --- GCS Handler for Deployment ---
+        if storage and BLOG_BUCKET_NAME:
             try:
-                # Template will be filled by the handler's __init__
                 gcs_log_path_template = "logs/deploy/app_{date}_worker_{worker_id}.log"
                 gcs_handler = GCSLoggingHandler(
                     bucket_name=BLOG_BUCKET_NAME,
                     gcs_log_path_template=gcs_log_path_template,
                 )
-                # ... (set formatter, level, and add handler) ...
+                gcs_handler.setLevel(getattr(logging, config.get('file', 'INFO'), logging.INFO))
+                gcs_handler.setFormatter(formatter)
+                logger.addHandler(gcs_handler)
             except Exception as e:
-                print(f"CRITICAL: Failed to set up GCSLoggingHandler for deploy: {e}", file=sys.stderr)                   
-    else: 
-        # LOCAL / NON-DEPLOY MODE: Use local rotating file handler
+                print(f"CRITICAL: Failed to set up GCSLoggingHandler: {e}", file=sys.stderr)
+    elif not is_reloader_active:
+        # --- Local File Handler for Docker or when reloader is OFF ---
         if portalocker:
             try:
-                # Add a debug print to stderr to confirm the path being used
-                print(f"DEBUG: Attempting to set up log file at: {LOG_FILE}", file=sys.stderr)
-                
                 os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
-                
                 file_handler = SafeRotatingFileHandler(
                     str(LOG_FILE), maxBytes=5_000_000, backupCount=3, delay=True
                 )
-                file_handler.setLevel(file_level)
+                file_handler.setLevel(getattr(logging, config.get('file', 'INFO'), logging.INFO))
                 file_handler.setFormatter(formatter)
                 logger.addHandler(file_handler)
-                
-                print(f"INFO: SafeRotatingFileHandler successfully added for local file '{LOG_FILE}'.", file=sys.stderr)
-
             except Exception as e:
-                # Make the error message very visible in the console
-                print("\n" + "="*80, file=sys.stderr)
-                print("          FATAL ERROR: FAILED TO SETUP THE LOCAL LOG FILE HANDLER.", file=sys.stderr)
-                print(f"          Error was: {e}", file=sys.stderr)
-                print(f"          Check permissions and path for the log file: {LOG_FILE}", file=sys.stderr)
-                print("="*80 + "\n", file=sys.stderr)
+                print(f"FATAL ERROR: Failed to setup local log file handler: {e}", file=sys.stderr)
         else:
-            print("\n" + "="*80, file=sys.stderr)
-            print("          WARNING: portalocker library is not installed.", file=sys.stderr)
-            print("          Local file logging will be DISABLED and will NOT be process-safe.", file=sys.stderr)
-            print("          To enable, run: pip install portalocker", file=sys.stderr)
-            print("="*80 + "\n", file=sys.stderr)
+            print("WARNING: portalocker not installed. Local file logging is disabled.", file=sys.stderr)
+    else:
+        # --- Reloader is ON, so we do NOT add a file handler ---
+        logger.error("Flask reloader is active. Skipping file logging to prevent file lock errors.")
 
-    # --- Silence Noisy Libraries ---
+
+    # Silence Noisy Libraries
     logging.getLogger('matplotlib.font_manager').setLevel(logging.WARNING)
     logging.getLogger('google.auth').setLevel(logging.WARNING)
     logging.getLogger('urllib3').setLevel(logging.WARNING)
-    # Set Werkzeug's own logger level. Use INFO to see requests, WARNING to hide them.
     logging.getLogger('werkzeug').setLevel(logging.INFO)
 
-    # Set a flag on the logger itself to indicate that our custom setup has completed.
     logger._is_rl_configured = True
     
-    # This first log message will go to all configured handlers (console and file/GCS)
     logger.info(f"Logger successfully initialized for worker {WORKER_ID} in '{env_mode}' mode.")
-    
-    return logger 
-    '''
+    return logger
 
 def clear_or_rotate_logs():
     """
@@ -651,11 +634,76 @@ def clear_or_rotate_logs():
 
         if not handler_actioned:
             handler_types = [type(h).__name__ for h in root_logger.handlers]
-            logger.warning(f"No suitable SafeRotatingFileHandler found for local rotation. Active handlers: {handler_types}")
+            logger.error(f"No suitable SafeRotatingFileHandler found for local rotation. Active handlers: {handler_types}")
             return "No rotating file handler found to clear/rotate.", "warning"
 
 
+# rl/rl_data.py
 
+# ... (keep other functions as they are)
+
+def delete_log_file(filename_to_delete):
+    """
+    Deletes a single, specific log file.
+    - 'deploy' mode: Deletes a specific GCS blob.
+    - Local mode: Deletes backup files. For the active log file, it will likely
+      fail due to the Flask reloader's file lock, which is handled gracefully.
+    
+    Args:
+        filename_to_delete (str): The name of the file to delete.
+
+    Returns:
+        tuple: A (success_boolean, message_string) tuple for the flash message.
+    """
+    logger = get_logger()
+    env_mode = os.environ.get('ENV_MODE', 'development')
+    
+    if env_mode == 'deploy':
+        # --- GCS Logic (unchanged) ---
+        # ... (This part is correct and remains the same)
+        logger.info(f"Attempting to delete GCS log blob: {filename_to_delete}")
+        if not storage or not BLOG_BUCKET_NAME:
+            return False, "GCS logging not configured, cannot delete."
+        try:
+            storage_client = storage.Client()
+            bucket = storage_client.bucket(BLOG_BUCKET_NAME)
+            blob = bucket.blob(filename_to_delete)
+            
+            if blob.exists():
+                blob.delete()
+                logger.info(f"DELETED GCS log object: {blob.name}")
+                return True, f"Successfully deleted GCS log file: {filename_to_delete}"
+            else:
+                logger.error(f"GCS log file not found for deletion: {filename_to_delete}")
+                return False, f"GCS log file not found: {filename_to_delete}"
+        except Exception as e:
+            logger.critical(f"Error deleting GCS log file {filename_to_delete}: {e}", exc_info=True)
+            return False, f"Error deleting GCS log file: {e}"
+            
+    else:
+        # --- FINAL Local File Deletion Logic ---
+        logger.info(f"Processing delete request for local log file: {filename_to_delete}")
+        try:
+            local_filepath = Path(LOG_FILE_DIR) / Path(filename_to_delete)
+            
+            if not local_filepath.exists() or not local_filepath.is_file():
+                logger.error(f"Local log file not found for deletion: {local_filepath}")
+                return False, f"Local log file not found: {filename_to_delete}"
+
+            # We can now simply try to remove the file.
+            os.remove(local_filepath)
+            logger.info(f"DELETED local backup log file: {local_filepath}")
+            return True, f"Successfully deleted local backup log file: {filename_to_delete}"
+        
+        except PermissionError:
+            logger.error(f"PermissionError deleting '{filename_to_delete}'. This is expected for the active log file when using the Flask reloader on Windows.")
+            return False, f"Could not delete '{filename_to_delete}'. It is likely locked by the development server. Try deleting backup logs (.log.1, .log.2) instead, or restart the server."
+            
+        except Exception as e:
+            logger.critical(f"Error processing delete for {filename_to_delete}: {e}", exc_info=True)
+            return False, f"Error processing log file: {e}"
+        
+        
 def get_logger(name=None):
     """
     Get a logger instance. Ensures setup_logger() has been called at least once

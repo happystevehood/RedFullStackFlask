@@ -66,10 +66,10 @@ def create_app():
     # Set up the logger
     """Initialize Flask app with improved logging"""
     # Set up the logger
-    #logger = rl_data.setup_logger()
-
+    logger = rl_data.setup_logger()
+    
     # Replace Flask's logger with our improved logger
-    #app.logger = logger
+    app.logger = logger
 
     #To prevent abuse (e.g., bots spamming the search box), need to review if limits are appropriate
     limiter = Limiter(app=app,
@@ -356,7 +356,7 @@ def sitemap():
 
 @app.route('/robots.txt')
 def robots_txt():
-    app.logger.info("robots.txt route handler was called.")
+    app.logger.warning("robots.txt route handler was called.")
     # Serves 'robots.txt' from your 'static_folder' (which is 'static/')
     return send_from_directory(rl_data.ROBOTS_DIR, 'robots.txt')
 
@@ -1242,6 +1242,27 @@ def clear_logs_route(): # Unified clear/rotate route
     flash(message, category)
     return redirect(url_for('view_logs'))
 
+@app.route('/admin/logs/delete/<path:filename>', methods=['POST'])
+@login_required
+def delete_single_log(filename):
+    """
+    Handles the request to delete a single log file.
+    The <path:filename> converter allows the filename to contain slashes,
+    which is necessary for GCS blob paths.
+    """
+    app.logger.warning(f"Received request to delete log file: {filename}")
+    
+    # The CSRF token is automatically validated by Flask-WTF for POST requests.
+    
+    success, message = rl_data.delete_log_file(filename)
+    
+    if success:
+        flash(message, "success")
+    else:
+        flash(message, "danger")
+        
+    return redirect(url_for('view_logs'))
+
 @app.route('/admin/logs')
 @login_required
 def view_logs():
@@ -1254,7 +1275,7 @@ def view_logs():
 
     try:
         if env_mode == 'deploy':
-            # --- Read from GCS ---
+            # --- (Your GCS logic remains unchanged) ---
             if not rl_data.storage or not rl_data.BLOG_BUCKET_NAME:
                 log_files_content['error'] = "GCS is not configured on the server."
                 app.logger.warning("GCS logging not configured, cannot view logs.")
@@ -1263,13 +1284,8 @@ def view_logs():
                 storage_client = rl_data.storage.Client()
                 bucket = storage_client.bucket(rl_data.BLOG_BUCKET_NAME)
                 
-                # In your previous setup, logs were per-worker per-day.
-                # So we must list all blobs for today.
-                #log_date = datetime.utcnow().strftime('%Y-%m-%d')
-                #prefix_to_view = f"logs/deploy/app_{log_date}"
                 prefix_to_view = f"logs/deploy/app_"
                 
-                # Use list() to get all at once, use reversed() to get newest first
                 blobs = list(reversed(list((bucket.list_blobs(prefix=prefix_to_view)))))
                 app.logger.info(f"Found {len(blobs)} log blob(s) in GCS with prefix '{prefix_to_view}'.")
 
@@ -1278,7 +1294,6 @@ def view_logs():
                 else:
                     for blob in blobs:
                         app.logger.debug(f"Attempting to download blob: {blob.name}")
-                        # This download call requires 'storage.objects.get' permission.
                         content = blob.download_as_text() 
                         clean_content = ANSI_ESCAPE_RE.sub('', content)
                         log_files_content[blob.name] = clean_content
@@ -1286,17 +1301,38 @@ def view_logs():
                         app.logger.info(f"Successfully read {len(content)} bytes from {blob.name}.")
 
         else:
-            # --- Read from Local File ---
-            if os.path.exists(rl_data.LOG_FILE):
-                app.logger.info(f"Reading local log file: {rl_data.LOG_FILE}")
-                with open(rl_data.LOG_FILE, 'r', encoding='utf-8') as f:
-                    log_contents = f.read()
-                log_files_content[os.path.basename(rl_data.LOG_FILE)] = ANSI_ESCAPE_RE.sub('', log_contents)
+            # --- MODIFIED: Read from Local File ---
+            local_log_file_path = Path(rl_data.LOG_FILE)
+            
+            # Ensure the directory exists first
+            local_log_file_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # If the main log file was deleted, touch it to recreate it as empty
+            if not local_log_file_path.exists():
+                local_log_file_path.touch()
+                app.logger.info(f"Main log file '{local_log_file_path}' was missing. Recreated empty file.")
+
+            # Now, read all .log and .log.* files in the directory
+            log_directory = Path(rl_data.LOG_FILE_DIR)
+            
+            # Get all log files, sort them to show the main one first, then backups
+            all_log_files = sorted(
+                [f for f in log_directory.iterdir() if f.is_file() and str(f.name).startswith('activity.log')],
+                key=lambda x: str(x.name)
+            )
+
+            if all_log_files:
+                for log_file in all_log_files:
+                    app.logger.info(f"Reading local log file: {log_file}")
+                    with open(log_file, 'r', encoding='utf-8') as f:
+                        log_contents = f.read()
+                    log_files_content[log_file.name] = ANSI_ESCAPE_RE.sub('', log_contents)
             else:
-                 log_files_content['error'] = f"Local log file not found at: {rl_data.LOG_FILE}"
+                 log_files_content['info'] = "No log files found in the log directory."
+
 
     except Exception as e:
-        # This will catch permissions errors from GCS and other issues
+        # This will catch permissions errors and other issues
         app.logger.error(f"An error occurred while viewing logs: {e}", exc_info=True)
         log_files_content['error'] = f"An error occurred while trying to read logs: {e}"
 
