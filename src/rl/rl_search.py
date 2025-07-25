@@ -41,11 +41,12 @@ def find_competitor(competitor, callback):
                             #leave early
                             #logger.debug(f'reached {matchcount} matches' )
                             callback(competitor, matches)
-                            return 
+                            return
+                        
                         
                     #within same file should be be checking both names and members.
                     #if row called 'Member1 exists.
-                    if found == False and 'Member1' in row:
+                    if found == False and 'Member4' in row:
                         if competitor.upper() in row['Member1'].upper() or competitor.upper() in row['Member2'].upper() or competitor.upper() in row['Member3'].upper() or competitor.upper() in row['Member4'].upper():
                             match = {
                                 'competitor': row['Name'],
@@ -62,7 +63,23 @@ def find_competitor(competitor, callback):
                                 #logger.debug(f'reached {matchcount} matches' )
                                 callback(competitor, matches)
                                 return 
-                    
+                    elif found == False and 'Member2' in row:        
+                        if competitor.upper() in row['Member1'].upper() or competitor.upper() in row['Member2'].upper(): 
+                            match = {
+                                'competitor': row['Name'],
+                                'description': element[1],  
+                                'race_no': row['Race No'],
+                                'event': element[0]  # could be extracted from filename
+                            }
+                            logger.debug(f"found a match {match}")
+                            matches.append(match)
+                            matchcount += 1
+
+                            if matchcount >= 50:
+                                #leave early
+                                #logger.debug(f'reached {matchcount} matches' )
+                                callback(competitor, matches)
+                                return                     
 
                            
 

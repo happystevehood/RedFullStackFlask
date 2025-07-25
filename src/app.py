@@ -966,7 +966,7 @@ def login_required(f):
 #        app.logger.debug(f"===================")
         if session.get('logged_in') != True:
             flash("You must log in to access this page.", "warning")
-            app.logger.warning(f"You must log in to access this page.")
+            #app.logger.warning(f"You must log in to access this page.")
 
             return redirect(url_for('login', _external=True, _scheme=request.scheme))
         return f(*args, **kwargs)
@@ -996,11 +996,12 @@ def login():
             
             #app.logger.debug(f"Post-login session: {dict(session)}")
             flash("Login successful!", "success")
-            app.logger.warning(f"Login successful!")
+            #app.logger.warning(f"Login successful!")
             
             # Use the same scheme and host as the request
             return redirect(url_for('admin', _external=True, _scheme=request.scheme))
         else:
+            app.logger.warning(f"Login unsuccessful!")
             flash("Incorrect password. Try again.", "danger")
             
     return render_template('login.html')
@@ -1250,7 +1251,7 @@ def delete_single_log(filename):
     The <path:filename> converter allows the filename to contain slashes,
     which is necessary for GCS blob paths.
     """
-    app.logger.warning(f"Received request to delete log file: {filename}")
+    #app.logger.warning(f"Received request to delete log file: {filename}")
     
     # The CSRF token is automatically validated by Flask-WTF for POST requests.
     

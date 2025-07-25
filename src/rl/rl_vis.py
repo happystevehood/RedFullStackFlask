@@ -107,6 +107,9 @@ def tidyTheData(df, filename):
     for i in range(n - 1, -1, -1):  # Start at n-1, go down to 0 (exclusive -1), step by -1
         
         station_name_for_duration = actual_station_names[i]
+        #what to do if final value is zero?
+        if i != n - 1:
+            station_end_name_for_duration = actual_station_names[i+1]
         start_timestamp_col_name = timestamp_cols[i]
         end_timestamp_col_name = timestamp_cols[i+1]
           
@@ -139,7 +142,11 @@ def tidyTheData(df, filename):
                 # ... (Your checks for < 20.0 and > 420.0 with correct indexing for StationCutOffCount[i]) ...
                 if duration_seconds < 20.0:
                     logger.info(f"Removed Low value {filename} {x} {station_name_for_duration} {duration_seconds} {df.loc[x,'Pos']}")
-                    df.drop(x, inplace=True)
+                    #both the higher and lower stations should be 0! If finishing time is zero then we are all done, in a bad way.
+                    df.loc[x,station_name_for_duration] = float("nan")
+                    if i != n - 1:
+                        df.loc[x,station_end_name_for_duration] = float("nan")
+                    #df.drop(x, inplace=True)
                     continue 
                 elif duration_seconds > 420.0:
                     if i < len(runtimeVars['StationCutOffCount']):
@@ -223,8 +230,8 @@ def tidyTheData(df, filename):
                                                           - datetime.strptime(rl_data.convert_to_standard_time("00:00:00.0")        ,"%H:%M:%S.%f"))
                       
             #time Adjust format is the samve #added for 2025
-            if ('Time Adj' in df.columns and pd.isna(df.loc[x, "Time Adj"]) == False and df.loc[x, "Time Adj"] != "-"):
-                print(f"Time Adj 1: {df.loc[x,'Time Adj']}")
+            if ('Time Adj' in df.columns and pd.isna(df.loc[x, "Time Adj"]) == False):
+                #print(f"Time Adj 1: {df.loc[x,'Time Adj']}")
                 timeAdj = df.loc[x,"Time Adj"].replace("+", "")
                 df.loc[x,'Time Adj'] = timedelta.total_seconds(datetime.strptime(rl_data.convert_to_standard_time(df.loc[x,'Time Adj']),"%H:%M:%S.%f") 
                                                              - datetime.strptime(rl_data.convert_to_standard_time("00:00:00.0")        ,"%H:%M:%S.%f"))
@@ -306,13 +313,18 @@ def getCompetitorIndex(df, runtimeVars_override=None):
     # get mask based on substring matching competitor name.
  
      #if relay 
-    if 'Member1' in df.columns:
+    if 'Member4' in df.columns:
         nameMask = df['Name'].str.contains(runtimeVars['competitorName'], na=False, regex=False) 
         mem1Mask = df['Member1'].str.contains(runtimeVars['competitorName'], na=False, regex=False) 
         mem2Mask = df['Member2'].str.contains(runtimeVars['competitorName'], na=False, regex=False)
         mem3Mask = df['Member3'].str.contains(runtimeVars['competitorName'], na=False, regex=False)
         mem4Mask = df['Member4'].str.contains(runtimeVars['competitorName'], na=False, regex=False)
         compMask = nameMask | mem1Mask | mem2Mask | mem3Mask | mem4Mask & df['Race No'].astype(str).str.contains(runtimeVars['competitorRaceNo'], na=False, regex=False)
+    elif 'Member2' in df.columns:
+        nameMask = df['Name'].str.contains(runtimeVars['competitorName'], na=False, regex=False) 
+        mem1Mask = df['Member1'].str.contains(runtimeVars['competitorName'], na=False, regex=False) 
+        mem2Mask = df['Member2'].str.contains(runtimeVars['competitorName'], na=False, regex=False)
+        compMask = nameMask | mem1Mask | mem2Mask & df['Race No'].astype(str).str.contains(runtimeVars['competitorRaceNo'], na=False, regex=False)       
 
     else:
         compMask = df['Name'].str.contains(runtimeVars['competitorName'], regex=False) & df['Race No'].astype(str).str.contains(runtimeVars['competitorRaceNo'], na=False, regex=False)
@@ -366,9 +378,11 @@ def tidyTheDataCorr(df, runtimeVars_override=None):
     if 'Team' in df.columns:
         df.drop('Team', axis=1, inplace = True)
 
-    if 'Member1' in df.columns:
+    if 'Member2' in df.columns:
         df.drop('Member1', axis=1, inplace = True)
         df.drop('Member2', axis=1, inplace = True)
+        
+    if 'Member4' in df.columns:
         df.drop('Member3', axis=1, inplace = True)
         df.drop('Member4', axis=1, inplace = True)
 
@@ -3258,7 +3272,8 @@ def redline_vis_generate_generic_init():
         'bar_stacked_dist_generic'      : True,
         'violin_generic'                : True,  
         'radar_median_generic'          : True,  
-        'cutoff_bar_generic'            : True,  
+        # cut off bar for 2025 is different need to add logic to differentiate...
+        #'cutoff_bar_generic'            : True,  
         'histogram_nettime_generic'     : True,  
         'catbar_avgtime_generic'        : True,  
         'correlation_bar_generic'       : True,  
