@@ -122,18 +122,20 @@ STATIONLISTSTART25 = ['Start', 'RUN', 'SKI', 'DEADBALL BURPEES', 'BIKE', 'FARMER
 # Your data for filtering purposes
 EVENT_DATA_LIST = [
     #2025
-    #["WomensSinglesInterKL2025", "REDLINE Fitness Games '25 KL Womens Singles Inter.", "2025", "WOMENS", "SINGLES_INTERMEDIATE", "KL", "YES_CAT"],
-    #["WomensSinglesAdvKL2025", "REDLINE Fitness Games '25 KL Womens Singles Adv.", "2025", "WOMENS", "SINGLES_ADVANCED", "KL", "YES_CAT"],
-    #["MensSinglesAdvKL2025", "REDLINE Fitness Games '25 KL Mens Singles Adv.", "2025", "MENS", "SINGLES_ADVANCED", "KL", "YES_CAT"],
-    #["MixedDoublesKL2025", "REDLINE Fitness Games '25 KL Mixed Doubles", "2025", "MIXED", "DOUBLES", "KL", "NO_CAT"],
-    #["MensDoublesKL2025", "REDLINE Fitness Games '25 KL Mens Doubles", "2025", "MENS", "DOUBLES", "KL", "NO_CAT"],
-    #["WomensBeginnersKL2025", "REDLINE Fitness Games '25 KL Singles Beginners", "2025", "MIXED", "SINGLES_BEGINNERS", "KL", "NO_CAT"],
-    #["MensBeginnersKL2025", "REDLINE Fitness Games '25 KL Singles Beginners", "2025", "MIXED", "SINGLES_BEGINNERS", "KL", "NO_CAT"],
-    #["MensSinglesInterKL2025", "REDLINE Fitness Games '25 KL Mens Singles Inter.", "2025", "MENS", "SINGLES_INTERMEDIATE", "KL", "YES_CAT"],
-    #["WomensDoublesKL2025", "REDLINE Fitness Games '25 KL Womens Doubles", "2025", "WOMENS", "DOUBLES", "KL", "NO_CAT"],
-    #["TeamRelayWomenKL2025", "REDLINE Fitness Games '25 KL Womens Team Relay", "2025", "WOMENS", "RELAY", "KL", "NO_CAT"],
-    #["TeamRelayMenKL2025", "REDLINE Fitness Games '25 KL Mens Team Relay", "2025", "MENS", "RELAY", "KL", "NO_CAT"],
-    #["TeamRelayMixedKL2025", "REDLINE Fitness Games '25 KL Mixed Team Relay", "2025", "MIXED", "RELAY", "KL", "NO_CAT"],
+
+    ["WomensSinglesAdvKL2025", "REDLINE Fitness Games '25 KL Womens Singles Advanced", "2025", "WOMENS", "SINGLES_ADVANCED", "KL", "YES_CAT"],
+    ["MensSinglesAdvKL2025", "REDLINE Fitness Games '25 KL Mens Singles Advanced", "2025", "MENS", "SINGLES_ADVANCED", "KL", "YES_CAT"],
+    ["WomensSinglesInterKL2025", "REDLINE Fitness Games '25 KL Womens Singles Intermediate", "2025", "WOMENS", "SINGLES_INTERMEDIATE", "KL", "YES_CAT"],
+    ["MensSinglesInterKL2025", "REDLINE Fitness Games '25 KL Mens Singles Intermediate", "2025", "MENS", "SINGLES_INTERMEDIATE", "KL", "YES_CAT"],
+    ["WomensBeginnersKL2025", "REDLINE Fitness Games '25 KL Womens Singles Beginners", "2025", "WOMENS", "SINGLES_BEGINNERS", "KL", "YES_CAT"],
+    ["MensBeginnersKL2025", "REDLINE Fitness Games '25 KL Mens Singles Beginners", "2025", "MENS", "SINGLES_BEGINNERS", "KL", "YES_CAT"],
+    ["WomensDoublesKL2025", "REDLINE Fitness Games '25 KL Womens Doubles", "2025", "WOMENS", "DOUBLES", "KL", "YES_CAT"],
+    ["MixedDoublesKL2025", "REDLINE Fitness Games '25 KL Mixed Doubles", "2025", "MIXED", "DOUBLES", "KL", "YES_CAT"],
+    ["MensDoublesKL2025", "REDLINE Fitness Games '25 KL Mens Doubles", "2025", "MENS", "DOUBLES", "KL", "YES_CAT"],
+    ["TeamRelayWomenKL2025", "REDLINE Fitness Games '25 KL Womens Team Relay", "2025", "WOMENS", "RELAY", "KL", "YES_CAT"],
+    ["TeamRelayMenKL2025", "REDLINE Fitness Games '25 KL Mens Team Relay", "2025", "MENS", "RELAY", "KL", "YES_CAT"],
+    ["TeamRelayMixedKL2025", "REDLINE Fitness Games '25 KL Mixed Team Relay", "2025", "MIXED", "RELAY", "KL", "YES_CAT"],
+
     #2024
     ["WomensSinglesCompetitive2024", "REDLINE Fitness Games '24 Womens Singles Comp.", "2024", "WOMENS", "SINGLES_COMPETITIVE", "KL", "YES_CAT"],
     ["MensSinglesCompetitive2024", "REDLINE Fitness Games '24 Mens Singles Comp.", "2024", "MENS", "SINGLES_COMPETITIVE", "KL", "YES_CAT"],

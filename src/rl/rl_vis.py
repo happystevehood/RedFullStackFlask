@@ -78,6 +78,16 @@ def tidyTheData(df, filename):
     #in 2023 doubles "The Mule" Column is called "Finish Column"
     df.rename(columns={'Finish':'The Mule'},inplace=True)
 
+    #for 2025
+    actual_station_names = runtimeVars['StationList']
+    for station_name in actual_station_names:
+        station_name_duration = station_name + ' Workout Time' 
+        if station_name_duration in df.columns:
+            df.drop(station_name_duration, axis=1, inplace = True)
+            #print(f"dropped column: {station_name_duration}")
+        #else:
+            #print(f"Column {station_name_duration} not found in DataFrame, cannot drop it.")
+ 
     #name_column = df.pop('Name')  # Remove the Name column and store it
     #df.insert(1, 'Name', name_column)  # Insert it at position 2 (leftmost)
 
@@ -148,7 +158,10 @@ def tidyTheData(df, filename):
                         df.loc[x,station_end_name_for_duration] = float("nan")
                     #df.drop(x, inplace=True)
                     continue 
-                elif duration_seconds > 420.0:
+                
+                elif ((duration_seconds > 600.0 and runtimeVars['eventDataList'][2]=="2025") or 
+                      (duration_seconds > 420.0 and runtimeVars['eventDataList'][2]!="2025")):
+                          
                     if i < len(runtimeVars['StationCutOffCount']):
                          runtimeVars['StationCutOffCount'][i] = runtimeVars['StationCutOffCount'][i] + 1
                     else:
@@ -156,7 +169,7 @@ def tidyTheData(df, filename):
 
             except (ValueError):
                     #One of the values in not a string so write NaN to the value.
-                    #logger.info(f'ValueError {filename} {x} {station_name_for_duration}, {start_timestamp_col_name}, {end_timestamp_col_name}'  )
+                    logger.info(f'ValueError {filename} {x} {station_name_for_duration}, {start_timestamp_col_name}, {end_timestamp_col_name}'  )
                     df.loc[x,station_name_for_duration] = float("nan")
 
             except (TypeError):
@@ -231,10 +244,21 @@ def tidyTheData(df, filename):
                       
             #time Adjust format is the samve #added for 2025
             if ('Time Adj' in df.columns and pd.isna(df.loc[x, "Time Adj"]) == False):
+                
+                time_str = df.loc[x,"Time Adj"]
+                multiplier = 1.0
+
+                # Check for a sign and set the multiplier
+                if time_str.startswith('-'):
+                    multiplier = -1.0
+                    time_str = time_str[1:]  # Remove the sign for parsing
+                elif time_str.startswith('+'):
+                    time_str = time_str[1:]  # Remove the sign for parsing
+                
                 #print(f"Time Adj 1: {df.loc[x,'Time Adj']}")
                 timeAdj = df.loc[x,"Time Adj"].replace("+", "")
-                df.loc[x,'Time Adj'] = timedelta.total_seconds(datetime.strptime(rl_data.convert_to_standard_time(df.loc[x,'Time Adj']),"%H:%M:%S.%f") 
-                                                             - datetime.strptime(rl_data.convert_to_standard_time("00:00:00.0")        ,"%H:%M:%S.%f"))
+                df.loc[x,'Time Adj'] = timedelta.total_seconds(datetime.strptime(rl_data.convert_to_standard_time(time_str),"%H:%M:%S.%f") 
+                                                             - datetime.strptime(rl_data.convert_to_standard_time("00:00:00.0")        ,"%H:%M:%S.%f")) * multiplier
             else:
                 df.loc[x,'Time Adj'] = 0.0
 
@@ -254,6 +278,9 @@ def tidyTheData(df, filename):
             for event in runtimeVars['StationListStart']:
                 #print(f"event in {x} {event}")
                 calculatedNetTime = calculatedNetTime + df.loc[x,event] 
+                
+            if ('Time Adj' in df.columns and pd.isna(df.loc[x, "Time Adj"]) == False):
+                calculatedNetTime = calculatedNetTime + df.loc[x,'Time Adj']    
 
             #Store the event time.
             df.loc[x,'Calc Time'] = calculatedNetTime    
@@ -726,7 +753,8 @@ def CreateHistAgeCat(df, filepath, runtimeVars, competitorIndex=-1 ):
         return True
 
     min_time_min = np.floor(net_times_in_minutes.min()) 
-    max_time_min = np.ceil(net_times_in_minutes.max()) 
+    #max_time_min = np.ceil(net_times_in_minutes.max()) 
+    max_time_min = np.ceil(net_times_in_minutes.quantile(0.98)) 
     if min_time_min >= max_time_min: max_time_min = min_time_min + 1
     bins = np.arange(min_time_min, max_time_min + 1, 1)
     if len(bins) < 2: bins = np.array([min_time_min, min_time_min + 1])
@@ -745,7 +773,6 @@ def CreateHistAgeCat(df, filepath, runtimeVars, competitorIndex=-1 ):
         if not category_order : category_order = unique_cats # Fallback if hint was bad
 
         try:
-            import seaborn as sns
             colors = sns.color_palette("tab10", n_colors=len(category_order))
         except ImportError:
             colors = plt.cm.get_cmap('viridis', len(category_order)).colors if len(category_order) > 0 else ['blue']
@@ -1094,7 +1121,8 @@ def CreateBarChartEvent(df, filepath, runtimeVars, competitorIndex=-1 ):
         '30-50%': [df[event].quantile(0.50) for event in station_names],
         '10-30%': [df[event].quantile(0.30) for event in station_names],
         '01-10%': [df[event].quantile(0.10) for event in station_names],
-        'Fastest': [df[event].min() for event in station_names]
+        'Fastest': [df[event].quantile(0.01) for event in station_names],       
+        #'Fastest': [df[event].min() for event in station_names]
     }
     
     band_colors = {
@@ -1340,7 +1368,12 @@ def CreateBarChartCutOffEvent(df, filepath, runtimeVars, competitorIndex=-1 ):
         cutOffStationList.append((100*runtimeVars['StationCutOffCount'][MyIndex]) / len(df.index) )
         MyIndex = MyIndex + 1
 
-    ax.bar(runtimeVars['StationList'], cutOffStationList,       color='red'   , label='Partipants > 7min')
+    if runtimeVars['eventDataList'][2]=="2025":
+        ax.bar(runtimeVars['StationList'], cutOffStationList,       color='red'   , label='Partipants > 10min')
+    else:
+        ax.bar(runtimeVars['StationList'], cutOffStationList,       color='orange', label='Partipants > 7min')
+
+    
 
     for container in ax.containers:
         ax.bar_label(container,fmt='%.1f%%')
@@ -1348,7 +1381,12 @@ def CreateBarChartCutOffEvent(df, filepath, runtimeVars, competitorIndex=-1 ):
     plt.grid(color ='grey', linestyle ='-.', linewidth = 0.5, alpha = 0.4)
     plt.tick_params(axis='x', labelrotation=90)
     plt.ylabel('Num Participants')
-    plt.title(runtimeVars['eventDataList'][1] + ' Station 7 Min Stats')
+    
+    if runtimeVars['eventDataList'][2]=="2025":
+        plt.title(runtimeVars['eventDataList'][1] + ' Station 10 Min Stats')
+    else:
+        plt.title(runtimeVars['eventDataList'][1] + ' Station 7 Min Stats')
+    
     plt.legend() 
 
     plt.savefig(filepath, bbox_inches='tight', pad_inches = 0.3)
@@ -1589,7 +1627,11 @@ def CreateGroupBarChart(df, filepath, runtimeVars, competitorIndex=-1 ):
 
     # 0. Get the competitor's time for each event
     competitor_event_times = []
-    station_names = runtimeVars['StationList'] # Use this for x-axis labels
+    #station_names = runtimeVars['StationList'] # Use this for x-axis labels
+    station_names = runtimeVars['StationList'].copy() # Copy to avoid modifying original list 
+     
+    # Ensure 'Time Adj' is included 
+    station_names.append('Time Adj')
 
     for event in station_names:
         competitor_event_times.append(df.loc[competitorIndex, event])
@@ -1697,7 +1739,12 @@ def CreateCumulativeTimeComparison(df, filepath, runtimeVars, competitorIndex=-1
 
     competitor_name = df.loc[competitorIndex, 'Name']
 
-    station_names = runtimeVars['StationList']
+    #station_names = runtimeVars['StationList']
+    station_names = runtimeVars['StationList'].copy() # Copy to avoid modifying original list 
+    
+    # Ensure 'Time Adj' is included 
+    station_names.append('Time Adj')
+    
     competitor_event_times = [df.loc[competitorIndex, event] for event in station_names]
 
     # --- Get Similar Finishers' Average Station Times ---
@@ -1812,7 +1859,12 @@ def CreateStationTimeDifferenceChart(df, filepath, runtimeVars, competitorIndex=
 
     competitor_name = df.loc[competitorIndex, 'Name']
         
-    station_names = runtimeVars['StationList']
+    #station_names = runtimeVars['StationList']
+    station_names = runtimeVars['StationList'].copy() # Copy to avoid modifying original list 
+    
+    # Ensure 'Time Adj' is included 
+    station_names.append('Time Adj')
+    
     competitor_event_times = np.array([df.loc[competitorIndex, event] for event in station_names])
 
     # --- Get Similar Finishers' Average Station Times ---
@@ -3272,8 +3324,7 @@ def redline_vis_generate_generic_init():
         'bar_stacked_dist_generic'      : True,
         'violin_generic'                : True,  
         'radar_median_generic'          : True,  
-        # cut off bar for 2025 is different need to add logic to differentiate...
-        #'cutoff_bar_generic'            : True,  
+        'cutoff_bar_generic'            : True,  
         'histogram_nettime_generic'     : True,  
         'catbar_avgtime_generic'        : True,  
         'correlation_bar_generic'       : True,  

@@ -568,6 +568,8 @@ def postdisplayEvent():
             heatmap_specific_columns = rl_data.STATIONLISTSTART23
         elif (rl_data.EVENT_DATA_LIST[index][2]=="2024"):
             heatmap_specific_columns = rl_data.STATIONLISTSTART24
+        elif (rl_data.EVENT_DATA_LIST[index][2]=="2025"):
+            heatmap_specific_columns = rl_data.STATIONLISTSTART25
         else:
             app.logger.error(f"ERROR: Event year not found {rl_data.EVENT_DATA_LIST[index][2]}")
             
