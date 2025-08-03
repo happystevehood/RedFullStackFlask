@@ -819,10 +819,12 @@ def generate_and_download_pdf_route():
 
     pdf_config_item = next((item for item in OUTPUT_CONFIGS if item['id'] == output_id), None)
     if not pdf_config_item:
+        app.logger.error(f"Invalid PDF type requested: {output_id}")
         return "Invalid PDF type requested", 400
     
     html_config_item = next((item for item in OUTPUT_CONFIGS if item['id'] == 'html_info_comp'), None)
     if not html_config_item:
+        app.logger.error(f"Invalid HTML Not found: {output_id}")
         return "Invalid HTML Not found", 400   
     
     if pdf_config_item['is_competitor_specific']:
@@ -831,17 +833,17 @@ def generate_and_download_pdf_route():
         
     # Check if this type of output is enabled in general_config
     if( outputVars.get(pdf_config_item['id'], False) == False ):
-        app.logger.info(f"Output type not enabled: {pdf_config_item['id']}")
+        app.logger.error(f"Output type not enabled: {pdf_config_item['id']}")
         return "Invalid PDF type requested", 400
 
     # Skip if mode doesn't match (e.g., trying to generate generic in competitor mode, or vice-versa)
     if pdf_config_item['id'] == 'pdf_report_comp' and pdf_config_item['is_competitor_specific'] == False:
-        app.logger.info(f"CompetitorAnalysis mode does not match output mode: {pdf_config_item['pdf_report_comp']} {pdf_config_item['is_competitor_specific']}")
+        app.logger.error(f"CompetitorAnalysis mode does not match output mode: {pdf_config_item['pdf_report_comp']} {pdf_config_item['is_competitor_specific']}")
         return "Invalid PDF type requested", 400
     
     # Skip if competitor is required but not found
     if pdf_config_item['id'] == 'pdf_report_generic' and pdf_config_item['is_competitor_specific'] == True:
-        app.logger.info(f"Generic PDF mode does not match output mode: {pdf_config_item['pdf_report_generic']} {pdf_config_item['is_competitor_specific']}")
+        app.logger.error(f"Generic PDF mode does not match output mode: {pdf_config_item['pdf_report_generic']} {pdf_config_item['is_competitor_specific']}")
         return "Invalid PDF type requested", 400
 
     # --- Assume PNGs are all ready and available  ---
@@ -881,8 +883,6 @@ def generate_and_download_pdf_route():
             pdf_filepath = Path(pdf_output_dir) / Path(pdf_filename)
 
             if(MakeFullPdfReport(filepath=pdf_filepath,  outputDict=outputDict, html_filepath=html_info_comp_filepaths, competitorAnalysis=outputVars['competitorAnalysis'])==True):
-                #app.logger.error(f"PDF done {pdf_filename} and pdf_config_item {pdf_config_item}")
-
                 return send_file(pdf_filepath, as_attachment=True, mimetype='application/pdf')
             
         else:
