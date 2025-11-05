@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 import uuid
 from io import BytesIO
+import re
 
 #for security purposes
 from flask_wtf.csrf import CSRFProtect, generate_csrf
@@ -29,6 +30,7 @@ from functools import wraps
 import shutil
 import json
 import re
+
 
 # --- Define the ANSI Escape Code Regular Expression ---
 # This regex matches the patterns for ANSI color codes.
@@ -159,7 +161,9 @@ def create_app():
                                             description= e.description)
                 raise e
             except:
-                return  render_template('error.html', string1="Error", string2="Something went wrong")
+                return  render_template('error.html', string1="Error",
+                                            error_code=e.code,        
+                                            string2="Something went wrong")
 
     OutputInfo = False
 
@@ -414,7 +418,7 @@ def feedback():
 
             filename = rl_data.CSV_FEEDBACK_DIR / Path('feedback.csv')
 
-            with open(filename, 'a', newline='', encoding='utf-8') as f:
+            with open(filename, 'a', newline='', encoding='utf-8-sig') as f:
                 writer = csv.writer(f)
                 writer.writerow([datetime.now().isoformat(), name, email, comments, category, rating])
 
@@ -568,10 +572,12 @@ def postdisplayEvent():
             heatmap_specific_columns = rl_data.STATIONLISTSTART23
         elif (rl_data.EVENT_DATA_LIST[index][2]=="2024"):
             heatmap_specific_columns = rl_data.STATIONLISTSTART24
-        elif (rl_data.EVENT_DATA_LIST[index][2]=="2025"):
+        elif rl_data.EVENT_DATA_LIST[index][2]=="2025" and rl_data.EVENT_DATA_LIST[index][5]=="KL":
             heatmap_specific_columns = rl_data.STATIONLISTSTART25
+        elif rl_data.EVENT_DATA_LIST[index][2]=="2025" and rl_data.EVENT_DATA_LIST[index][7]=="CRU_FIT_GAM" :
+            heatmap_specific_columns = rl_data.STATIONLISTSTARTCRU25
         else:
-            app.logger.error(f"ERROR: Event year not found {rl_data.EVENT_DATA_LIST[index][2]}")
+            app.logger.error(f"ERROR: Event year not found {rl_data.EVENT_DATA_LIST[index][2]}") 
             
         #add the time column to the heatmap_specific_columns listdf.dropna
         heatmap_specific_columns.append('Time Adj')
@@ -1102,7 +1108,7 @@ def admin_feedback():
         filename = rl_data.CSV_FEEDBACK_DIR / Path('feedback.csv')
 
         if os.path.exists(filename):
-            with open(filename, newline='', encoding='utf-8') as f:
+            with open(filename, newline='', encoding='utf-8-sig') as f:
                 reader = csv.reader(f)
                 feedback_list = list(reader)
 
@@ -1271,82 +1277,88 @@ def delete_single_log(filename):
 def view_logs():
     app.logger.debug(f"/admin/logs received. Checking for logs...")
     
-    import re
+    page = request.args.get('page', 1, type=int)
+    files_per_page = rl_data.MAX_LOG_FILES_TO_DISPLAY
+
     ANSI_ESCAPE_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
     log_files_content = {}
     env_mode = os.environ.get('ENV_MODE', 'development')
+    
+    pagination = {'current_page': page, 'total_pages': 1}
 
     try:
         if env_mode == 'deploy':
-            # --- (Your GCS logic remains unchanged) ---
             if not rl_data.storage or not rl_data.BLOG_BUCKET_NAME:
                 log_files_content['error'] = "GCS is not configured on the server."
-                app.logger.warning("GCS logging not configured, cannot view logs.")
+                app.logger.warning(f"GCS is not configured on the server.")
             else:
-                app.logger.info(f"Attempting to read logs from GCS bucket: {rl_data.BLOG_BUCKET_NAME}")
                 storage_client = rl_data.storage.Client()
                 bucket = storage_client.bucket(rl_data.BLOG_BUCKET_NAME)
-                
                 prefix_to_view = f"logs/deploy/app_"
                 
                 blobs = list(reversed(list((bucket.list_blobs(prefix=prefix_to_view)))))
-                app.logger.info(f"Found {len(blobs)} log blob(s) in GCS with prefix '{prefix_to_view}'.")
+                app.logger.info(f"Found {len(blobs)} total log blob(s) in GCS.")
 
-                if not blobs:
-                    log_files_content['info'] = f"No log files found with prefix '{prefix_to_view}' in GCS bucket '{rl_data.BLOG_BUCKET_NAME}'."
+                total_files = len(blobs)
+                pagination['total_pages'] = max(1, (total_files + files_per_page - 1) // files_per_page)
+                start_index = (page - 1) * files_per_page
+                end_index = start_index + files_per_page
+                
+                paginated_blobs = blobs[start_index:end_index]
+
+                if not paginated_blobs and total_files > 0:
+                     log_files_content['info'] = "No log files to display on this page."
                 else:
-                    for blob in blobs:
-                        app.logger.debug(f"Attempting to download blob: {blob.name}")
+                    for blob in paginated_blobs:
                         content = blob.download_as_text() 
-                        clean_content = ANSI_ESCAPE_RE.sub('', content)
-                        log_files_content[blob.name] = clean_content
-                        
-                        app.logger.info(f"Successfully read {len(content)} bytes from {blob.name}.")
-
+                        log_files_content[blob.name] = ANSI_ESCAPE_RE.sub('', content)
         else:
-            # --- MODIFIED: Read from Local File ---
-            local_log_file_path = Path(rl_data.LOG_FILE)
-            
-            # Ensure the directory exists first
-            local_log_file_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            # If the main log file was deleted, touch it to recreate it as empty
-            if not local_log_file_path.exists():
-                local_log_file_path.touch()
-                app.logger.info(f"Main log file '{local_log_file_path}' was missing. Recreated empty file.")
-
-            # Now, read all .log and .log.* files in the directory
+            # --- Local File Logic ---
             log_directory = Path(rl_data.LOG_FILE_DIR)
-            
-            # Get all log files, sort them to show the main one first, then backups
+            log_directory.mkdir(parents=True, exist_ok=True)
+            if not Path(rl_data.LOG_FILE).exists():
+                Path(rl_data.LOG_FILE).touch()
+
             all_log_files = sorted(
                 [f for f in log_directory.iterdir() if f.is_file() and str(f.name).startswith('activity.log')],
                 key=lambda x: str(x.name)
             )
 
-            if all_log_files:
-                for log_file in all_log_files:
-                    app.logger.info(f"Reading local log file: {log_file}")
+            total_files = len(all_log_files)
+            pagination['total_pages'] = max(1, (total_files + files_per_page - 1) // files_per_page)
+            start_index = (page - 1) * files_per_page
+            end_index = start_index + files_per_page
+
+            paginated_files = all_log_files[start_index:end_index]
+
+            if not paginated_files and total_files > 0:
+                 log_files_content['info'] = "No log files to display on this page."
+            else:
+                for log_file in paginated_files:
                     with open(log_file, 'r', encoding='utf-8') as f:
                         log_contents = f.read()
                     log_files_content[log_file.name] = ANSI_ESCAPE_RE.sub('', log_contents)
-            else:
-                 log_files_content['info'] = "No log files found in the log directory."
-
 
     except Exception as e:
-        # This will catch permissions errors and other issues
-        app.logger.error(f"An error occurred while viewing logs: {e}", exc_info=True)
-        log_files_content['error'] = f"An error occurred while trying to read logs: {e}"
+        # ### MODIFICATION: Capture the FULL traceback ###
+        # This will show you the exact line of code that failed and why.
+        app.logger.error(f"A critical error occurred while viewing logs: {e}", exc_info=True)
+        
+        # Create a detailed error message with the full traceback
+        error_details = f"An error occurred while trying to read logs:\n\n{traceback.format_exc()}"
+        
+        # We will display this directly on the page for debugging
+        log_files_content['error'] = error_details
+        # ### END MODIFICATION ###
 
-    
     current_levels = rl_data.get_log_levels()
     
     return render_template('admin_logs.html', 
                            log_files_content=log_files_content, 
                            current_levels=current_levels,
-                           env_mode=env_mode)
-
+                           env_mode=env_mode,
+                           pagination=pagination)
+    
 @app.route('/admin/logs/download/<path:gcs_blob_name>')
 @login_required
 def download_gcs_log(gcs_blob_name):

@@ -43,6 +43,184 @@ from rl.rl_dict import OUTPUT_CONFIGS
 # Otherwise get this warning - UserWarning: Starting a Matplotlib GUI outside of the main thread will likely fail
 mpl.use('agg')
  
+ #############################
+# Tidy df functions 
+#############################
+ 
+def prepare_data_for_processing(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Prepares a fitness games DataFrame for further processing using the provided
+    helper functions for time string standardization.
+    """
+    df_processed = df.copy()
+    
+    runtimeVars = session.get('runtime', {})
+    station_list = runtimeVars['StationList']
+
+    # --- Step 1: Standardize common column names ---
+    rename_map = {'Overall Pos': 'Pos', 'Net Pos': 'Pos', 'Net Cat Pos': 'Cat Pos'}
+    df_processed.rename(columns=rename_map, inplace=True)
+    df_processed = df_processed.drop(columns=['Fav', 'Share', 'Net Cat Pos (Net Gen Pos)', 'Net Gender Pos'], errors='ignore')
+
+    # --- Step 2: Detect format and apply the correct transformation ---
+    if 'Start' not in df_processed.columns:
+        # ** CRUCIBLE FORMAT DETECTED (Durations) **
+        print("--> Detected 'Crucible' format (durations). Applying full transformation...")
+
+        # Check if the 'Status' column exists to avoid errors.
+        if 'Status' in df_processed.columns:
+            #print("Found 'Status' column. Filtering for 'Finished' entries...")
+            original_row_count = len(df_processed)
+
+            # 2. For each row, keep only the ones where the 'Status' is 'Finished'.
+            #    We use .str.strip() to handle potential extra spaces like "Finished ".
+            df_processed = df_processed[df_processed['Status'].str.strip() == 'Finished'].copy()
+
+            # Provide feedback on how many rows were removed
+            rows_removed = original_row_count - len(df_processed)
+            #if rows_removed > 0:
+            #    print(f"Removed {rows_removed} rows with a status other than 'Finished'.")
+
+            # 3. At the end, delete the 'Status' column from the DataFrame.
+            df_processed.drop(columns=['Status'], inplace=True)
+            #print("Successfully removed the 'Status' column.")
+
+        else:
+            print("Warning: 'Status' column not found. No filtering was performed.")
+
+
+        # 2a. Dynamically identify station columns
+        df_processed.rename(columns={'Sled Push & Pull':'Sled Push Pull'},inplace=True)
+        df_processed.rename(columns={'Ski Erg':'Ski'},inplace=True)
+        df_processed.rename(columns={'Row Erg':'Row'},inplace=True)
+        df_processed.rename(columns={'Bike Erg':'Bike'},inplace=True)
+        df_processed.rename(columns={'Erg Bike':'Bike'},inplace=True)
+        
+        known_metadata_cols = ['Name', 'Race No', 'Pos', 'Cat Pos', 'Net Time', 'Category', 'Wave', 'Gender', 'Team', 'Member1', 'Member2', 'Member3', 'Member4']
+        station_cols = [col for col in df_processed.columns if col not in known_metadata_cols]
+        
+        # 2b. Standardize all time strings, then convert to seconds for calculation
+        df_processed['Net Time'] = df_processed['Net Time'].apply(rl_data.convert_to_standard_time).apply(rl_data.standard_time_str_to_seconds)
+        for col in station_cols:
+            df_processed[col] = df_processed[col].apply(rl_data.convert_to_standard_time).apply(rl_data.standard_time_str_to_seconds)
+        
+        # 2c. Add 'Start' and 'Time Adj'
+        df_processed['Start'] = 0.0
+        if 'Time Adj' not in df_processed.columns:
+             df_processed['Time Adj'] = 0.0
+             df_processed['Time Adj'] = df_processed['Time Adj'].apply(rl_data.seconds_to_standard_time_str)
+
+        # 2e. iteratively finds rows with missing station times and corrects the
+        # subsequent station's time, which is incorrectly recorded as an elapsed time.
+        
+        # ### FIX: Convert all station columns to 'object' dtype ###
+        # This prevents the FutureWarning by ensuring the columns can accept string values
+        # like '00:00:00' even if they were initially inferred as float64 due to being empty.
+        for station_name in station_list:
+            if station_name in df_processed.columns:
+                df_processed[station_name] = df_processed[station_name].astype(object)
+        # ### END FIX ###
+
+        # Iterate over each row
+        for index, row in df_processed.iterrows():
+            # --- DEBUGGING: Add a loop counter and limit ---
+            loop_count = 0
+            loop_limit = 20 # A safe limit, as there are only ~12 stations
+
+            while True:
+                loop_count += 1
+                if loop_count > loop_limit:
+                    #print(f"!!! Loop limit exceeded for row index {index}. Breaking to prevent infinite loop. !!!")
+                    #print("--- FINAL ROW STATE ---")
+                    #print(row[station_list])
+                    break
+
+                blank_info = rl_data.find_first_blank_column(row, station_list[:-1])
+                
+                # If no blank is found, this row is clean, so we can exit the while loop
+                if blank_info is None:
+                    # If this is the first pass, the row was already clean.
+                    if loop_count == 1:
+                        pass # Just move on
+                    #else:
+                    #    print(f"--- Row {index} successfully cleaned. ---")
+                    break
+                
+                # --- DEBUGGING: Print the state at the start of the loop ---
+                #print(f"\n--- Processing Row Index: {index} (Attempt #{loop_count}) ---")
+                #print(f"Found blank column: {blank_info}")
+
+                blank_col_index, blank_col_name = blank_info
+                elapsed_time_col_name = station_list[blank_col_index + 1]
+                elapsed_seconds = row.get(elapsed_time_col_name, '') # Use .get for safety
+
+                if pd.notna(elapsed_seconds) and elapsed_seconds != '':
+                    #print(f"  > row: {row}")
+                    previous_station_cols = station_list[:blank_col_index]
+                    sum_of_previous_seconds = rl_data.calculate_row_sum(row, previous_station_cols)
+                    
+                    correct_duration_seconds = elapsed_seconds - sum_of_previous_seconds
+                    
+                    # --- DEBUGGING: Print calculations ---
+                    #print(f"  > Previous stations columns: {previous_station_cols}")
+                    #print(f"  > Previous stations sum: {sum_of_previous_seconds}s")
+                    #print(f"  > Incorrect elapsed time in '{elapsed_time_col_name}': {elapsed_seconds}s ")
+                    #
+                    # print(f"  > Calculated correct duration: {correct_duration_seconds}s ")
+
+                    df_processed.at[index, elapsed_time_col_name] = correct_duration_seconds
+                #else:
+                    #print(f"  > The next column '{elapsed_time_col_name}' is also blank. Skipping correction for it.")
+
+                # Fill the original blank cell
+                df_processed.at[index, blank_col_name] = 0.0
+                #print(f"  > Filled '{blank_col_name}' with '0.0'.")
+                
+                # Update the 'row' variable with the changes
+                row = df_processed.loc[index]
+            
+        # 2e. Calculate cumulative sum of durations IN SECONDS
+        
+        # 1. Create a temporary DataFrame containing only numerical seconds.
+        #    We use .apply() to run your time_str_to_seconds function on every cell.
+        df_seconds = df_processed[station_cols].apply(pd.to_numeric, errors='coerce').fillna(0)
+
+        # 2. Now, perform the cumsum() operation on this purely numerical DataFrame.
+        #    This will now work correctly.
+        df_cumulative_seconds = df_seconds.cumsum(axis=1)
+
+        # 2f. Convert cumulative seconds and other time fields back to STANDARD STRING format
+        df_processed['Start'] = df_processed['Start'].apply(rl_data.seconds_to_standard_time_str)
+        df_processed['Net Time'] = df_processed['Net Time'].apply(rl_data.seconds_to_standard_time_str)
+        for col in station_cols:
+             df_processed[col] = df_cumulative_seconds[col].apply(rl_data.seconds_to_standard_time_str)
+        
+        #print(f"--> Transformation complete. Data is now in cumulative timestamp format.")
+
+    else:
+        # ** REDLINE FORMAT DETECTED (Cumulative Timestamps) **
+        print("--> Detected 'Redline' format (cumulative timestamps). Applying standardization...")
+        
+        # 2a. Normalize legacy Redline names
+        redline_rename_map = {
+            'Sled Push & Pull': 'Sled Push Pull', 'Ski Erg': 'Ski', 'Row Erg': 'Row', 'Bike Erg': 'Bike',
+            'Battle Rope Whips': 'Battle Whip', 'SandbagGauntlet': 'Sandbag Gauntlet',
+            'Deadball Burpee Over Target': 'Deadball Burpee',
+        }
+        df_processed.rename(columns=redline_rename_map, inplace=True)
+
+        # 2b. Ensure all timestamp fields are in the standard format
+        known_metadata_cols = ['Name', 'Race No', 'Pos', 'Cat Pos', 'Net Time', 'Category', 'Wave', 'Gender', 'Time Adj', 'Team', 'Member1', 'Member2', 'Member3', 'Member4']
+        timestamp_cols = [col for col in df_processed.columns if col not in known_metadata_cols] + ['Net Time']
+        
+        for col in timestamp_cols:
+             if col in df_processed.columns:
+                  df_processed[col] = df_processed[col].apply(rl_data.convert_to_standard_time)
+
+        print("--> Standardization complete.")
+
+    return df_processed
+ 
 #############################
 # Tidy df functions 
 #############################
@@ -71,6 +249,7 @@ def tidyTheData(df, filename):
     df.rename(columns={'Ski Erg':'Ski'},inplace=True)
     df.rename(columns={'Row Erg':'Row'},inplace=True)
     df.rename(columns={'Bike Erg':'Bike'},inplace=True)
+    df.rename(columns={'Erg Bike':'Bike'},inplace=True)
     df.rename(columns={'Battle Rope Whips':'Battle Whip'},inplace=True)
     df.rename(columns={'SandbagGauntlet':'Sandbag Gauntlet'},inplace=True)
     df.rename(columns={'Deadball Burpee Over Target':'Deadball Burpee'},inplace=True)
@@ -227,7 +406,8 @@ def tidyTheData(df, filename):
                                 df.loc[x,runtimeVars['StationListStart'][MyIndex]] = float("nan")
 
                                 #print(f"tidyTheData ValueError, TypeError: {x} {event} {MyIndex} {rl_data.convert_to_standard_time(dforig.loc[x,event])} {rl_data.convert_to_standard_time(dforig.loc[x,runtimeVars['StationListStart'][MyIndex-2]])}")
-
+                                
+                    
         MyIndex = MyIndex - 1
 
     # convert Net Time Column to float in seconds.
@@ -286,7 +466,7 @@ def tidyTheData(df, filename):
             df.loc[x,'Calc Time'] = calculatedNetTime    
 
             #if NetTime - Calculated time is more than 13 seconds
-            if (abs(df.loc[x,'Net Time'] - calculatedNetTime) > 13):                               
+            if ((abs(df.loc[x,'Net Time'] - calculatedNetTime) > 13) and runtimeVars['eventDataList'][7]=="RL_FIT_GAM"):                               
                 logger.info(f"Warning: NetTime Mismatch {filename} {abs(df.loc[x,'Net Time'] - calculatedNetTime)}, {x}"  )
 
         except (ValueError, TypeError):
@@ -474,7 +654,7 @@ def GenerateCompInfoTable(df, filepath, runtimeVars, competitorIndex=-1 ):
     if os.path.isfile(filepath) : # Add force check if needed
         logger.debug(f"File {filepath} already exists. Reading content.")
         try:
-            with open(filepath, 'r', encoding='utf-8') as f:
+            with open(filepath, 'r', encoding='utf-8-sig') as f:
                 return f.read()
         except Exception as e:
             logger.critical(f"Error reading existing HTML file {filepath}: {e}")
@@ -484,7 +664,7 @@ def GenerateCompInfoTable(df, filepath, runtimeVars, competitorIndex=-1 ):
         logger.error(message)
         error_html = f"<p class='text-danger'>{message}</p>"
         try:
-            with open(filepath, "w", encoding='utf-8') as file: file.write(error_html)
+            with open(filepath, "w", encoding='utf-8-sig') as file: file.write(error_html)
         except Exception as e: logger.critical(f"Error writing error HTML to {filepath}: {e}")
         return error_html
 
@@ -494,12 +674,20 @@ def GenerateCompInfoTable(df, filepath, runtimeVars, competitorIndex=-1 ):
     competitor_name_title = df.loc[competitorIndex, "Name"].title() if pd.notna(df.loc[competitorIndex, "Name"]) else "N/A"
 
     if 'Member1' in df.columns and pd.notna(df.loc[competitorIndex, "Member1"]):
-        members_list = [df.loc[competitorIndex, f"Member{i}"].title() for i in range(1, 5) if f"Member{i}" in df.columns and pd.notna(df.loc[competitorIndex, f"Member{i}"])]
-        team_members_str = ", ".join(members_list)
+        members_list = [df.loc[competitorIndex, f"Member{i}"].title() for i in range(1, 3) if f"Member{i}" in df.columns and pd.notna(df.loc[competitorIndex, f"Member{i}"])]
+        
+        if 'Member3' in df.columns and pd.notna(df.loc[competitorIndex, "Member3"]):
+            members_list = [df.loc[competitorIndex, f"Member{i}"].title() for i in range(3, 5) if f"Member{i}" in df.columns and pd.notna(df.loc[competitorIndex, f"Member{i}"])] + members_list
+
+        team_members_str = ', '.join(members_list)        
         html_parts.append(f'<tr><th scope="row" style="width: 30%;">Team Name</th><td>{competitor_name_title}</td></tr>')
         if team_members_str: html_parts.append(f'<tr><th scope="row">Members</th><td>{team_members_str}</td></tr>')
     else:
         html_parts.append(f'<tr><th scope="row" style="width: 30%;">Competitor Name</th><td>{competitor_name_title}</td></tr>')
+
+    if 'Team' in df.columns and pd.notna(df.loc[competitorIndex, "Team"]) :
+        team_name_title = df.loc[competitorIndex, "Team"].title() 
+        html_parts.append(f'<tr><th scope="row">Team</th><td>{team_name_title}</td></tr>')
 
     if 'Gender' in df.columns:
         html_parts.append(f'<tr><th scope="row">Gender</th><td>{df.loc[competitorIndex, "Gender"]}</td></tr>')
@@ -633,7 +821,7 @@ def GenerateCompInfoTable(df, filepath, runtimeVars, competitorIndex=-1 ):
     final_html = "".join(html_parts)
 
     try:
-        with open(filepath, "w", encoding='utf-8') as file:
+        with open(filepath, "w", encoding='utf-8-sig') as file:
             file.write(final_html)
         logger.debug(f"Saved competitor info HTML to {filepath}")
     except Exception as e:
@@ -2566,9 +2754,15 @@ def prepare_visualization_data_for_template( competitorDetails):
     elif runtimeVars['eventDataList'][2]=="2024":
         runtimeVars['StationList'] = rl_data.STATIONLIST24
         runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART24
-    else:
+    elif runtimeVars['eventDataList'][2]=="2025" and runtimeVars['eventDataList'][5]=="KL":
         runtimeVars['StationList'] = rl_data.STATIONLIST25
         runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART25
+    elif runtimeVars['eventDataList'][2]=="2025" and runtimeVars['eventDataList'][7]=="CRU_FIT_GAM" :
+        runtimeVars['StationList'] = rl_data.STATIONLISTCRU25
+        runtimeVars['StationListStart'] = rl_data.STATIONLISTSTARTCRU25
+    else:
+        logger.error(f"ERROR: Event not found {runtimeVars['eventDataList'][2]} {runtimeVars['eventDataList'][5]} {runtimeVars['eventDataList'][7]}") 
+
         
     logger.info(f"Preparing event page: {runtimeVars['eventDataList'][0]}")
    
@@ -2700,15 +2894,21 @@ def prepare_competitor_visualization_page(competitorDetails):
     elif runtimeVars['eventDataList'][2]=="2024":
         runtimeVars['StationList'] = rl_data.STATIONLIST24
         runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART24
-    else:
+    elif runtimeVars['eventDataList'][2]=="2025" and runtimeVars['eventDataList'][5]=="KL":
         runtimeVars['StationList'] = rl_data.STATIONLIST25
         runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART25
+    elif runtimeVars['eventDataList'][2]=="2025" and runtimeVars['eventDataList'][7]=="CRU_FIT_GAM" :
+        runtimeVars['StationList'] = rl_data.STATIONLISTCRU25
+        runtimeVars['StationListStart'] = rl_data.STATIONLISTSTARTCRU25
+    else:
+        logger.error(f"ERROR: Event not found {runtimeVars['eventDataList'][2]} {runtimeVars['eventDataList'][5]} {runtimeVars['eventDataList'][7]}") 
 
     logger.info(f"Preparing competitor page for event: {runtimeVars['eventDataList'][0]}")
     
     indatafile = Path(rl_data.CSV_INPUT_DIR) / Path(runtimeVars['eventDataList'][0] + '.csv')
     try:
-        df = pd.read_csv(indatafile)
+        df_raw = pd.read_csv(indatafile)
+        df = prepare_data_for_processing(df_raw)
         tidyTheData(df=df, filename=indatafile)
     except FileNotFoundError:
         logger.critical(f"Data file not found: {indatafile}")
@@ -2948,8 +3148,12 @@ def generate_single_output_file(params): # df_override for testing or specific c
                 temp_runtimeVars['StationList'] = rl_data.STATIONLIST23
             elif element[2] == "2024": 
                 temp_runtimeVars['StationList'] = rl_data.STATIONLIST24
-            else: 
+            elif element[2]=="2025" and element[5]=="KL":
                 temp_runtimeVars['StationList'] = rl_data.STATIONLIST25
+            elif element[2]=="2025" and element[7]=="CRU_FIT_GAM" :
+                temp_runtimeVars['StationList'] = rl_data.STATIONLISTCRU25
+            else:
+                logger.error(f"ERROR: Event not found {element[2]} {element[5]} {element[7]}") 
 
             event_details_found = True
             break
@@ -3069,19 +3273,25 @@ def redline_vis_generate(competitorDetails):
         if (eventDataList[2]=="2023"):
             runtimeVars['StationList'] = rl_data.STATIONLIST23
             runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART23
-
         elif (eventDataList[2]=="2024"):
             runtimeVars['StationList'] = rl_data.STATIONLIST24
             runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART24
-        else:
+        elif runtimeVars['eventDataList'][2]=="2025" and runtimeVars['eventDataList'][5]=="KL":
             runtimeVars['StationList'] = rl_data.STATIONLIST25
             runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART25
+        elif runtimeVars['eventDataList'][2]=="2025" and runtimeVars['eventDataList'][7]=="CRU_FIT_GAM" :
+            runtimeVars['StationList'] = rl_data.STATIONLISTCRU25
+            runtimeVars['StationListStart'] = rl_data.STATIONLISTSTARTCRU25
+        else:
+            logger.error(f"ERROR: Event not found {runtimeVars['eventDataList'][2]} {runtimeVars['eventDataList'][5]} {runtimeVars['eventDataList'][7]}") 
 
         logger.debug(f"eventDataList[0] {eventDataList[0]}")
 
         indatafile = Path(rl_data.CSV_INPUT_DIR) / Path(eventDataList[0] + '.csv')
         try:
-            df = pd.read_csv(indatafile)
+            df_raw = pd.read_csv(indatafile)
+            df = prepare_data_for_processing(df_raw)
+            
             tidyTheData(df=df, filename=indatafile) # Pass filename for logging if tidyTheData uses it
         except FileNotFoundError:
             logger.critical(f"Data file not found: {indatafile}")

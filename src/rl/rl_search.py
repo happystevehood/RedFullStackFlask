@@ -19,13 +19,14 @@ def find_competitor(competitor, callback):
         filepath = Path(rl_data.CSV_INPUT_DIR) / Path(element[0] + '.csv')
 
         try:
-            with open(filepath, newline='', encoding='utf-8') as csvfile:
+            with open(filepath, newline='', encoding='utf-8-sig') as csvfile:
+                
                 reader = csv.DictReader(csvfile)
                 for row in reader:
                     found = False
                     # Check if the name field has a partial match with competitor (case insensitive)
+                    #logger.debug(f'before if competitor check {row}')
                     if competitor.upper() in row['Name'].upper():
-
                         match = {
                             'competitor': row['Name'],
                             'description': element[1],  
@@ -65,6 +66,18 @@ def find_competitor(competitor, callback):
                                 return 
                     elif found == False and 'Member2' in row:        
                         if competitor.upper() in row['Member1'].upper() or competitor.upper() in row['Member2'].upper(): 
+                            match = {
+                                'competitor': row['Name'],
+                                'description': element[1],  
+                                'race_no': row['Race No'],
+                                'event': element[0]  # could be extracted from filename
+                            }
+                            logger.debug(f"found a match {match}")
+                            matches.append(match)
+                            matchcount += 1
+
+                    elif found == False and 'Team' in row:        
+                        if competitor.upper() in row['Team'].upper(): 
                             match = {
                                 'competitor': row['Name'],
                                 'description': element[1],  

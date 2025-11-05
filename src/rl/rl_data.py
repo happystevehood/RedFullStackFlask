@@ -19,7 +19,7 @@ import time
 from PIL import Image # Import Pillow
 from io import BytesIO
 import numpy as np
-
+import pandas as pd
 # In your rl_data_gcs.py or rl_data.py
 
 from google.auth import iam as google_auth_iam # Alias to avoid confusion with any 'iam' variable
@@ -53,6 +53,7 @@ TEMPLATE_FOLDER = Path('templates')
 LOG_FILE_DIR      = Path('store') / 'logs'
 LOG_FILE          = LOG_FILE_DIR / 'activity.log'
 LOG_CONFIG_FILE   = LOG_FILE_DIR / 'log_config.json'
+MAX_LOG_FILES_TO_DISPLAY = 20  # Max number of log files to display in the log viewer
 
 CSV_FEEDBACK_DIR  = Path('store') / 'feedback'
 FEEDBACK_FILENAME  = 'feedback.csv'
@@ -114,50 +115,69 @@ STATIONLISTSTART23 = ['Start', 'Run','Bike','Sandbag Gauntlet','Battle Rope Pull
 STATIONLIST24 =      [         'Run', 'Row', 'Deadball Burpee', 'Pendulum Shots', 'Bike', 'Sandbag Gauntlet', 'Battle Whip', 'Farmer\'s Carry', 'Agility Chamber', 'Ski', 'Mule', 'Sled Push Pull']
 STATIONLISTSTART24 = ['Start', 'Run', 'Row', 'Deadball Burpee', 'Pendulum Shots', 'Bike', 'Sandbag Gauntlet', 'Battle Whip', 'Farmer\'s Carry', 'Agility Chamber', 'Ski', 'Mule', 'Sled Push Pull']
 
-#The 2025 Events Lists
+#The 2025 KL Redline Events Lists
 STATIONLIST25 =      [         'RUN', 'SKI', 'DEADBALL BURPEES', 'BIKE', 'FARMER\'S CARRY', 'SHUTTLE RUNS', 'RUSSIAN TWISTS', 'SANDBAG GAUNTLET', 'ROW', 'SQUAT THRUSTS', 'THE MULE', 'SLED PUSH & PULL']
 STATIONLISTSTART25 = ['Start', 'RUN', 'SKI', 'DEADBALL BURPEES', 'BIKE', 'FARMER\'S CARRY', 'SHUTTLE RUNS', 'RUSSIAN TWISTS', 'SANDBAG GAUNTLET', 'ROW', 'SQUAT THRUSTS', 'THE MULE', 'SLED PUSH & PULL']
+
+#The 2025 Crucible Events Lists
+STATIONLISTCRU25 =      [         'Bike', 'Row', 'Burden Run', 'Deadball Power Trip', 'Sandbag Hoist', 'Sled Push Pull', 'Burpee to Plate', 'Cruciball Chamber', 'Run', 'Ski', 'Lactic Legs', 'Cruci-Haul']
+STATIONLISTSTARTCRU25 = ['Start', 'Bike', 'Row', 'Burden Run', 'Deadball Power Trip', 'Sandbag Hoist', 'Sled Push Pull', 'Burpee to Plate', 'Cruciball Chamber', 'Run', 'Ski', 'Lactic Legs', 'Cruci-Haul']
+
+
 
 
 # Your data for filtering purposes
 EVENT_DATA_LIST = [
-    #2025
-
-    ["WomensSinglesAdvKL2025", "REDLINE Fitness Games '25 KL Womens Singles Advanced", "2025", "WOMENS", "SINGLES_ADVANCED", "KL", "YES_CAT"],
-    ["MensSinglesAdvKL2025", "REDLINE Fitness Games '25 KL Mens Singles Advanced", "2025", "MENS", "SINGLES_ADVANCED", "KL", "YES_CAT"],
-    ["WomensSinglesInterKL2025", "REDLINE Fitness Games '25 KL Womens Singles Intermediate", "2025", "WOMENS", "SINGLES_INTERMEDIATE", "KL", "YES_CAT"],
-    ["MensSinglesInterKL2025", "REDLINE Fitness Games '25 KL Mens Singles Intermediate", "2025", "MENS", "SINGLES_INTERMEDIATE", "KL", "YES_CAT"],
-    ["WomensBeginnersKL2025", "REDLINE Fitness Games '25 KL Womens Singles Beginners", "2025", "WOMENS", "SINGLES_BEGINNERS", "KL", "YES_CAT"],
-    ["MensBeginnersKL2025", "REDLINE Fitness Games '25 KL Mens Singles Beginners", "2025", "MENS", "SINGLES_BEGINNERS", "KL", "YES_CAT"],
-    ["WomensDoublesKL2025", "REDLINE Fitness Games '25 KL Womens Doubles", "2025", "WOMENS", "DOUBLES", "KL", "YES_CAT"],
-    ["MixedDoublesKL2025", "REDLINE Fitness Games '25 KL Mixed Doubles", "2025", "MIXED", "DOUBLES", "KL", "YES_CAT"],
-    ["MensDoublesKL2025", "REDLINE Fitness Games '25 KL Mens Doubles", "2025", "MENS", "DOUBLES", "KL", "YES_CAT"],
-    ["TeamRelayWomenKL2025", "REDLINE Fitness Games '25 KL Womens Team Relay", "2025", "WOMENS", "RELAY", "KL", "YES_CAT"],
-    ["TeamRelayMenKL2025", "REDLINE Fitness Games '25 KL Mens Team Relay", "2025", "MENS", "RELAY", "KL", "YES_CAT"],
-    ["TeamRelayMixedKL2025", "REDLINE Fitness Games '25 KL Mixed Team Relay", "2025", "MIXED", "RELAY", "KL", "YES_CAT"],
+    
+    #2025 Crucible Games Bangkok
+    ["Cru2025WomensSinglesGold", "Crucible Fitness Games '25 BKK Womens Singles Gold", "2025", "WOMENS", "SINGLES_ADVANCED", "BKK", "YES_CAT", "CRU_FIT_GAM"],
+    ["Cru2025MensSinglesGold", "Crucible Fitness Games '25 BKK Mens Singles Gold",     "2025", "MENS", "SINGLES_ADVANCED", "BKK", "YES_CAT", "CRU_FIT_GAM"],
+    ["Cru2025WomensSinglesSilver", "Crucible Fitness Games '25 BKK Womens Singles Silver", "2025", "WOMENS", "SINGLES_INTERMEDIATE", "BKK", "YES_CAT", "CRU_FIT_GAM"],
+    ["Cru2025MensSinglesSilver", "Crucible Fitness Games '25 BKK Mens Singles Silver", "2025", "MENS", "SINGLES_INTERMEDIATE", "BKK", "YES_CAT", "CRU_FIT_GAM"],
+    ["Cru2025SinglesBonze", "Crucible Fitness Games '25 BKK Singles Bronze", "2025", "MIXED", "SINGLES_BEGINNERS", "BKK", "YES_CAT", "CRU_FIT_GAM"],
+    ["Cru2025WomensDoubles", "Crucible Fitness Games '25 BKK Womens Doubles", "2025", "WOMENS", "DOUBLES", "BKK", "YES_CAT", "CRU_FIT_GAM"],
+    ["Cru2025MensDoubles", "Crucible Fitness Games '25 BKK Mens Doubles", "2025", "MENS", "DOUBLES", "BKK", "YES_CAT", "CRU_FIT_GAM"],
+    ["Cru2025MixedDoubles", "Crucible Fitness Games '25 BKK Mixed Doubles", "2025", "MIXED", "DOUBLES", "BKK", "YES_CAT", "CRU_FIT_GAM"],
+    ["Cru2025TeamRelayWomen", "Crucible Fitness Games '25 BKK Womens Team Relay", "2025", "WOMENS", "RELAY", "BKK", "YES_CAT", "CRU_FIT_GAM"],
+    ["Cru2025TeamRelayMen", "Crucible Fitness Games '25 BKK Mens Team Relay", "2025", "MENS", "RELAY", "BKK", "YES_CAT", "CRU_FIT_GAM"],
+    ["Cru2025TeamRelayMixed", "Crucible Fitness Games '25 BKK Mixed Team Relay", "2025", "MIXED", "RELAY", "BKK", "YES_CAT", "CRU_FIT_GAM"],
+    
+    #2025 Redline Fitness Games KL
+    ["WomensSinglesAdvKL2025", "REDLINE Fitness Games '25 KL Womens Singles Advanced", "2025", "WOMENS", "SINGLES_ADVANCED", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["MensSinglesAdvKL2025", "REDLINE Fitness Games '25 KL Mens Singles Advanced", "2025", "MENS", "SINGLES_ADVANCED", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["WomensSinglesInterKL2025", "REDLINE Fitness Games '25 KL Womens Singles Intermediate", "2025", "WOMENS", "SINGLES_INTERMEDIATE", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["MensSinglesInterKL2025", "REDLINE Fitness Games '25 KL Mens Singles Intermediate", "2025", "MENS", "SINGLES_INTERMEDIATE", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["WomensBeginnersKL2025", "REDLINE Fitness Games '25 KL Womens Singles Beginners", "2025", "WOMENS", "SINGLES_BEGINNERS", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["MensBeginnersKL2025", "REDLINE Fitness Games '25 KL Mens Singles Beginners", "2025", "MENS", "SINGLES_BEGINNERS", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["WomensDoublesKL2025", "REDLINE Fitness Games '25 KL Womens Doubles", "2025", "WOMENS", "DOUBLES", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["MensDoublesKL2025", "REDLINE Fitness Games '25 KL Mens Doubles", "2025", "MENS", "DOUBLES", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["MixedDoublesKL2025", "REDLINE Fitness Games '25 KL Mixed Doubles", "2025", "MIXED", "DOUBLES", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["TeamRelayWomenKL2025", "REDLINE Fitness Games '25 KL Womens Team Relay", "2025", "WOMENS", "RELAY", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["TeamRelayMenKL2025", "REDLINE Fitness Games '25 KL Mens Team Relay", "2025", "MENS", "RELAY", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["TeamRelayMixedKL2025", "REDLINE Fitness Games '25 KL Mixed Team Relay", "2025", "MIXED", "RELAY", "KL", "YES_CAT", "RL_FIT_GAM"],
 
     #2024
-    ["WomensSinglesCompetitive2024", "REDLINE Fitness Games '24 Womens Singles Comp.", "2024", "WOMENS", "SINGLES_COMPETITIVE", "KL", "YES_CAT"],
-    ["MensSinglesCompetitive2024", "REDLINE Fitness Games '24 Mens Singles Comp.", "2024", "MENS", "SINGLES_COMPETITIVE", "KL", "YES_CAT"],
-    ["WomensSinglesOpen2024", "REDLINE Fitness Games '24 Womens Singles Open", "2024", "WOMENS", "SINGLES_OPEN", "KL", "NO_CAT"],
-    ["MensSinglesOpen2024", "REDLINE Fitness Games '24 Mens Singles Open", "2024", "MENS", "SINGLES_OPEN", "KL", "NO_CAT"],
-    ["WomensDoubles2024", "REDLINE Fitness Games '24 Womens Doubles", "2024", "WOMENS", "DOUBLES", "KL", "YES_CAT"],
-    ["MensDoubles2024", "REDLINE Fitness Games '24 Mens Doubles", "2024", "MENS", "DOUBLES", "KL", "YES_CAT"],
-    ["MixedDoubles2024", "REDLINE Fitness Games '24 Mixed Doubles", "2024", "MIXED", "DOUBLES", "KL", "YES_CAT"],
-    ["TeamRelayWomen2024", "REDLINE Fitness Games '24 Womens Team Relay", "2024", "WOMENS", "RELAY", "KL", "YES_CAT"],
-    ["TeamRelayMen2024", "REDLINE Fitness Games '24 Mens Team Relay", "2024", "MENS", "RELAY", "KL", "YES_CAT"],
-    ["TeamRelayMixed2024", "REDLINE Fitness Games '24 Mixed Team Relay", "2024", "MIXED", "RELAY", "KL", "YES_CAT"],
+    ["WomensSinglesCompetitive2024", "REDLINE Fitness Games '24 Womens Singles Comp.", "2024", "WOMENS", "SINGLES_ADVANCED", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["MensSinglesCompetitive2024", "REDLINE Fitness Games '24 Mens Singles Comp.", "2024", "MENS", "SINGLES_ADVANCED", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["WomensSinglesOpen2024", "REDLINE Fitness Games '24 Womens Singles Open", "2024", "WOMENS", "SINGLES_INTERMEDIATE", "KL", "NO_CAT", "RL_FIT_GAM"],
+    ["MensSinglesOpen2024", "REDLINE Fitness Games '24 Mens Singles Open", "2024", "MENS", "SINGLES_INTERMEDIATE", "KL", "NO_CAT", "RL_FIT_GAM"],
+    ["WomensDoubles2024", "REDLINE Fitness Games '24 Womens Doubles", "2024", "WOMENS", "DOUBLES", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["MensDoubles2024", "REDLINE Fitness Games '24 Mens Doubles", "2024", "MENS", "DOUBLES", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["MixedDoubles2024", "REDLINE Fitness Games '24 Mixed Doubles", "2024", "MIXED", "DOUBLES", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["TeamRelayWomen2024", "REDLINE Fitness Games '24 Womens Team Relay", "2024", "WOMENS", "RELAY", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["TeamRelayMen2024", "REDLINE Fitness Games '24 Mens Team Relay", "2024", "MENS", "RELAY", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["TeamRelayMixed2024", "REDLINE Fitness Games '24 Mixed Team Relay", "2024", "MIXED", "RELAY", "KL", "YES_CAT", "RL_FIT_GAM"],
     #2023
-    ["WomensSinglesCompetitive2023", "REDLINE Fitness Games '23 Womens Singles Comp.", "2023", "WOMENS", "SINGLES_COMPETITIVE", "KL", "YES_CAT"],
-    ["MensSinglesCompetitive2023", "REDLINE Fitness Games '23 Mens Singles Comp.", "2023", "MENS", "SINGLES_COMPETITIVE", "KL", "YES_CAT"],
-    ["WomensSinglesOpen2023", "REDLINE Fitness Games '23 Womens Singles Open", "2023", "WOMENS", "SINGLES_OPEN", "KL", "NO_CAT"],
-    ["MensSinglesOpen2023", "REDLINE Fitness Games '23 Mens Singles Open", "2023", "MENS", "SINGLES_OPEN", "KL", "NO_CAT"],
-    ["WomensDoubles2023", "REDLINE Fitness Games '23 Womens Doubles", "2023", "WOMENS", "DOUBLES", "KL", "NO_CAT"],
-    ["MensDoubles2023", "REDLINE Fitness Games '23 Mens Doubles", "2023", "MENS", "DOUBLES", "KL", "NO_CAT"],
-    ["MixedDoubles2023", "REDLINE Fitness Games '23 Mixed Doubles", "2023", "MIXED", "DOUBLES", "KL", "NO_CAT"],
-    ["TeamRelayWomen2023", "REDLINE Fitness Games '23 Womens Team Relay", "2023", "WOMENS", "RELAY", "KL", "NO_CAT"],
-    ["TeamRelayMen2023", "REDLINE Fitness Games '23 Mens Team Relay", "2023", "MENS", "RELAY", "KL", "NO_CAT"],
-    ["TeamRelayMixed2023", "REDLINE Fitness Games '23 Mixed Team Relay", "2023", "MIXED", "RELAY", "KL", "NO_CAT"],
+    ["WomensSinglesCompetitive2023", "REDLINE Fitness Games '23 Womens Singles Comp.", "2023", "WOMENS", "SINGLES_ADVANCED", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["MensSinglesCompetitive2023", "REDLINE Fitness Games '23 Mens Singles Comp.", "2023", "MENS", "SINGLES_ADVANCED", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["WomensSinglesOpen2023", "REDLINE Fitness Games '23 Womens Singles Open", "2023", "WOMENS", "SINGLES_INTERMEDIATE", "KL", "NO_CAT", "RL_FIT_GAM"],
+    ["MensSinglesOpen2023", "REDLINE Fitness Games '23 Mens Singles Open", "2023", "MENS", "SINGLES_INTERMEDIATE", "KL", "NO_CAT", "RL_FIT_GAM"],
+    ["WomensDoubles2023", "REDLINE Fitness Games '23 Womens Doubles", "2023", "WOMENS", "DOUBLES", "KL", "NO_CAT", "RL_FIT_GAM"],
+    ["MensDoubles2023", "REDLINE Fitness Games '23 Mens Doubles", "2023", "MENS", "DOUBLES", "KL", "NO_CAT", "RL_FIT_GAM"],
+    ["MixedDoubles2023", "REDLINE Fitness Games '23 Mixed Doubles", "2023", "MIXED", "DOUBLES", "KL", "NO_CAT", "RL_FIT_GAM"],
+    ["TeamRelayWomen2023", "REDLINE Fitness Games '23 Womens Team Relay", "2023", "WOMENS", "RELAY", "KL", "NO_CAT", "RL_FIT_GAM"],
+    ["TeamRelayMen2023", "REDLINE Fitness Games '23 Mens Team Relay", "2023", "MENS", "RELAY", "KL", "NO_CAT", "RL_FIT_GAM"],
+    ["TeamRelayMixed2023", "REDLINE Fitness Games '23 Mixed Team Relay", "2023", "MIXED", "RELAY", "KL", "NO_CAT", "RL_FIT_GAM"],
 ]
 
 # Generate a unique worker ID that persists for this worker process
@@ -952,76 +972,147 @@ def format_time_mm_ss(seconds_total, pos=None): # pos is required by FuncFormatt
 
 def convert_to_standard_time(time_str):
     """
-    Convert a time string to the standard format "%H:%M:%S.%f" with one decimal place
-    
-    Parameters:
-    -----------
-    time_str : str or nan
-        Time string in various formats like "%M:%S.%f", "%H:%M:%S", or nan
-        
-    Returns:
-    --------
-    str
-        Time string in the format "%H:%M:%S.%f" with exactly one decimal place
-        Returns "00:00:00.0" if the input is nan or invalid
+    Convert a time string to the standard format "%H:%M:%S.%f" with one decimal place.
+    Returns an empty string if the input is nan or invalid.
+    (This is the function you provided)
     """
-    # Handle nan or None
-    if time_str is None or str(time_str).lower() == 'nan':
-        return "" #float("nan")
+    if time_str is None or pd.isna(time_str) or str(time_str).lower() == 'nan':
+        return ""
     
-    # Convert to string if not already
     time_str = str(time_str).strip()
-    
-    # If empty string
     if not time_str:
         return ""
     
     try:
         parts = time_str.split(':')
         
-        # Handle %M:%S.%f format (two parts with colon)
-        if len(parts) == 2:
+        if len(parts) == 2: # M:S or M:S.f
             minutes = int(parts[0])
-            
-            # Check if seconds part has a decimal point
             if '.' in parts[1]:
-                seconds_parts = parts[1].split('.')
-                seconds = int(seconds_parts[0])
-                decimal = float(f"0.{seconds_parts[1]}")
+                seconds, frac = map(int, parts[1].split('.'))
+                frac_str = str(frac).ljust(1, '0')[:1] # Ensure one decimal place
             else:
-                seconds = int(parts[1])
-                decimal = 0.0
-                
-            # Calculate hours from minutes if needed
-            hours = minutes // 60
-            minutes = minutes % 60
-            
-            return f"{hours:02d}:{minutes:02d}:{seconds:02d}.{int(decimal * 10):1d}"
-        
-        # Handle %H:%M:%S format (three parts with colons)
-        elif len(parts) == 3:
+                seconds, frac_str = int(parts[1]), '0'
+            td = timedelta(minutes=minutes, seconds=seconds, milliseconds=int(frac_str)*100)
+
+        elif len(parts) == 3: # H:M:S or H:M:S.f
             hours = int(parts[0])
             minutes = int(parts[1])
-            
-            # Check if seconds part has a decimal point
             if '.' in parts[2]:
-                seconds_parts = parts[2].split('.')
-                seconds = int(seconds_parts[0])
-                decimal = float(f"0.{seconds_parts[1]}")
+                seconds, frac = map(int, parts[2].split('.'))
+                frac_str = str(frac).ljust(1, '0')[:1]
             else:
-                seconds = int(parts[2])
-                decimal = 0.0
-                
-            return f"{hours:02d}:{minutes:02d}:{seconds:02d}.{int(decimal * 10):1d}"
-        
+                seconds, frac_str = int(parts[2]), '0'
+            td = timedelta(hours=hours, minutes=minutes, seconds=seconds, milliseconds=int(frac_str)*100)
         else:
-            # Invalid format
             return ""
-            
+
+        total_seconds = td.total_seconds()
+        hours, remainder = divmod(total_seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        sec_int = int(seconds)
+        frac_int = int((seconds - sec_int) * 10)
+        
+        return f"{int(hours):02d}:{int(minutes):02d}:{sec_int:02d}.{frac_int}"
+
     except (ValueError, IndexError):
-        # Return default for any parsing errors
         return ""
 
+# --- New Internal Helper Functions ---
+def standard_time_str_to_seconds(std_time_str):
+    """Converts a standardized 'HH:MM:SS.f' string to total seconds."""
+    if pd.isna(std_time_str) or std_time_str == "":
+        return np.nan
+    try:
+        dt = datetime.strptime(std_time_str, "%H:%M:%S.%f")
+        return (dt - datetime(1900, 1, 1)).total_seconds()
+    except (ValueError, TypeError):
+        return np.nan
+
+def seconds_to_standard_time_str(s):
+    """Converts total seconds (float) into a 'HH:MM:SS.f' string format."""
+    if pd.isna(s):
+        return ""
+    s = round(s, 1) # Ensure we handle floating point inaccuracies
+    sec = int(s)
+    frac = int((s - sec) * 10)
+    td = timedelta(seconds=sec)
+    hours, remainder = divmod(td.seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}.{frac}"
+
+
+def time_str_to_seconds(time_str):
+    """
+    Converts a time string (HH:MM:SS or MM:SS) to total seconds.
+    Returns 0 if the input is empty, NaN, or invalid.
+    """
+    if pd.isna(time_str) or time_str == '':
+        return 0
+    
+    parts = str(time_str).split(':')
+    try:
+        if len(parts) == 3:  # HH:MM:SS
+            h, m, s = map(int, parts)
+            return h * 3600 + m * 60 + s
+        elif len(parts) == 2:  # MM:SS
+            m, s = map(int, parts)
+            return m * 60 + s
+        else: # Invalid format
+            return 0
+    except (ValueError, TypeError):
+        # Handles cases where parts are not numbers
+        return 0
+
+def seconds_to_time_str(seconds):
+    """Converts total seconds to a HH:MM:SS formatted string."""
+    if pd.isna(seconds) or seconds < 0:
+        return '00:00:00'
+    
+    seconds = int(seconds)
+    m, s = divmod(seconds, 60)
+    h, m = divmod(m, 60)
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
+def find_first_blank_column(row, columns_to_check):
+    """
+    Finds the first column in a given list that is blank for a specific row.
+
+    Args:
+        row (pd.Series): A single row from a pandas DataFrame.
+        columns_to_check (list): A list of column names to search through in order.
+
+    Returns:
+        tuple: A tuple containing the (index, name) of the first blank column.
+               For example: (4, 'Sandbag Hoist').
+        None: If no blank columns are found in the specified list.
+    """
+    for i, col_name in enumerate(columns_to_check):
+        value = row.get(col_name)
+        # A cell is considered blank if it is NaN (pandas default for empty) or an empty string.
+        if pd.isna(value) or value == '':
+            return (i, col_name)
+    
+    # If the loop completes without finding any blanks, return None
+    return None
+
+def calculate_row_sum(row, columns_to_sum):
+    """
+    Calculates the sum of time values for specified columns in a row.
+
+    Args:
+        row (pd.Series): A single row from a pandas DataFrame.
+        columns_to_sum (list): A list of column names containing time strings to be summed.
+
+    Returns:
+        int: The total sum of the time values in seconds.
+    """
+    total_seconds = 0
+    for col_name in columns_to_sum:
+        # Relies on the time_str_to_seconds helper to convert each value before summing
+        total_seconds += row.get(col_name)
+        
+    return total_seconds
 
 # --- BLOG Helper Functions ---
 def load_global_blog_config():

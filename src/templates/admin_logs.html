@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Admin - View Logs | Redline Results{% endblock %}
+{% block title %}Admin - View Logs | ASEAN Fitness Games Results{% endblock %}
 
 {% block head %}
     {{ super() }}
@@ -120,43 +120,66 @@
         
     {% if log_files_content %}
         {% if log_files_content.get('error') %}
-            <div class="alert alert-danger">{{ log_files_content.error }}</div>
-        {% elif log_files_content.get('info') %}
-            <div class="alert alert-info">{{ log_files_content.info }}</div>
-        {% else %}
-            {% for filename, content in log_files_content.items() %}
-                <div class="card log-card mb-3">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <span><strong>Log File:</strong> <code>{{ filename }}</code></span>
-                        
-                        {# Button Group for Actions #}
-                        <div>
-                            {% if env_mode == 'deploy' %}
-                                <a href="{{ url_for('download_gcs_log', gcs_blob_name=filename) }}" class="btn btn-sm btn-info">
-                                    Download
-                                </a>
-                            {% endif %}
+            <div class="alert alert-danger">{{ log_files_content.pop('error') }}</div>
+        {% endif %}
+        {% if log_files_content.get('info') %}
+            <div class="alert alert-info">{{ log_files_content.pop('info') }}</div>
+        {% endif %}
+        
+        {% for filename, content in log_files_content.items() %}
+            <div class="card log-card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><strong>Log File:</strong> <code>{{ filename }}</code></span>
+                    
+                    {# Button Group for Actions #}
+                    <div>
+                        {% if env_mode == 'deploy' %}
+                            <a href="{{ url_for('download_gcs_log', gcs_blob_name=filename) }}" class="btn btn-sm btn-info">
+                                Download
+                            </a>
+                        {% endif %}
 
-                            {# NEW DELETE BUTTON FORM #}
-                            <form action="{{ url_for('delete_single_log', filename=filename) }}" method="POST" class="d-inline"
-                                  onsubmit="return confirm('Are you sure you want to permanently delete this log file: \'{{ filename }}\'? This action cannot be undone.');">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button type="submit" class="btn btn-sm btn-danger">
-                                    Delete
-                                </button>
-                            </form>
-                            {# END NEW DELETE BUTTON FORM #}
-                        </div>
-
-                    </div>
-                    <div class="card-body p-0">
-                        <pre class="log-container m-0"><code>{{ content | e }}</code></pre>
+                        <form action="{{ url_for('delete_single_log', filename=filename) }}" method="POST" class="d-inline"
+                              onsubmit="return confirm('Are you sure you want to permanently delete this log file: \'{{ filename }}\'? This action cannot be undone.');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-danger">
+                                Delete
+                            </button>
+                        </form>
                     </div>
                 </div>
-            {% endfor %}
-        {% endif %}
+                <div class="card-body p-0">
+                    <pre class="log-container m-0"><code>{{ content | e }}</code></pre>
+                </div>
+            </div>
+        {% endfor %}
+
     {% else %}
         <div class="alert alert-secondary">No log content to display.</div>
+    {% endif %}
+
+    <!-- Pagination Controls for Log Files -->
+    {% if pagination and pagination.total_pages > 1 %}
+    <nav aria-label="Log file pagination" class="mt-4">
+        <ul class="pagination justify-content-center">
+            {# Previous Page Link #}
+            <li class="page-item {% if pagination.current_page == 1 %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('view_logs', page=pagination.current_page - 1) }}">&laquo; Previous</a>
+            </li>
+
+            {# Page Number Links #}
+            {% for p in range(1, pagination.total_pages + 1) %}
+                <li class="page-item {% if p == pagination.current_page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('view_logs', page=p) }}">{{ p }}</a>
+                </li>
+            {% endfor %}
+
+            {# Next Page Link #}
+            <li class="page-item {% if pagination.current_page == pagination.total_pages %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('view_logs', page=pagination.current_page + 1) }}">Next &raquo;</a>
+            </li>
+        </ul>
+    </nav>
     {% endif %}
 
 </div>
