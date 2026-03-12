@@ -30,6 +30,7 @@ from functools import wraps
 import shutil
 import json
 import re
+import traceback
 
 
 # --- Define the ANSI Escape Code Regular Expression ---
@@ -572,7 +573,7 @@ def postdisplayEvent():
             heatmap_specific_columns = rl_data.STATIONLISTSTART23
         elif (rl_data.EVENT_DATA_LIST[index][2]=="2024"):
             heatmap_specific_columns = rl_data.STATIONLISTSTART24
-        elif rl_data.EVENT_DATA_LIST[index][2]=="2025" and rl_data.EVENT_DATA_LIST[index][5]=="KL":
+        elif rl_data.EVENT_DATA_LIST[index][2]=="2025" and rl_data.EVENT_DATA_LIST[index][7]=="RL_FIT_GAM":
             heatmap_specific_columns = rl_data.STATIONLISTSTART25
         elif rl_data.EVENT_DATA_LIST[index][2]=="2025" and rl_data.EVENT_DATA_LIST[index][7]=="CRU_FIT_GAM" :
             heatmap_specific_columns = rl_data.STATIONLISTSTARTCRU25

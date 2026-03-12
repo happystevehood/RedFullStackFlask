@@ -54,6 +54,8 @@ def prepare_data_for_processing(df: pd.DataFrame) -> pd.DataFrame:
     """
     df_processed = df.copy()
     
+    logger = rl_data.get_logger()
+    
     runtimeVars = session.get('runtime', {})
     station_list = runtimeVars['StationList']
 
@@ -65,7 +67,7 @@ def prepare_data_for_processing(df: pd.DataFrame) -> pd.DataFrame:
     # --- Step 2: Detect format and apply the correct transformation ---
     if 'Start' not in df_processed.columns:
         # ** CRUCIBLE FORMAT DETECTED (Durations) **
-        print("--> Detected 'Crucible' format (durations). Applying full transformation...")
+        logger.info("--> Detected 'Crucible' format (durations). Applying full transformation...")
 
         # Check if the 'Status' column exists to avoid errors.
         if 'Status' in df_processed.columns:
@@ -86,7 +88,7 @@ def prepare_data_for_processing(df: pd.DataFrame) -> pd.DataFrame:
             #print("Successfully removed the 'Status' column.")
 
         else:
-            print("Warning: 'Status' column not found. No filtering was performed.")
+            logger.warning("Warning: 'Status' column not found. No filtering was performed.")
 
 
         # 2a. Dynamically identify station columns
@@ -199,7 +201,7 @@ def prepare_data_for_processing(df: pd.DataFrame) -> pd.DataFrame:
 
     else:
         # ** REDLINE FORMAT DETECTED (Cumulative Timestamps) **
-        print("--> Detected 'Redline' format (cumulative timestamps). Applying standardization...")
+        logger.info("--> Detected 'Redline' format (cumulative timestamps). Applying standardization...")
         
         # 2a. Normalize legacy Redline names
         redline_rename_map = {
@@ -217,7 +219,7 @@ def prepare_data_for_processing(df: pd.DataFrame) -> pd.DataFrame:
              if col in df_processed.columns:
                   df_processed[col] = df_processed[col].apply(rl_data.convert_to_standard_time)
 
-        print("--> Standardization complete.")
+        logger.info("--> Standardization complete.")
 
     return df_processed
  
@@ -2754,7 +2756,7 @@ def prepare_visualization_data_for_template( competitorDetails):
     elif runtimeVars['eventDataList'][2]=="2024":
         runtimeVars['StationList'] = rl_data.STATIONLIST24
         runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART24
-    elif runtimeVars['eventDataList'][2]=="2025" and runtimeVars['eventDataList'][5]=="KL":
+    elif runtimeVars['eventDataList'][2]=="2025" and runtimeVars['eventDataList'][7]=="RL_FIT_GAM" :
         runtimeVars['StationList'] = rl_data.STATIONLIST25
         runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART25
     elif runtimeVars['eventDataList'][2]=="2025" and runtimeVars['eventDataList'][7]=="CRU_FIT_GAM" :
@@ -2894,7 +2896,7 @@ def prepare_competitor_visualization_page(competitorDetails):
     elif runtimeVars['eventDataList'][2]=="2024":
         runtimeVars['StationList'] = rl_data.STATIONLIST24
         runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART24
-    elif runtimeVars['eventDataList'][2]=="2025" and runtimeVars['eventDataList'][5]=="KL":
+    elif runtimeVars['eventDataList'][2]=="2025" and runtimeVars['eventDataList'][7]=="RL_FIT_GAM":
         runtimeVars['StationList'] = rl_data.STATIONLIST25
         runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART25
     elif runtimeVars['eventDataList'][2]=="2025" and runtimeVars['eventDataList'][7]=="CRU_FIT_GAM" :
@@ -3148,7 +3150,7 @@ def generate_single_output_file(params): # df_override for testing or specific c
                 temp_runtimeVars['StationList'] = rl_data.STATIONLIST23
             elif element[2] == "2024": 
                 temp_runtimeVars['StationList'] = rl_data.STATIONLIST24
-            elif element[2]=="2025" and element[5]=="KL":
+            elif element[2]=="2025" and element[7]=="RL_FIT_GAM":
                 temp_runtimeVars['StationList'] = rl_data.STATIONLIST25
             elif element[2]=="2025" and element[7]=="CRU_FIT_GAM" :
                 temp_runtimeVars['StationList'] = rl_data.STATIONLISTCRU25
@@ -3269,14 +3271,14 @@ def redline_vis_generate(competitorDetails):
         #make sure up to date for each loop.
         runtimeVars['eventDataList'] = eventDataList
 
-        #configure for 2023 format or 2024 format
+        #configure for appropriate format
         if (eventDataList[2]=="2023"):
             runtimeVars['StationList'] = rl_data.STATIONLIST23
             runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART23
         elif (eventDataList[2]=="2024"):
             runtimeVars['StationList'] = rl_data.STATIONLIST24
             runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART24
-        elif runtimeVars['eventDataList'][2]=="2025" and runtimeVars['eventDataList'][5]=="KL":
+        elif runtimeVars['eventDataList'][2]=="2025" and runtimeVars['eventDataList'][7]=="RL_FIT_GAM":
             runtimeVars['StationList'] = rl_data.STATIONLIST25
             runtimeVars['StationListStart'] = rl_data.STATIONLISTSTART25
         elif runtimeVars['eventDataList'][2]=="2025" and runtimeVars['eventDataList'][7]=="CRU_FIT_GAM" :
