@@ -233,23 +233,24 @@ OUTPUT_CONFIGS = [
         'is_placeholder_ready': True,
         'load_priority': 12 #  PRIORITY
     },
-    {
-        'id': 'cutoff_bar_generic', 
-        'name': 'Participants Missing Cut-Offs',
-        'function_name': 'CreateBarChartCutOffEvent', 
-        'is_competitor_specific': False,
-        'filename_template': '{EVENT_NAME_SLUG}_CutOffBar_Generic.png', # Original filename had STATION_NAME_HERE, but function usually makes one summary
-        'output_dir_const': 'PNG_GENERIC_DIR',
-        'output_type': 'png',
-        'requires_category_data': False,
-        'generates_multiple_files': False,
-        'html_string_template': ("<p><b>Interpreting the Cut-Off Chart:</b> This shows the percentage of participants who exceeded the 7-minute time cap for each station in the '24 events (resulting in a 7-minute penalty for that station). "
-                                 "Stations with higher bars were more likely to cause athletes to hit this limit. "
-                                 "For '25, while the 7-min cap is gone, an incomplete station incurs a 10-min penalty. "
-                                 "This '24 data highlights historically challenging stations where ensuring completion and building a buffer should be a training priority to avoid devastating penalties in '25.</p>"),
-        'is_placeholder_ready': True,
-        'load_priority': 13 #  PRIORITY
-    },
+    #cut off par not so relevant, potential need to logic to show in some cases, and not in others, so removing for now to avoid confusion, but can be added back in future if needed
+    #{
+    #    'id': 'cutoff_bar_generic', 
+    #    'name': 'Participants Missing Cut-Offs',
+    #    'function_name': 'CreateBarChartCutOffEvent', 
+    #    'is_competitor_specific': False,
+    #    'filename_template': '{EVENT_NAME_SLUG}_CutOffBar_Generic.png', # Original filename had STATION_NAME_HERE, but function usually makes one summary
+    #    'output_dir_const': 'PNG_GENERIC_DIR',
+    #    'output_type': 'png',
+    #    'requires_category_data': False,
+    #    'generates_multiple_files': False,
+    #    'html_string_template': ("<p><b>Interpreting the Cut-Off Chart:</b> This shows the percentage of participants who exceeded the 7-minute time cap for each station in the '24 events (resulting in a 7-minute penalty for that station). "
+    #                             "Stations with higher bars were more likely to cause athletes to hit this limit. "
+    #                             "For '25, while the 7-min cap is gone, an incomplete station incurs a 10-min penalty. "
+    #                             "This '24 data highlights historically challenging stations where ensuring completion and building a buffer should be a training priority to avoid devastating penalties in '25.</p>"),
+    #    'is_placeholder_ready': True,
+    #    'load_priority': 13 #  PRIORITY
+    #},
     {
         'id': 'heatmap_correlation_generic', # Was showHeat
         'name': 'Inter-Station Correlation Heatmap',

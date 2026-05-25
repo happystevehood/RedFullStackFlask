@@ -287,7 +287,7 @@ def gethome():
 
 @app.route("/sitemap.xml")
 def sitemap():
-    app.logger.warning("Sitemap.xml route handler was called (dynamic).")
+    app.logger.info("Sitemap.xml route handler was called (dynamic).")
     pages = []
 
     # Static pages
@@ -361,7 +361,7 @@ def sitemap():
 
 @app.route('/robots.txt')
 def robots_txt():
-    app.logger.warning("robots.txt route handler was called.")
+    app.logger.info("robots.txt route handler was called.")
     # Serves 'robots.txt' from your 'static_folder' (which is 'static/')
     return send_from_directory(rl_data.ROBOTS_DIR, 'robots.txt')
 
@@ -577,6 +577,8 @@ def postdisplayEvent():
             heatmap_specific_columns = rl_data.STATIONLISTSTART25
         elif rl_data.EVENT_DATA_LIST[index][2]=="2025" and rl_data.EVENT_DATA_LIST[index][7]=="CRU_FIT_GAM" :
             heatmap_specific_columns = rl_data.STATIONLISTSTARTCRU25
+        elif rl_data.EVENT_DATA_LIST[index][2]=="2026" and rl_data.EVENT_DATA_LIST[index][7]=="CRU_FIT_GAM" :
+            heatmap_specific_columns = rl_data.STATIONLISTSTARTCRU26
         else:
             app.logger.error(f"ERROR: Event year not found {rl_data.EVENT_DATA_LIST[index][2]}") 
             
@@ -837,12 +839,12 @@ def generate_and_download_pdf_route():
     if pdf_config_item['is_competitor_specific']:
         runtimeVars['competitorName'] = competitor_name_actual
         runtimeVars['competitorRaceNo'] = competitor_race_no_actual
-        
-    # Check if this type of output is enabled in general_config
+       
+    # Extra debug Check if this type of output is enabled in general_config 
     if( outputVars.get(pdf_config_item['id'], False) == False ):
-        app.logger.error(f"Output type not enabled: {pdf_config_item['id']}")
-        return "Invalid PDF type requested", 400
-
+        app.logger.error(f"MISSING SESSION DATA: output_id={pdf_config_item['id']}, available_keys={list(outputVars.keys())}")
+        return "Your session has expired. Please refresh the page and try again.", 400
+    
     # Skip if mode doesn't match (e.g., trying to generate generic in competitor mode, or vice-versa)
     if pdf_config_item['id'] == 'pdf_report_comp' and pdf_config_item['is_competitor_specific'] == False:
         app.logger.error(f"CompetitorAnalysis mode does not match output mode: {pdf_config_item['pdf_report_comp']} {pdf_config_item['is_competitor_specific']}")

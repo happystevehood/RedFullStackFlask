@@ -88,17 +88,32 @@ def prepare_data_for_processing(df: pd.DataFrame) -> pd.DataFrame:
             #print("Successfully removed the 'Status' column.")
 
         else:
-            logger.warning("Warning: 'Status' column not found. No filtering was performed.")
+            logger.info("Warning: 'Status' column not found. No filtering was performed.")
 
 
         # 2a. Dynamically identify station columns
+        #if 'Sled Push & Pull' not in df_processed.columns:
         df_processed.rename(columns={'Sled Push & Pull':'Sled Push Pull'},inplace=True)
         df_processed.rename(columns={'Ski Erg':'Ski'},inplace=True)
         df_processed.rename(columns={'Row Erg':'Row'},inplace=True)
         df_processed.rename(columns={'Bike Erg':'Bike'},inplace=True)
         df_processed.rename(columns={'Erg Bike':'Bike'},inplace=True)
         
+        #Keep naming consistent accross years
+        df_processed.rename(columns={'Member 1':'Member1'},inplace=True)
+        df_processed.rename(columns={'Member 2':'Member2'},inplace=True)
+        df_processed.rename(columns={'Member 3':'Member3'},inplace=True)
+        df_processed.rename(columns={'Member 4':'Member4'},inplace=True)
+        
+        #CRU 2026 Temporary hack
+        #if runtimeVars['eventDataList'][2]=="2026" and runtimeVars['eventDataList'][7]=="CRU_FIT_GAM" :
+        #    df_processed.drop(df_processed.filter(regex='^Time_Adj').columns, axis=1, inplace=True)
+        
         known_metadata_cols = ['Name', 'Race No', 'Pos', 'Cat Pos', 'Net Time', 'Category', 'Wave', 'Gender', 'Team', 'Member1', 'Member2', 'Member3', 'Member4']
+        
+        adj_cols = df_processed.filter(regex='^Time_Adj').columns
+        known_metadata_cols = known_metadata_cols + list(adj_cols)
+        
         station_cols = [col for col in df_processed.columns if col not in known_metadata_cols]
         
         # 2b. Standardize all time strings, then convert to seconds for calculation
@@ -132,9 +147,9 @@ def prepare_data_for_processing(df: pd.DataFrame) -> pd.DataFrame:
             while True:
                 loop_count += 1
                 if loop_count > loop_limit:
-                    #print(f"!!! Loop limit exceeded for row index {index}. Breaking to prevent infinite loop. !!!")
-                    #print("--- FINAL ROW STATE ---")
-                    #print(row[station_list])
+                    print(f"!!! Loop limit exceeded for row index {index}. Breaking to prevent infinite loop. !!!")
+                    print("--- FINAL ROW STATE ---")
+                    print(row[station_list])
                     break
 
                 blank_info = rl_data.find_first_blank_column(row, station_list[:-1])
@@ -149,6 +164,7 @@ def prepare_data_for_processing(df: pd.DataFrame) -> pd.DataFrame:
                     break
                 
                 # --- DEBUGGING: Print the state at the start of the loop ---
+                
                 #print(f"\n--- Processing Row Index: {index} (Attempt #{loop_count}) ---")
                 #print(f"Found blank column: {blank_info}")
 
@@ -167,12 +183,12 @@ def prepare_data_for_processing(df: pd.DataFrame) -> pd.DataFrame:
                     #print(f"  > Previous stations columns: {previous_station_cols}")
                     #print(f"  > Previous stations sum: {sum_of_previous_seconds}s")
                     #print(f"  > Incorrect elapsed time in '{elapsed_time_col_name}': {elapsed_seconds}s ")
-                    #
-                    # print(f"  > Calculated correct duration: {correct_duration_seconds}s ")
+                    
+                    #print(f"  > Calculated correct duration: {correct_duration_seconds}s ")
 
                     df_processed.at[index, elapsed_time_col_name] = correct_duration_seconds
                 #else:
-                    #print(f"  > The next column '{elapsed_time_col_name}' is also blank. Skipping correction for it.")
+                #    print(f"  > The next column '{elapsed_time_col_name}' is also blank. Skipping correction for it.")
 
                 # Fill the original blank cell
                 df_processed.at[index, blank_col_name] = 0.0
@@ -182,8 +198,11 @@ def prepare_data_for_processing(df: pd.DataFrame) -> pd.DataFrame:
                 row = df_processed.loc[index]
             
         # 2e. Calculate cumulative sum of durations IN SECONDS
+        #print(f"--> Calculate cumulative sum of durations IN SECONDS")
         
-        # 1. Create a temporary DataFrame containing only numerical seconds.
+        #print(df_processed.head(10))
+        
+                # 1. Create a temporary DataFrame containing only numerical seconds.
         #    We use .apply() to run your time_str_to_seconds function on every cell.
         df_seconds = df_processed[station_cols].apply(pd.to_numeric, errors='coerce').fillna(0)
 
@@ -198,6 +217,8 @@ def prepare_data_for_processing(df: pd.DataFrame) -> pd.DataFrame:
              df_processed[col] = df_cumulative_seconds[col].apply(rl_data.seconds_to_standard_time_str)
         
         #print(f"--> Transformation complete. Data is now in cumulative timestamp format.")
+        
+        #print(df_processed.head(10))
 
     else:
         # ** REDLINE FORMAT DETECTED (Cumulative Timestamps) **
@@ -210,6 +231,12 @@ def prepare_data_for_processing(df: pd.DataFrame) -> pd.DataFrame:
             'Deadball Burpee Over Target': 'Deadball Burpee',
         }
         df_processed.rename(columns=redline_rename_map, inplace=True)
+
+        #Keep naming consistent accross years
+        df_processed.rename(columns={'Member 1':'Member1'},inplace=True)
+        df_processed.rename(columns={'Member 2':'Member2'},inplace=True)
+        df_processed.rename(columns={'Member 3':'Member3'},inplace=True)
+        df_processed.rename(columns={'Member 4':'Member4'},inplace=True)
 
         # 2b. Ensure all timestamp fields are in the standard format
         known_metadata_cols = ['Name', 'Race No', 'Pos', 'Cat Pos', 'Net Time', 'Category', 'Wave', 'Gender', 'Time Adj', 'Team', 'Member1', 'Member2', 'Member3', 'Member4']
@@ -255,9 +282,14 @@ def tidyTheData(df, filename):
     df.rename(columns={'Battle Rope Whips':'Battle Whip'},inplace=True)
     df.rename(columns={'SandbagGauntlet':'Sandbag Gauntlet'},inplace=True)
     df.rename(columns={'Deadball Burpee Over Target':'Deadball Burpee'},inplace=True)
-
-    #in 2023 doubles "The Mule" Column is called "Finish Column"
-    df.rename(columns={'Finish':'The Mule'},inplace=True)
+    
+    #CRU 2026 
+    if runtimeVars['eventDataList'][2]=="2026" and runtimeVars['eventDataList'][7]=="CRU_FIT_GAM":
+        # in 2026 gold women Finish is called "Cruci-Haul"
+        df.rename(columns={'Finish':'Cruci-Haul'},inplace=True)
+    else:
+        #in 2023 doubles "The Mule" Column is called "Finish Column"
+        df.rename(columns={'Finish':'The Mule'},inplace=True)
 
     #for 2025
     actual_station_names = runtimeVars['StationList']
@@ -341,7 +373,9 @@ def tidyTheData(df, filename):
                     continue 
                 
                 elif ((duration_seconds > 600.0 and runtimeVars['eventDataList'][2]=="2025") or 
-                      (duration_seconds > 420.0 and runtimeVars['eventDataList'][2]!="2025")):
+                      (duration_seconds > 600.0 and runtimeVars['eventDataList'][2]=="2026") or 
+                      (duration_seconds > 420.0 and runtimeVars['eventDataList'][2]=="2024") or 
+                      (duration_seconds > 420.0 and runtimeVars['eventDataList'][2]=="2023")):
                           
                     if i < len(runtimeVars['StationCutOffCount']):
                          runtimeVars['StationCutOffCount'][i] = runtimeVars['StationCutOffCount'][i] + 1
@@ -412,6 +446,56 @@ def tidyTheData(df, filename):
                     
         MyIndex = MyIndex - 1
 
+    # from Crucible 2026 with SOME event of the format "Time_Adj_*" instead of one "Time Adj"
+    # --- 1. PRE-PROCESS ALL 'Time_Adj_' COLUMNS (Do this BEFORE the loop) ---
+    adj_cols = df.filter(regex='^Time_Adj_').columns
+
+    if not adj_cols.empty:
+        # Function to convert individual string values (like "+00:01:30.0") to seconds
+        def val_to_seconds(val):
+            # Convert to string and clean whitespace
+            s_val = str(val).strip()
+            
+            if pd.isna(val) or s_val == "" or s_val.lower() == "nan":
+                return 0.0
+            
+            # 1. Determine the multiplier based on the sign
+            multiplier = 1.0
+            if s_val.startswith('-'):
+                multiplier = -1.0
+                s_val = s_val[1:]  # Remove the minus for parsing
+            elif s_val.startswith('+'):
+                s_val = s_val[1:]  # Remove the plus for parsing
+
+            try:
+                # 2. Standardize and parse the absolute time
+                standardized = rl_data.convert_to_standard_time(s_val)
+                t = datetime.strptime(standardized, "%H:%M:%S.%f")
+                ref = datetime.strptime("00:00:00.0", "%H:%M:%S.%f")
+                
+                # 3. Apply the multiplier to the total seconds
+                return (t - ref).total_seconds() * multiplier
+            except Exception as e:
+                # Log error if needed: print(f"Error parsing {val}: {e}")
+                return 0.0
+
+        # Apply conversion to the entire block of columns and sum them into a new 'Time Adj'
+        # We use applymap to process every cell in these specific columns
+        adj_seconds_df = df[adj_cols].map(val_to_seconds)
+        
+        # If 'Time Adj' already exists, add these to it, otherwise create it
+        if 'Time Adj' in df.columns:
+            df['Time Adj'] = pd.to_numeric(df['Time Adj'], errors='coerce').fillna(0) + adj_seconds_df.sum(axis=1)
+        else:
+            df['Time Adj'] = adj_seconds_df.sum(axis=1)
+
+        # Now safe to drop the prefix columns because we are NOT inside the loop yet
+        df.drop(columns=adj_cols, inplace=True)
+
+    # If 'Time Adj' doenst exist, create it
+    if 'Time Adj' not in df.columns:
+        df['Time Adj'] = 0.0
+
     # convert Net Time Column to float in seconds.
     for x in df.index:
 
@@ -423,26 +507,22 @@ def tidyTheData(df, filename):
             
             df.loc[x,'Start']    =  timedelta.total_seconds(datetime.strptime(rl_data.convert_to_standard_time(df.loc[x,'Start'])   ,"%H:%M:%S.%f") 
                                                           - datetime.strptime(rl_data.convert_to_standard_time("00:00:00.0")        ,"%H:%M:%S.%f"))
-                      
+            
+                                                             
             #time Adjust format is the samve #added for 2025
-            if ('Time Adj' in df.columns and pd.isna(df.loc[x, "Time Adj"]) == False):
-                
-                time_str = df.loc[x,"Time Adj"]
-                multiplier = 1.0
-
-                # Check for a sign and set the multiplier
-                if time_str.startswith('-'):
-                    multiplier = -1.0
-                    time_str = time_str[1:]  # Remove the sign for parsing
-                elif time_str.startswith('+'):
-                    time_str = time_str[1:]  # Remove the sign for parsing
-                
-                #print(f"Time Adj 1: {df.loc[x,'Time Adj']}")
-                timeAdj = df.loc[x,"Time Adj"].replace("+", "")
-                df.loc[x,'Time Adj'] = timedelta.total_seconds(datetime.strptime(rl_data.convert_to_standard_time(time_str),"%H:%M:%S.%f") 
-                                                             - datetime.strptime(rl_data.convert_to_standard_time("00:00:00.0")        ,"%H:%M:%S.%f")) * multiplier
-            else:
-                df.loc[x,'Time Adj'] = 0.0
+            # If 'Time Adj' is still a string (from the CSV), convert it
+            current_adj = df.loc[x, 'Time Adj']
+            if isinstance(current_adj, str):
+                multiplier = -1.0 if current_adj.startswith('-') else 1.0
+                clean_adj = current_adj.replace('+', '').replace('-', '')
+                df.loc[x, 'Time Adj'] = timedelta.total_seconds(
+                    datetime.strptime(rl_data.convert_to_standard_time(clean_adj), "%H:%M:%S.%f") - 
+                    datetime.strptime(rl_data.convert_to_standard_time("00:00:00.0"), "%H:%M:%S.%f")
+                ) * multiplier
+            
+            # Ensure it's 0.0 if NaN
+            if pd.isna(df.loc[x, 'Time Adj']):
+                df.loc[x, 'Time Adj'] = 0.0
 
             #if net time less than 10 minutes (used to be 6 minutes)
             if ((df.loc[x,'Net Time']) < 600.0):
@@ -502,6 +582,7 @@ def tidyTheData(df, filename):
 
     session['runtime'] = runtimeVars
     
+    
  ##############################################################
 # Input a df using runtimeVars['competitorRaceNo'] and runtimeVars['competitorName']
 # returns a competitor index
@@ -534,7 +615,6 @@ def getCompetitorIndex(df, runtimeVars_override=None):
         mem1Mask = df['Member1'].str.contains(runtimeVars['competitorName'], na=False, regex=False) 
         mem2Mask = df['Member2'].str.contains(runtimeVars['competitorName'], na=False, regex=False)
         compMask = nameMask | mem1Mask | mem2Mask & df['Race No'].astype(str).str.contains(runtimeVars['competitorRaceNo'], na=False, regex=False)       
-
     else:
         compMask = df['Name'].str.contains(runtimeVars['competitorName'], regex=False) & df['Race No'].astype(str).str.contains(runtimeVars['competitorRaceNo'], na=False, regex=False)
 
@@ -583,7 +663,7 @@ def tidyTheDataCorr(df, runtimeVars_override=None):
     #get rid of this in place of 'Calc Time'
     if 'Time Adj' in df.columns:
         df.drop('Time Adj', axis=1, inplace = True)
-
+        
     if 'Team' in df.columns:
         df.drop('Team', axis=1, inplace = True)
 
@@ -1558,7 +1638,7 @@ def CreateBarChartCutOffEvent(df, filepath, runtimeVars, competitorIndex=-1 ):
         cutOffStationList.append((100*runtimeVars['StationCutOffCount'][MyIndex]) / len(df.index) )
         MyIndex = MyIndex + 1
 
-    if runtimeVars['eventDataList'][2]=="2025":
+    if runtimeVars['eventDataList'][2]=="2025" or runtimeVars['eventDataList'][2]=="2026":
         ax.bar(runtimeVars['StationList'], cutOffStationList,       color='red'   , label='Partipants > 10min')
     else:
         ax.bar(runtimeVars['StationList'], cutOffStationList,       color='orange', label='Partipants > 7min')
@@ -1572,7 +1652,7 @@ def CreateBarChartCutOffEvent(df, filepath, runtimeVars, competitorIndex=-1 ):
     plt.tick_params(axis='x', labelrotation=90)
     plt.ylabel('Num Participants')
     
-    if runtimeVars['eventDataList'][2]=="2025":
+    if runtimeVars['eventDataList'][2]=="2025" or runtimeVars['eventDataList'][2]=="2026":
         plt.title(runtimeVars['eventDataList'][1] + ' Station 10 Min Stats')
     else:
         plt.title(runtimeVars['eventDataList'][1] + ' Station 7 Min Stats')
@@ -2762,6 +2842,9 @@ def prepare_visualization_data_for_template( competitorDetails):
     elif runtimeVars['eventDataList'][2]=="2025" and runtimeVars['eventDataList'][7]=="CRU_FIT_GAM" :
         runtimeVars['StationList'] = rl_data.STATIONLISTCRU25
         runtimeVars['StationListStart'] = rl_data.STATIONLISTSTARTCRU25
+    elif runtimeVars['eventDataList'][2]=="2026" and runtimeVars['eventDataList'][7]=="CRU_FIT_GAM" :
+        runtimeVars['StationList'] = rl_data.STATIONLISTCRU26
+        runtimeVars['StationListStart'] = rl_data.STATIONLISTSTARTCRU26
     else:
         logger.error(f"ERROR: Event not found {runtimeVars['eventDataList'][2]} {runtimeVars['eventDataList'][5]} {runtimeVars['eventDataList'][7]}") 
 
@@ -2902,6 +2985,9 @@ def prepare_competitor_visualization_page(competitorDetails):
     elif runtimeVars['eventDataList'][2]=="2025" and runtimeVars['eventDataList'][7]=="CRU_FIT_GAM" :
         runtimeVars['StationList'] = rl_data.STATIONLISTCRU25
         runtimeVars['StationListStart'] = rl_data.STATIONLISTSTARTCRU25
+    elif runtimeVars['eventDataList'][2]=="2026" and runtimeVars['eventDataList'][7]=="CRU_FIT_GAM" :
+        runtimeVars['StationList'] = rl_data.STATIONLISTCRU26
+        runtimeVars['StationListStart'] = rl_data.STATIONLISTSTARTCRU26
     else:
         logger.error(f"ERROR: Event not found {runtimeVars['eventDataList'][2]} {runtimeVars['eventDataList'][5]} {runtimeVars['eventDataList'][7]}") 
 
@@ -3154,6 +3240,8 @@ def generate_single_output_file(params): # df_override for testing or specific c
                 temp_runtimeVars['StationList'] = rl_data.STATIONLIST25
             elif element[2]=="2025" and element[7]=="CRU_FIT_GAM" :
                 temp_runtimeVars['StationList'] = rl_data.STATIONLISTCRU25
+            elif element[2]=="2026" and element[7]=="CRU_FIT_GAM" :
+                temp_runtimeVars['StationList'] = rl_data.STATIONLISTCRU26
             else:
                 logger.error(f"ERROR: Event not found {element[2]} {element[5]} {element[7]}") 
 
@@ -3284,6 +3372,9 @@ def redline_vis_generate(competitorDetails):
         elif runtimeVars['eventDataList'][2]=="2025" and runtimeVars['eventDataList'][7]=="CRU_FIT_GAM" :
             runtimeVars['StationList'] = rl_data.STATIONLISTCRU25
             runtimeVars['StationListStart'] = rl_data.STATIONLISTSTARTCRU25
+        elif runtimeVars['eventDataList'][2]=="2026" and runtimeVars['eventDataList'][7]=="CRU_FIT_GAM" :
+            runtimeVars['StationList'] = rl_data.STATIONLISTCRU26
+            runtimeVars['StationListStart'] = rl_data.STATIONLISTSTARTCRU26
         else:
             logger.error(f"ERROR: Event not found {runtimeVars['eventDataList'][2]} {runtimeVars['eventDataList'][5]} {runtimeVars['eventDataList'][7]}") 
 

@@ -75,7 +75,35 @@ def find_competitor(competitor, callback):
                             logger.debug(f"found a match {match}")
                             matches.append(match)
                             matchcount += 1
+                    #elif row called 'Member1 exists.
+                    elif found == False and 'Member 4' in row:
+                        if competitor.upper() in row['Member 1'].upper() or competitor.upper() in row['Member 2'].upper() or competitor.upper() in row['Member 3'].upper() or competitor.upper() in row['Member 4'].upper():
+                            match = {
+                                'competitor': row['Name'],
+                                'description': element[1],  
+                                'race_no': row['Race No'],
+                                'event': element[0]  # could be extracted from filename
+                            }
+                            logger.debug(f"found a match {match}")
+                            matches.append(match)
+                            matchcount += 1
 
+                            if matchcount >= 50:
+                                #leave early
+                                #logger.debug(f'reached {matchcount} matches' )
+                                callback(competitor, matches)
+                                return 
+                    elif found == False and 'Member 2' in row:        
+                        if competitor.upper() in row['Member 1'].upper() or competitor.upper() in row['Member 2'].upper(): 
+                            match = {
+                                'competitor': row['Name'],
+                                'description': element[1],  
+                                'race_no': row['Race No'],
+                                'event': element[0]  # could be extracted from filename
+                            }
+                            logger.debug(f"found a match {match}")
+                            matches.append(match)
+                            matchcount += 1
                     elif found == False and 'Team' in row:        
                         if competitor.upper() in row['Team'].upper(): 
                             match = {
