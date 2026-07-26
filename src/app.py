@@ -259,7 +259,7 @@ def format_datetime_filter(value, format='%Y-%m-%d %H:%M'):
 @app.route('/', methods=["GET"])
 def gethome():
 
-    app.logger.warning(f"/ GET received {request}")
+    app.logger.info(f"/ GET received {request}")
 
     #clear the session to keep fresh
     session.pop('search_results', None)
@@ -568,7 +568,7 @@ def postdisplayEvent():
         data = df.to_dict(orient='records')
         headers = df.columns.tolist()
         
-        #configure for 2023 format or 2024 format
+        #configure for 2023 format or 2024 format etc
         if (rl_data.EVENT_DATA_LIST[index][2]=="2023"):
             heatmap_specific_columns = rl_data.STATIONLISTSTART23
         elif (rl_data.EVENT_DATA_LIST[index][2]=="2024"):
@@ -579,6 +579,8 @@ def postdisplayEvent():
             heatmap_specific_columns = rl_data.STATIONLISTSTARTCRU25
         elif rl_data.EVENT_DATA_LIST[index][2]=="2026" and rl_data.EVENT_DATA_LIST[index][7]=="CRU_FIT_GAM" :
             heatmap_specific_columns = rl_data.STATIONLISTSTARTCRU26
+        elif rl_data.EVENT_DATA_LIST[index][2]=="2026" and rl_data.EVENT_DATA_LIST[index][7]=="RL_FIT_GAM" :
+            heatmap_specific_columns = rl_data.RLSTATIONLISTSTART26
         else:
             app.logger.error(f"ERROR: Event year not found {rl_data.EVENT_DATA_LIST[index][2]}") 
             

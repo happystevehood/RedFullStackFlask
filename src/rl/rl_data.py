@@ -115,7 +115,7 @@ STATIONLISTSTART23 = ['Start', 'Run','Bike','Sandbag Gauntlet','Battle Rope Pull
 STATIONLIST24 =      [         'Run', 'Row', 'Deadball Burpee', 'Pendulum Shots', 'Bike', 'Sandbag Gauntlet', 'Battle Whip', 'Farmer\'s Carry', 'Agility Chamber', 'Ski', 'Mule', 'Sled Push Pull']
 STATIONLISTSTART24 = ['Start', 'Run', 'Row', 'Deadball Burpee', 'Pendulum Shots', 'Bike', 'Sandbag Gauntlet', 'Battle Whip', 'Farmer\'s Carry', 'Agility Chamber', 'Ski', 'Mule', 'Sled Push Pull']
 
-#The 2025 KL Redline Events Lists
+#The 2025 Redline Events Lists
 STATIONLIST25 =      [         'RUN', 'SKI', 'DEADBALL BURPEES', 'BIKE', 'FARMER\'S CARRY', 'SHUTTLE RUNS', 'RUSSIAN TWISTS', 'SANDBAG GAUNTLET', 'ROW', 'SQUAT THRUSTS', 'THE MULE', 'SLED PUSH & PULL']
 STATIONLISTSTART25 = ['Start', 'RUN', 'SKI', 'DEADBALL BURPEES', 'BIKE', 'FARMER\'S CARRY', 'SHUTTLE RUNS', 'RUSSIAN TWISTS', 'SANDBAG GAUNTLET', 'ROW', 'SQUAT THRUSTS', 'THE MULE', 'SLED PUSH & PULL']
 
@@ -127,8 +127,33 @@ STATIONLISTSTARTCRU25 = ['Start', 'Bike', 'Row', 'Burden Run', 'Deadball Power T
 STATIONLISTCRU26 =      [         'Run', 'Row', 'Ski', 'Strength Erg', 'Deadball Power Trip', 'Sandbag Hoist', 'Burpee to Plate', 'Burden Run', 'Cruciball Chamber',  'Lactic Legs', 'Sled Push Pull', 'Cruci-Haul']
 STATIONLISTSTARTCRU26 = ['Start', 'Run', 'Row', 'Ski', 'Strength Erg', 'Deadball Power Trip', 'Sandbag Hoist', 'Burpee to Plate', 'Burden Run', 'Cruciball Chamber',  'Lactic Legs', 'Sled Push Pull', 'Cruci-Haul']
 
+#The 2026 Redline Events Lists
+RLSTATIONLIST26 =      [         'RUN', 'SKI', 'DEADBALL OVER SHOULDER', 'BIKE', 'FARMER\'S CARRY', 'SHUTTLE RUNS', 'PLANK PULL', 'SANDBAG GAUNTLET', 'ROW', 'BURPEE THRUSTER', 'THE MULE', 'SLED PUSH & PULL']
+RLSTATIONLISTSTART26 = ['Start', 'RUN', 'SKI', 'DEADBALL OVER SHOULDER', 'BIKE', 'FARMER\'S CARRY', 'SHUTTLE RUNS', 'PLANK PULL', 'SANDBAG GAUNTLET', 'ROW', 'BURPEE THRUSTER', 'THE MULE', 'SLED PUSH & PULL']
+
 # Your data for filtering purposes
 EVENT_DATA_LIST = [
+   
+    #2026 Redline Fitness Games KL
+    ["RL2026KLWomensSinglesAdv", "REDLINE Fitness Games '26 KL Womens Singles Advanced", "2026", "WOMENS", "SINGLES_ADVANCED", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["RL2026KLMensSinglesAdv", "REDLINE Fitness Games '26 KL Mens Singles Advanced", "2026", "MENS", "SINGLES_ADVANCED", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["RL2026KLWomensSinglesInter", "REDLINE Fitness Games '26 KL Womens Singles Intermediate", "2026", "WOMENS", "SINGLES_INTERMEDIATE", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["RL2026KLMensSinglesInter", "REDLINE Fitness Games '26 KL Mens Singles Intermediate", "2026", "MENS", "SINGLES_INTERMEDIATE", "KL", "YES_CAT", "RL_FIT_GAM"],
+    #["RL2026KLWomensBeginners", "REDLINE Fitness Games '26 KL Womens Singles Beginners", "2026", "WOMENS", "SINGLES_BEGINNERS", "KL", "YES_CAT", "RL_FIT_GAM"],
+    #["RL2026KLMensBeginners", "REDLINE Fitness Games '26 KL Mens Singles Beginners", "2026", "MENS", "SINGLES_BEGINNERS", "KL", "YES_CAT", "RL_FIT_GAM"],
+    #["RL2026KLWomensDoubles", "REDLINE Fitness Games '26 KL Womens Doubles", "2026", "WOMENS", "DOUBLES", "KL", "YES_CAT", "RL_FIT_GAM"],
+    #["RL2026KLMensDoubles", "REDLINE Fitness Games '26 KL Mens Doubles", "2026", "MENS", "DOUBLES", "KL", "YES_CAT", "RL_FIT_GAM"],
+    #["RL2026KLMixedDoubles", "REDLINE Fitness Games '26 KL Mixed Doubles", "2026", "MIXED", "DOUBLES", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["RL2026KLWomenTeamRelay", "REDLINE Fitness Games '26 KL Womens Team Relay", "2026", "WOMENS", "RELAY", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["RL2026KLMenTeamRelay", "REDLINE Fitness Games '26 KL Mens Team Relay", "2026", "MENS", "RELAY", "KL", "YES_CAT", "RL_FIT_GAM"],
+    ["RL2026KLMixedTeamRelay", "REDLINE Fitness Games '26 KL Mixed Team Relay", "2026", "MIXED", "RELAY", "KL", "YES_CAT", "RL_FIT_GAM"],
+
+# Comment out when testing.....
+#]
+#    
+#EVENT_DATA_LIST_TEMP = [     
+#
+#
     #2026 Crucible Games Bangkok
     ["Cru2026BKKWomensSinglesGold", "Crucible Fitness Games '26 BKK Womens Singles Gold", "2026", "WOMENS", "SINGLES_ADVANCED", "BKK", "YES_CAT", "CRU_FIT_GAM"],
     ["Cru2026BKKMensSinglesGold", "Crucible Fitness Games '26 BKK Mens Singles Gold",     "2026", "MENS", "SINGLES_ADVANCED", "BKK", "YES_CAT", "CRU_FIT_GAM"],
@@ -138,7 +163,7 @@ EVENT_DATA_LIST = [
     ["Cru2026BKKWomensDoubles", "Crucible Fitness Games '26 BKK Womens Doubles", "2026", "WOMENS", "DOUBLES", "BKK", "NO_CAT", "CRU_FIT_GAM"],
     ["Cru2026BKKMensDoubles", "Crucible Fitness Games '26 BKK Mens Doubles", "2026", "MENS", "DOUBLES", "BKK", "NO_CAT", "CRU_FIT_GAM"],
     ["Cru2026BKKMixedDoubles", "Crucible Fitness Games '26 BKK Mixed Doubles", "2026", "MIXED", "DOUBLES", "BKK", "NO_CAT", "CRU_FIT_GAM"],
-    #["Cru2026BKKTeamRelayWomen", "Crucible Fitness Games '26 BKK Womens Team Relay", "2026", "WOMENS", "RELAY", "BKK", "YES_CAT", "CRU_FIT_GAM"],
+    ["Cru2026BKKTeamRelayWomen", "Crucible Fitness Games '26 BKK Womens Team Relay", "2026", "WOMENS", "RELAY", "BKK", "YES_CAT", "CRU_FIT_GAM"],
     ["Cru2026BKKTeamRelayMen", "Crucible Fitness Games '26 BKK Mens Team Relay", "2026", "MENS", "RELAY", "BKK", "YES_CAT", "CRU_FIT_GAM"],
     ["Cru2026BKKTeamRelayMixed", "Crucible Fitness Games '26 BKK Mixed Team Relay", "2026", "MIXED", "RELAY", "BKK", "YES_CAT", "CRU_FIT_GAM"],
 
@@ -206,6 +231,7 @@ EVENT_DATA_LIST = [
     ["TeamRelayWomen2023", "REDLINE Fitness Games '23 Womens Team Relay", "2023", "WOMENS", "RELAY", "KL", "NO_CAT", "RL_FIT_GAM"],
     ["TeamRelayMen2023", "REDLINE Fitness Games '23 Mens Team Relay", "2023", "MENS", "RELAY", "KL", "NO_CAT", "RL_FIT_GAM"],
     ["TeamRelayMixed2023", "REDLINE Fitness Games '23 Mixed Team Relay", "2023", "MIXED", "RELAY", "KL", "NO_CAT", "RL_FIT_GAM"],
+
    ]
 
 # Generate a unique worker ID that persists for this worker process

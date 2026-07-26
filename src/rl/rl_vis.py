@@ -2845,8 +2845,11 @@ def prepare_visualization_data_for_template( competitorDetails):
     elif runtimeVars['eventDataList'][2]=="2026" and runtimeVars['eventDataList'][7]=="CRU_FIT_GAM" :
         runtimeVars['StationList'] = rl_data.STATIONLISTCRU26
         runtimeVars['StationListStart'] = rl_data.STATIONLISTSTARTCRU26
+    elif runtimeVars['eventDataList'][2]=="2026" and runtimeVars['eventDataList'][7]=="RL_FIT_GAM" :
+        runtimeVars['StationList'] = rl_data.RLSTATIONLIST26
+        runtimeVars['StationListStart'] = rl_data.RLSTATIONLISTSTART26
     else:
-        logger.error(f"ERROR: Event not found {runtimeVars['eventDataList'][2]} {runtimeVars['eventDataList'][5]} {runtimeVars['eventDataList'][7]}") 
+        logger.error(f"ERROR: Event not found! {runtimeVars['eventDataList'][2]} {runtimeVars['eventDataList'][5]} {runtimeVars['eventDataList'][7]}") 
 
         
     logger.info(f"Preparing event page: {runtimeVars['eventDataList'][0]}")
@@ -2988,8 +2991,11 @@ def prepare_competitor_visualization_page(competitorDetails):
     elif runtimeVars['eventDataList'][2]=="2026" and runtimeVars['eventDataList'][7]=="CRU_FIT_GAM" :
         runtimeVars['StationList'] = rl_data.STATIONLISTCRU26
         runtimeVars['StationListStart'] = rl_data.STATIONLISTSTARTCRU26
+    elif runtimeVars['eventDataList'][2]=="2026" and runtimeVars['eventDataList'][7]=="RL_FIT_GAM" :
+        runtimeVars['StationList'] = rl_data.RLSTATIONLIST26
+        runtimeVars['StationListStart'] = rl_data.RLSTATIONLISTSTART26
     else:
-        logger.error(f"ERROR: Event not found {runtimeVars['eventDataList'][2]} {runtimeVars['eventDataList'][5]} {runtimeVars['eventDataList'][7]}") 
+        logger.error(f"ERROR: Event not found!! {runtimeVars['eventDataList'][2]} {runtimeVars['eventDataList'][5]} {runtimeVars['eventDataList'][7]}") 
 
     logger.info(f"Preparing competitor page for event: {runtimeVars['eventDataList'][0]}")
     
@@ -3242,8 +3248,10 @@ def generate_single_output_file(params): # df_override for testing or specific c
                 temp_runtimeVars['StationList'] = rl_data.STATIONLISTCRU25
             elif element[2]=="2026" and element[7]=="CRU_FIT_GAM" :
                 temp_runtimeVars['StationList'] = rl_data.STATIONLISTCRU26
+            elif element[2]=="2026" and element[7]=="RL_FIT_GAM" :
+                temp_runtimeVars['StationList'] = rl_data.RLSTATIONLIST26
             else:
-                logger.error(f"ERROR: Event not found {element[2]} {element[5]} {element[7]}") 
+                logger.error(f"ERROR: Event not found!!! {element[2]} {element[5]} {element[7]}") 
 
             event_details_found = True
             break
@@ -3352,6 +3360,7 @@ def redline_vis_generate(competitorDetails):
         #configure the complete file list for the next loop
         thisFileList = rl_data.EVENT_DATA_LIST
 
+    logger.debug(f"thisFileList {thisFileList}")
 
     #Loop through each file, 
     for eventDataList in thisFileList:
@@ -3375,8 +3384,11 @@ def redline_vis_generate(competitorDetails):
         elif runtimeVars['eventDataList'][2]=="2026" and runtimeVars['eventDataList'][7]=="CRU_FIT_GAM" :
             runtimeVars['StationList'] = rl_data.STATIONLISTCRU26
             runtimeVars['StationListStart'] = rl_data.STATIONLISTSTARTCRU26
+        elif runtimeVars['eventDataList'][2]=="2026" and runtimeVars['eventDataList'][7]=="RL_FIT_GAM" :
+            runtimeVars['StationList'] = rl_data.RLSTATIONLIST26
+            runtimeVars['StationListStart'] = rl_data.RLSTATIONLISTSTART26
         else:
-            logger.error(f"ERROR: Event not found {runtimeVars['eventDataList'][2]} {runtimeVars['eventDataList'][5]} {runtimeVars['eventDataList'][7]}") 
+            logger.error(f"ERROR: Event not found!!!! {runtimeVars['eventDataList'][2]} {runtimeVars['eventDataList'][5]} {runtimeVars['eventDataList'][7]}") 
 
         logger.debug(f"eventDataList[0] {eventDataList[0]}")
 
