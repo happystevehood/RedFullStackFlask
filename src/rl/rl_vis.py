@@ -2680,12 +2680,22 @@ def MakeFullPdfReport(filepath, outputDict, html_filepath, competitorAnalysis ):
 
         # if competitor Analysis enabled.
         if(competitorAnalysis == True):
-            page = doc.new_page()
-
-            #open html file html_info_comp_filepaths
-            with open(html_filepath, 'r') as f:
-                stringHtml = f.read()
-            page.insert_htmlbox(rect, stringHtml)
+ 
+            #logger.debug(f"Processing HTML for PDF: {html_filepath}")
+            
+            # for some reason this HTML appears to be missing proceed even if missing.           
+            try:
+                with open(html_filepath, 'r') as f:
+                    stringHtml = f.read()
+                
+                # Only create the page if the file was successfully read
+                page = doc.new_page()
+                page.insert_htmlbox(rect, stringHtml)
+                
+            except FileNotFoundError:
+                logger.warning(f"Error: The file {html_filepath} does not exist.")
+            except PermissionError:
+                logger.warning(f"Error: You do not have permission to read {html_filepath}.")
 
         for i, f_path_str in enumerate(outputDict['filename']):
             if (".png" in f_path_str): # Check extension case-insensitively
